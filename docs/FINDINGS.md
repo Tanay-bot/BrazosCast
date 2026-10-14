@@ -119,23 +119,48 @@ levelpath as RMOT2). Segments with `branch == 0` sit on tributaries and are mark
 
 **Result:** 1,614 mainstem segments in the Richmond/Rosenberg corridor.
 Thresholds: min 11.7 ft, p25 30.7 ft, median **33.4 ft**, p75 43.2 ft, max 81.9 ft.
-1.5% flood at action stage (20 ft) and 76.5% at minor flood (45 ft). 27 segments sit inside a
-levee-protected area (flagged `levee: true`). Output: `data/derived/road_thresholds.geojson`.
+1.4% flood at action stage (20 ft) and 76.3% at minor flood (45 ft). 27 segments sit inside a
+levee-protected area (`levee: true`). 104 segments cross a stream (`crossing: true`); 19 of those
+were repaired from non-crossing neighbours. 128 segments carry `confidence: "low"`.
+Output: `data/derived/road_thresholds.geojson`.
 
-**Two caught errors — both worth stating in the writeup.**
+**Three caught errors — all worth stating in the writeup.**
 
 1. *Discharge through the wrong rating curve.* Mapping `threshold_discharge_cfs` via the Richmond
    rating implied **38% of streets flood at action stage** — implausible. The file spans 442 NWM
-   reaches; a tributary's discharge is not comparable to the mainstem's. Rejected.
+   reaches; a tributary's discharge is not comparable to the mainstem's. Rejected. Re-confirmed with
+   the gauge's own fitted rating (9,690 paired daily observations, `gauge_rating.py`): a plain power
+   law errs **15.7 ft at the largest observed event**, and a shifted power-law rating that fits the
+   record to 0.34 ft median error yields a **78.5 ft median threshold**, with **860 of 1,614**
+   segments needing a discharge beyond anything the gauge has measured. The column is also not a
+   single-reach discharge at all: the mainstem levelpath's hydrotable carries 225 sub-reaches whose
+   discharges at one stage span **3,229–232,824 cms**. The route is unusable, and now measurably so.
 2. *Per-catchment rows poisoning the minimum.* A road has one row per catchment it crosses, and
    those rows reference **different reaches**. Simonton Road's rows ran 2.6 → 51.9 ft: the low values
    were referenced to a small tributary ("2.6 ft above that creek"), not the Brazos. Taking the
    minimum over all rows set the whole segment to 2.6 ft, and the app then claimed **863 of 2,474
    segments were underwater at a 9.2 ft stage**. Fix: keep only mainstem-levelpath rows *before*
    aggregating. The minimum threshold is now 11.7 ft, so nothing floods at 9.2 ft.
+3. *Bare-earth elevation at river crossings — and the limit of the fix.* OWP HAND comes from a
+   bare-earth DEM, so the ground *under* a bridge reads as channel bed and a crossing segment gets an
+   artificially low threshold. The OSM extract carries **no `bridge` or `layer` column**, so crossings
+   are found geometrically instead (within 15 m of an NWM stream line) and repaired from non-crossing
+   neighbours within 300 m. Low thresholds are genuinely concentrated at crossings: **33.3% of
+   sub-25-ft segments sit within 15 m of a stream line against 6.4% of all segments**, a 5.2×
+   enrichment. The repair fixes **State Highway 6 (14.2 → 30.2 ft)** but cannot fix US 90A or the Grand
+   Parkway, whose 16–19 ft values run the length of the corridor rather than concentrating at a
+   crossing. Those segments are now flagged rather than silently shipped.
+
+**Open defect — declared, not hidden.** Treating `threshold_hand_ft` as the Richmond gauge stage
+leaves a residual systematic error: the HAND reference changes bed elevation along the corridor, and
+regressing the thresholds on distance from the gauge gives **−0.92 ft/mile, r = −0.64**. Eleven
+classified highway segments (US 90A, Grand Parkway) still sit below action stage in
+`road_thresholds.summary.json` under `known_defect`. Closing this properly needs either a HAND re-run
+from the DEM (not in this repo) or per-reach channel bed elevations to convert local HAND depth to
+gauge stage (`usgs_elev_table.csv` has 15 rows, one per gauge). Both are new data, not new code.
 
 **Open QC item:** validate thresholds against the USGS Harvey observed-inundation layer before
-shipping. 76.5% of mainstem segments flooding at the 45 ft minor stage is high and unverified.
+shipping. 76.3% of mainstem segments flooding at the 45 ft minor stage is high and unverified.
 
 ## 6. Inundation bands — PROVISIONAL (`pipeline/derive/inundation.py`)
 

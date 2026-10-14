@@ -19,3 +19,7 @@ dist/
 data/raw/*.tmp
 data/raw/hand/
 data/raw/usgs/
+
+# Python
+__pycache__/
+*.pyc

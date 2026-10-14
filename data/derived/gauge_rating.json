@@ -1,0 +1,22 @@
+{
+  "site": "08114000",
+  "lid": "RMOT2",
+  "model": "stage_ft = a * flow_cfs^b  (log-log least squares)",
+  "a": 1.2730671449477884,
+  "b": 0.29324736105192045,
+  "n": 9690,
+  "period": [
+    "1998-10-01",
+    "2026-10-12"
+  ],
+  "r2": 0.9080154146694361,
+  "median_abs_error_ft": 0.8746859484791472,
+  "observed_stage_ft": {
+    "min": 7.77,
+    "max": 55.01
+  },
+  "observed_flow_cfs": {
+    "min": 182.0,
+    "max": 120000.0
+  }
+}

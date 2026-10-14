@@ -9,7 +9,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
  * ------------------------------------------------------------------ */
 
 const TH = { action: 20, minor: 45, moderate: 48, major: 50 };
-const GAUGE = { lid: "RMOT2", usgs: "08114000", lat: 29.582222, lon: -95.7575, zeroDatumFt: 26.73 };
+const GAUGE = { lid: "RMOT2", usgs: "08114000", lat: 29.582222, lon: -95.7575 };
 const TZ = "America/Chicago";
 const DATA = "./data/";
 const MAPBOX_TOKEN = (import.meta.env.VITE_MAPBOX_TOKEN as string | undefined) ?? "";
@@ -20,6 +20,7 @@ type Road = {
   properties: {
     osmid: number; highway: string; name: string | null;
     flood_stage_ft: number; mainstem: boolean; levee: boolean;
+    confidence: string; crossing: boolean;
   };
   geometry: { type: "LineString" | "MultiLineString"; coordinates: number[][] | number[][][] };
 };
@@ -316,13 +317,15 @@ function render() {
       }
     }
     if (sel.properties.levee) sEl.textContent += " ⚠ This segment is inside a levee-protected area — HAND does not model levees, so treat this threshold as unreliable.";
+    else if (sel.properties.confidence === "low") sEl.textContent += " ⚠ Low confidence: this segment is below action stage, or sits at a river crossing where the bare-earth elevation model reads the ground under the bridge rather than the deck. Treat this threshold as unreliable.";
   }
 
+  const lowConf = state.roads.filter((r) => r.properties.confidence === "low").length;
   $("prov").innerHTML =
     `<span>USGS ${GAUGE.usgs} / NWS ${GAUGE.lid} · Brazos River at Richmond</span><s>|</s>` +
     `<span>observed ${stage.toFixed(2)} ft</span><s>|</s>` +
     `<span>${state.mode === "live" ? "official NWS forecast" : "historical replay"}</span>` +
-    `<s>|</s><span>thresholds: modelled (OWP HAND)</span>`;
+    `<s>|</s><span>thresholds: modelled (OWP HAND) \u00b7 ${lowConf} of ${state.roads.length} low confidence</span>`;
 
   // chain
   const list = $("chainList");

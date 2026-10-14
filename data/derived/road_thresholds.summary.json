@@ -5,16 +5,135 @@
     -95.55,
     29.76
   ],
-  "gauge_zero_datum_ft": 26.73,
   "segments": 1614,
   "mainstem_segments": 1614,
   "levee_segments": 27,
-  "mainstem_flood_stage_ft": {
-    "min": 11.7,
-    "p25": 30.725,
-    "median": 33.4,
-    "p75": 43.2,
-    "max": 81.9
+  "crossing_segments": 104,
+  "crossing_repaired": 19,
+  "low_confidence_segments": 128,
+  "action_stage_ft": 20.0,
+  "flood_stage_ft": {
+    "min": 11.672410812835691,
+    "p25": 30.773087482528688,
+    "median": 33.41768777206421,
+    "p75": 43.202843384017946,
+    "max": 81.93372377876281
   },
-  "method": "threshold_hand_ft treated as Richmond gauge stage on the mainstem levelpath; off-mainstem segments marked mainstem=false."
+  "flooded_by_stage": {
+    "9.2": 0,
+    "20.0": 22,
+    "33.4": 802,
+    "45.0": 1231,
+    "50.0": 1337,
+    "55.1": 1468
+  },
+  "along_river_slope_ft_per_mile": {
+    "value": -0.9187395806950794,
+    "r": -0.6381906519834765,
+    "note": "systematic error of HAND-as-stage; not yet corrected"
+  },
+  "known_defect": {
+    "summary": "threshold_hand_ft is a HAND height referenced to the nearest drainage, not the Richmond gauge stage; the HAND reference changes bed elevation along the corridor, so a systematic along-river error remains.",
+    "classified_highways_below_action": [
+      {
+        "osmid": 20902070,
+        "highway": "primary",
+        "name": "US Highway 90A",
+        "flood_stage_ft": 18.7,
+        "crossing": true
+      },
+      {
+        "osmid": 20898558,
+        "highway": "primary",
+        "name": "East US Highway 90A",
+        "flood_stage_ft": 16.8,
+        "crossing": false
+      },
+      {
+        "osmid": 723249049,
+        "highway": "primary",
+        "name": "West Grand Parkway South",
+        "flood_stage_ft": 15.6,
+        "crossing": true
+      },
+      {
+        "osmid": 423488798,
+        "highway": "primary",
+        "name": "East US Highway 90A",
+        "flood_stage_ft": 18.3,
+        "crossing": false
+      },
+      {
+        "osmid": 318903499,
+        "highway": "primary",
+        "name": "West Grand Parkway South",
+        "flood_stage_ft": 16.8,
+        "crossing": false
+      },
+      {
+        "osmid": 908556981,
+        "highway": "primary",
+        "name": "East US Highway 90A",
+        "flood_stage_ft": 16.5,
+        "crossing": false
+      },
+      {
+        "osmid": 495275694,
+        "highway": "primary",
+        "name": "West Grand Parkway South",
+        "flood_stage_ft": 19.6,
+        "crossing": true
+      },
+      {
+        "osmid": 908556980,
+        "highway": "primary",
+        "name": "East US Highway 90A",
+        "flood_stage_ft": 18.1,
+        "crossing": false
+      },
+      {
+        "osmid": 423490586,
+        "highway": "primary",
+        "name": "West Grand Parkway South",
+        "flood_stage_ft": 15.6,
+        "crossing": false
+      },
+      {
+        "osmid": 423488797,
+        "highway": "primary",
+        "name": "East US Highway 90A",
+        "flood_stage_ft": 16.5,
+        "crossing": false
+      },
+      {
+        "osmid": 423488800,
+        "highway": "primary",
+        "name": "US Highway 90A",
+        "flood_stage_ft": 17.0,
+        "crossing": false
+      }
+    ],
+    "rejected_route_discharge_rating": {
+      "reason": "source threshold discharges lie mostly above the gauge's observed record",
+      "rating_model": "inverted rating: stage_ft = s0 + (flow_cfs / a)^(1/c)",
+      "rating_median_abs_error_ft": 0.34195805518787203,
+      "rating_median_abs_error_ft_stage_above_35": 2.7332041351204417,
+      "observed_flow_cfs_max": 120000.0,
+      "resulting_median_threshold_ft": 78.50928983435949,
+      "extrapolated_segments": 860
+    },
+    "rejected_route_discharge_column": {
+      "reason": "the source discharge is not a single-reach gauge discharge",
+      "levelpath": 3125000011,
+      "sub_reaches_per_stage": 225,
+      "discharge_cms_spread_at_max_stage": {
+        "stage_ft": 25.2984,
+        "min": 3229.1633661205874,
+        "median": 24488.69801650143,
+        "max": 232823.79874783108
+      }
+    },
+    "closing_it_needs": "a HAND re-run from the DEM (DEM not in this repo) or per-reach channel bed elevations to convert local HAND depth to gauge stage (usgs_elev_table.csv has 15 rows, one per gauge)"
+  },
+  "method": "threshold_hand_ft on the Brazos mainstem levelpath treated as Richmond gauge stage, with crossing segments (within 15 m of an NWM stream line) repaired from non-crossing neighbours within 300 m. Segments below action stage, unrepaired crossings and levee-protected segments are flagged confidence=low. See known_defect for the residual systematic error and the rejected alternatives."
 }

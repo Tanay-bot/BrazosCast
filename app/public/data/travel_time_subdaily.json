@@ -1,0 +1,52 @@
+{
+  "generated_at": "2026-10-14T02:55:10.715440+00:00",
+  "threshold_ft": 35.0,
+  "n_events": 20,
+  "gauges": {
+    "HPDT2": {
+      "name": "Hempstead",
+      "n": 20,
+      "median_h": 48.1,
+      "p25_h": 33.0,
+      "p75_h": 54.9,
+      "min_h": 25.5,
+      "max_h": 137.8
+    },
+    "BAWT2": {
+      "name": "San Felipe",
+      "n": 17,
+      "median_h": 30.8,
+      "p25_h": 20.2,
+      "p75_h": 56.8,
+      "min_h": 10.2,
+      "max_h": 111.0
+    },
+    "BBZT2": {
+      "name": "Bryan",
+      "n": 20,
+      "median_h": 75.5,
+      "p25_h": 69.1,
+      "p75_h": 100.8,
+      "min_h": 55.5,
+      "max_h": 139.8
+    },
+    "HIBT2": {
+      "name": "Highbank",
+      "n": 17,
+      "median_h": 101.5,
+      "p25_h": 85.0,
+      "p75_h": 134.8,
+      "min_h": 50.5,
+      "max_h": 189.8
+    },
+    "WBAT2": {
+      "name": "Waco",
+      "n": 19,
+      "median_h": 119.0,
+      "p25_h": 113.2,
+      "p75_h": 144.1,
+      "min_h": 73.8,
+      "max_h": 201.5
+    }
+  }
+}

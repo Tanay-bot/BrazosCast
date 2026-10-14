@@ -1,0 +1,222 @@
+{
+  "generated_at": "2026-10-14T02:27:40.175247+00:00",
+  "record": {
+    "start": "1990-01-01",
+    "end": "2026-10-12"
+  },
+  "richmond_flow_terciles_cfs": {
+    "q33": 1430.0,
+    "q66": 5540.0
+  },
+  "overall": {
+    "WBAT2": {
+      "name": "Waco",
+      "lag_days": 4,
+      "r": 0.795
+    },
+    "HIBT2": {
+      "name": "Highbank",
+      "lag_days": 3,
+      "r": 0.842
+    },
+    "BBZT2": {
+      "name": "Bryan",
+      "lag_days": 2,
+      "r": 0.919
+    },
+    "HPDT2": {
+      "name": "Hempstead",
+      "lag_days": 1,
+      "r": 0.985
+    },
+    "BAWT2": {
+      "name": "San Felipe",
+      "lag_days": 1,
+      "r": 0.987
+    }
+  },
+  "by_regime": {
+    "WBAT2": {
+      "name": "Waco",
+      "overall_lag_days": 4,
+      "overall_r": 0.795,
+      "regimes": {
+        "low": {
+          "lag_days": 4,
+          "r": 0.338,
+          "n": 4456
+        },
+        "medium": {
+          "lag_days": 4,
+          "r": 0.421,
+          "n": 4415
+        },
+        "high": {
+          "lag_days": 5,
+          "r": 0.728,
+          "n": 4563
+        }
+      }
+    },
+    "HIBT2": {
+      "name": "Highbank",
+      "overall_lag_days": 3,
+      "overall_r": 0.842,
+      "regimes": {
+        "low": {
+          "lag_days": 4,
+          "r": 0.493,
+          "n": 4456
+        },
+        "medium": {
+          "lag_days": 3,
+          "r": 0.522,
+          "n": 4415
+        },
+        "high": {
+          "lag_days": 4,
+          "r": 0.795,
+          "n": 4563
+        }
+      }
+    },
+    "BBZT2": {
+      "name": "Bryan",
+      "overall_lag_days": 2,
+      "overall_r": 0.919,
+      "regimes": {
+        "low": {
+          "lag_days": 3,
+          "r": 0.649,
+          "n": 4456
+        },
+        "medium": {
+          "lag_days": 2,
+          "r": 0.649,
+          "n": 4415
+        },
+        "high": {
+          "lag_days": 3,
+          "r": 0.86,
+          "n": 4563
+        }
+      }
+    },
+    "HPDT2": {
+      "name": "Hempstead",
+      "overall_lag_days": 1,
+      "overall_r": 0.985,
+      "regimes": {
+        "low": {
+          "lag_days": 2,
+          "r": 0.72,
+          "n": 4456
+        },
+        "medium": {
+          "lag_days": 1,
+          "r": 0.878,
+          "n": 4415
+        },
+        "high": {
+          "lag_days": 1,
+          "r": 0.974,
+          "n": 4563
+        }
+      }
+    },
+    "BAWT2": {
+      "name": "San Felipe",
+      "overall_lag_days": 1,
+      "overall_r": 0.987,
+      "regimes": {
+        "low": {
+          "lag_days": 1,
+          "r": 0.786,
+          "n": 4456
+        },
+        "medium": {
+          "lag_days": 1,
+          "r": 0.934,
+          "n": 4415
+        },
+        "high": {
+          "lag_days": 1,
+          "r": 0.987,
+          "n": 4563
+        }
+      }
+    }
+  },
+  "events": {
+    "WBAT2": {
+      "name": "Waco",
+      "n_events": 44,
+      "median_lag_days": 5.0,
+      "p25": 3.0,
+      "p75": 6.0,
+      "buckets": {
+        "0-24h": 4,
+        "24-48h": 0,
+        "48-72h": 3,
+        ">72h": 37,
+        "none": 0
+      }
+    },
+    "HIBT2": {
+      "name": "Highbank",
+      "n_events": 44,
+      "median_lag_days": 4.0,
+      "p25": 3.0,
+      "p75": 6.0,
+      "buckets": {
+        "0-24h": 0,
+        "24-48h": 2,
+        "48-72h": 5,
+        ">72h": 37,
+        "none": 0
+      }
+    },
+    "BBZT2": {
+      "name": "Bryan",
+      "n_events": 44,
+      "median_lag_days": 3.0,
+      "p25": 2.0,
+      "p75": 4.0,
+      "buckets": {
+        "0-24h": 2,
+        "24-48h": 2,
+        "48-72h": 9,
+        ">72h": 31,
+        "none": 0
+      }
+    },
+    "HPDT2": {
+      "name": "Hempstead",
+      "n_events": 44,
+      "median_lag_days": 2.0,
+      "p25": 1.0,
+      "p75": 2.0,
+      "buckets": {
+        "0-24h": 3,
+        "24-48h": 16,
+        "48-72h": 19,
+        ">72h": 6,
+        "none": 0
+      }
+    },
+    "BAWT2": {
+      "name": "San Felipe",
+      "n_events": 24,
+      "median_lag_days": 1.0,
+      "p25": 1.0,
+      "p75": 2.0,
+      "buckets": {
+        "0-24h": 1,
+        "24-48h": 14,
+        "48-72h": 5,
+        ">72h": 4,
+        "none": 0
+      }
+    }
+  }
+}

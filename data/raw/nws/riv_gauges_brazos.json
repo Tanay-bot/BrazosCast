@@ -1,0 +1,277 @@
+{
+  "displayFieldName": "gaugelid",
+  "fieldAliases": {
+    "gaugelid": "Gauge ID",
+    "location": "Guage Location",
+    "action": "Water Level In Need of Action",
+    "flood": "Flood Hazard Value",
+    "moderate": "Moderate Flood Danger Value",
+    "major": "Major Flood Danger Value",
+    "latitude": "Latitude"
+  },
+  "fields": [
+    {
+      "name": "gaugelid",
+      "type": "esriFieldTypeString",
+      "alias": "Gauge ID",
+      "length": 5
+    },
+    {
+      "name": "location",
+      "type": "esriFieldTypeString",
+      "alias": "Guage Location",
+      "length": 90
+    },
+    {
+      "name": "action",
+      "type": "esriFieldTypeString",
+      "alias": "Water Level In Need of Action",
+      "length": 24
+    },
+    {
+      "name": "flood",
+      "type": "esriFieldTypeString",
+      "alias": "Flood Hazard Value",
+      "length": 24
+    },
+    {
+      "name": "moderate",
+      "type": "esriFieldTypeString",
+      "alias": "Moderate Flood Danger Value",
+      "length": 24
+    },
+    {
+      "name": "major",
+      "type": "esriFieldTypeString",
+      "alias": "Major Flood Danger Value",
+      "length": 24
+    },
+    {
+      "name": "latitude",
+      "type": "esriFieldTypeDouble",
+      "alias": "Latitude"
+    }
+  ],
+  "features": [
+    {
+      "attributes": {
+        "gaugelid": "AMTT2",
+        "location": "Aspermont 10S",
+        "action": "19",
+        "flood": "21",
+        "moderate": "35",
+        "major": "37",
+        "latitude": 33.008158
+      }
+    },
+    {
+      "attributes": {
+        "gaugelid": "AQLT2",
+        "location": "Aquilla",
+        "action": "27",
+        "flood": "29",
+        "moderate": "32",
+        "major": "35",
+        "latitude": 31.812222
+      }
+    },
+    {
+      "attributes": {
+        "gaugelid": "BAWT2",
+        "location": "San Felipe",
+        "action": "113.1",
+        "flood": "122.5",
+        "moderate": "127.8",
+        "major": "129.3",
+        "latitude": 29.808333
+      }
+    },
+    {
+      "attributes": {
+        "gaugelid": "BBZT2",
+        "location": "Bryan",
+        "action": "37",
+        "flood": "52",
+        "moderate": "60",
+        "major": "66",
+        "latitude": 30.626667
+      }
+    },
+    {
+      "attributes": {
+        "gaugelid": "DNNT2",
+        "location": "Dennis",
+        "action": "10",
+        "flood": "21",
+        "moderate": "25",
+        "major": "27",
+        "latitude": 32.615556
+      }
+    },
+    {
+      "attributes": {
+        "gaugelid": "GLRT2",
+        "location": "Glen Rose",
+        "action": "22",
+        "flood": "29",
+        "moderate": "30",
+        "major": "34",
+        "latitude": 32.258889
+      }
+    },
+    {
+      "attributes": {
+        "gaugelid": "HIBT2",
+        "location": "Highbank",
+        "action": "33",
+        "flood": "35",
+        "moderate": "38",
+        "major": "40",
+        "latitude": 31.133889
+      }
+    },
+    {
+      "attributes": {
+        "gaugelid": "HPDT2",
+        "location": "Hempstead",
+        "action": "25",
+        "flood": "50",
+        "moderate": "53",
+        "major": "55",
+        "latitude": 30.128889
+      }
+    },
+    {
+      "attributes": {
+        "gaugelid": "JTBT2",
+        "location": "Justiceburg",
+        "action": "10",
+        "flood": "19",
+        "moderate": "21",
+        "major": "26",
+        "latitude": 33.038333
+      }
+    },
+    {
+      "attributes": {
+        "gaugelid": "LHPT2",
+        "location": "Lake Alan Henry",
+        "action": "",
+        "flood": "",
+        "moderate": "",
+        "major": "",
+        "latitude": 33.062778
+      }
+    },
+    {
+      "attributes": {
+        "gaugelid": "LSET2",
+        "location": "Lubbock 4ESE",
+        "action": "10",
+        "flood": "11",
+        "moderate": "14",
+        "major": "21",
+        "latitude": 33.5547
+      }
+    },
+    {
+      "attributes": {
+        "gaugelid": "PLOT2",
+        "location": "Palo Pinto",
+        "action": "14",
+        "flood": "16",
+        "moderate": "18",
+        "major": "22",
+        "latitude": 32.8625
+      }
+    },
+    {
+      "attributes": {
+        "gaugelid": "RMOT2",
+        "location": "Richmond",
+        "action": "20",
+        "flood": "45",
+        "moderate": "48",
+        "major": "50",
+        "latitude": 29.582222
+      }
+    },
+    {
+      "attributes": {
+        "gaugelid": "ROST2",
+        "location": "Rosharon",
+        "action": "40",
+        "flood": "43",
+        "moderate": "47",
+        "major": "51.3",
+        "latitude": 29.349444
+      }
+    },
+    {
+      "attributes": {
+        "gaugelid": "SLNT2",
+        "location": "US 59",
+        "action": "40",
+        "flood": "66.5",
+        "moderate": "68.5",
+        "major": "70.5",
+        "latitude": 29.56758
+      }
+    },
+    {
+      "attributes": {
+        "gaugelid": "SOUT2",
+        "location": "South Bend",
+        "action": "19",
+        "flood": "21",
+        "moderate": "28",
+        "major": "34",
+        "latitude": 33.024167
+      }
+    },
+    {
+      "attributes": {
+        "gaugelid": "SYMT2",
+        "location": "Seymour",
+        "action": "10",
+        "flood": "12",
+        "moderate": "15",
+        "major": "20",
+        "latitude": 33.580928
+      }
+    },
+    {
+      "attributes": {
+        "gaugelid": "WBAT2",
+        "location": "Waco",
+        "action": "10",
+        "flood": "19",
+        "moderate": "22",
+        "major": "27",
+        "latitude": 31.535833
+      }
+    },
+    {
+      "attributes": {
+        "gaugelid": "WBZT2",
+        "location": "Washington",
+        "action": "",
+        "flood": "",
+        "moderate": "",
+        "major": "",
+        "latitude": 30.35918
+      }
+    },
+    {
+      "attributes": {
+        "gaugelid": "WCBT2",
+        "location": "West Columbia",
+        "action": "20",
+        "flood": "26",
+        "moderate": "27",
+        "major": "28",
+        "latitude": 29.144
+      }
+    }
+  ]
+}

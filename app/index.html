@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>BrazosCast — when water reaches your street</title>
+  <meta name="description" content="Address-first flood lead-time for the lower Brazos at Richmond, Texas. Not whether the river is high — when water reaches your street, and how many hours you have." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" />
+</head>
+<body>
+  <header class="hdr">
+    <div class="hdr-in">
+      <div class="brand"><b>BrazosCast</b><span>Richmond · Fort&nbsp;Bend&nbsp;County</span></div>
+      <div class="hdr-sp"></div>
+      <span class="src-tag" id="srcTag">connecting…</span>
+      <div class="mode" role="group" aria-label="Data mode">
+        <button id="mLive" aria-pressed="true">Live</button>
+        <button id="mReplay" aria-pressed="false">Harvey replay</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="ask" aria-label="Find your street">
+      <label for="addr">Your address</label>
+      <div class="ask-row">
+        <input id="addr" type="text" list="samples" placeholder="e.g. 4710 Thompson Ferry Rd, Richmond, TX" autocomplete="off" />
+        <button id="go" class="go">Check my street</button>
+      </div>
+      <datalist id="samples"></datalist>
+      <p class="hint" id="askHint">Type an address, or click a road on the map.</p>
+    </section>
+
+    <section class="answer" id="answer" aria-live="polite">
+      <div class="sev-stripe" id="sevStripe"></div>
+      <div class="answer-in">
+        <div>
+          <div class="eyebrow"><span class="pill" id="sevPill">—</span> <span id="addrOut">no street selected</span></div>
+          <h1 class="verdict" id="verdict">Enter an address to see your lead time</h1>
+          <p class="sub" id="sub">The river is a number. Your street is the answer.</p>
+        </div>
+        <div class="count"><b id="hours">—</b><span id="hoursLab">hours of lead time</span></div>
+      </div>
+      <div class="prov" id="prov"></div>
+    </section>
+
+    <section class="chain" aria-label="Crest travelling down the gauge chain">
+      <div class="card-h"><h2>Crest lead time from upstream gauges</h2>
+        <span class="note" id="chainNote">derived from historical crest travel times</span></div>
+      <ol class="chain-list" id="chainList"></ol>
+    </section>
+
+    <div class="cols">
+      <section class="card map-card">
+        <div class="card-h"><h2>Roads at this stage</h2>
+          <span class="note" id="mapNote">—</span></div>
+        <div id="map" class="map"></div>
+        <div class="legend">
+          <span class="lg"><span class="sw" style="background:var(--dry)"></span>Passable</span>
+          <span class="lg"><span class="sw" style="background:var(--flood)"></span>Under water at this stage</span>
+          <span class="lg"><span class="sw" style="background:var(--you)"></span>Your segment</span>
+          <span class="lg"><span class="sw" style="background:var(--levee)"></span>Levee-protected (HAND unreliable)</span>
+        </div>
+      </section>
+
+      <div class="side">
+        <section class="card">
+          <div class="card-h"><h2>River stage</h2><span class="note">drag to explore</span></div>
+          <div class="stagebox">
+            <div class="stage-top">
+              <div><div class="stage-lab">Richmond gauge · RMOT2</div>
+                <div class="stage-val"><span id="stageVal">—</span><i>ft</i></div></div>
+              <div style="text-align:right"><div class="stage-lab">Category</div>
+                <div class="cat" id="catVal">—</div></div>
+            </div>
+            <input type="range" id="stage" min="5" max="56" step="0.1" value="9" aria-label="River stage in feet" />
+            <div class="hint"><span id="stageHint">official NWS categories: action 20 · flood 45 · moderate 48 · major 50</span></div>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-h"><h2>Streets nearest you</h2><span class="note" id="exitNote">pick a street first</span></div>
+          <div class="card-b" id="exits"><p class="muted">Enter an address, or click a road on the map.</p></div>
+        </section>
+      </div>
+    </div>
+
+    <section class="card hg">
+      <div class="card-h"><h2>Stage history and forecast</h2><span class="note" id="chartNote">—</span></div>
+      <div class="hgwrap"><canvas id="chart" height="300"></canvas></div>
+    </section>
+
+    <footer class="src">
+      <p><b>Where the numbers come from.</b> Live stage and official forecast: NOAA NWPS <code>RMOT2</code> (USGS <code>08114000</code>), action 20 ft · flood 45 ft · moderate 48 ft · major 50 ft.
+      Per-street flood thresholds: NOAA-OWP HAND FIM (<code>hand_fim_4_9_9_0/12070104</code>), mainstem levelpath.
+      Crest lead times: derived in-repo by cross-correlating historical gauge peaks (<code>pipeline/analyze/travel_time_subdaily.py</code>).
+      Flood zones: FEMA NFHL. Claims context: OpenFEMA.</p>
+      <p class="disc">A working prototype. Road depths are modelled, never observed. Flood extents are provisional pending a unit check on the HAND raster.
+      12 inches of moving water carries most cars away — never drive through water.</p>
+    </footer>
+  </main>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

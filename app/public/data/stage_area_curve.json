@@ -1,0 +1,44 @@
+{
+  "bbox": [
+    -96.1,
+    29.44,
+    -95.55,
+    29.76
+  ],
+  "provisional": true,
+  "units": {
+    "hand_raster": "cm (provisional)",
+    "hydrotable_stage": "m"
+  },
+  "note": "uniform stage across mainstem branch; HAND level-water assumption",
+  "curve": [
+    {
+      "stage_ft": 40,
+      "stage_m": 12.19,
+      "cells": 131619,
+      "area_km2": 13.16,
+      "polygons": 16
+    },
+    {
+      "stage_ft": 45,
+      "stage_m": 13.72,
+      "cells": 135051,
+      "area_km2": 13.51,
+      "polygons": 16
+    },
+    {
+      "stage_ft": 48,
+      "stage_m": 14.63,
+      "cells": 136981,
+      "area_km2": 13.7,
+      "polygons": 17
+    },
+    {
+      "stage_ft": 50,
+      "stage_m": 15.24,
+      "cells": 138399,
+      "area_km2": 13.84,
+      "polygons": 18
+    }
+  ]
+}

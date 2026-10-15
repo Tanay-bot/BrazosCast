@@ -1,0 +1,23 @@
+{
+  "fetchedAt": "2026-10-14T23:18:40.398Z",
+  "source": "USGS ScienceBase",
+  "item": "5aa02374e4b0b1c392e68400",
+  "citation": "Watson, K.M., and others, 2018, Characterization of peak streamflows and flood inundation of selected areas in southeastern Texas and southwestern Louisiana from the August and September 2017 flood resulting from Hurricane Harvey: USGS Scientific Investigations Report 2018-5070",
+  "doi": "10.5066/F7VH5N3N",
+  "license": "USGS public domain (CC0)",
+  "crs": "EPSG:6579 (Texas Centric Albers Equal Area)",
+  "layer_nature": "survey-anchored water-surface estimate interpolated from 44 high-water marks and clipped to the mapped boundary; a single maximum extent, not a satellite water edge and not a time series",
+  "use": "pipeline/derive/harvey_validation.py",
+  "files": [
+    {
+      "name": "Brazos_upper.zip",
+      "bytes": 2088560,
+      "source": "cache"
+    },
+    {
+      "name": "README.txt",
+      "bytes": 2985,
+      "source": "cache"
+    }
+  ]
+}

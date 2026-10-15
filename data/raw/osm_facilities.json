@@ -1,0 +1,975 @@
+{
+ "source": "OpenStreetMap via Overpass API (ODbL)",
+ "endpoint": "https://overpass-api.de/api/interpreter",
+ "bbox": "29.42,-96.20,29.85,-95.45",
+ "amenities": [
+  "hospital",
+  "fire_station",
+  "police"
+ ],
+ "fetchedAt": "2026-10-14T22:04:41.031Z",
+ "counts": {
+  "hospital": 9,
+  "fire_station": 38,
+  "police": 12
+ },
+ "facilities": [
+  {
+   "id": "node/356815851",
+   "kind": "hospital",
+   "name": "Cornerstone Hospital Houston – Bellaire",
+   "lon": -95.47327,
+   "lat": 29.70801,
+   "tags": {
+    "addr:city": "Houston",
+    "addr:housenumber": "5314",
+    "addr:postcode": "77081",
+    "addr:street": "Dashwood Drive",
+    "amenity": "hospital",
+    "emergency": "no",
+    "gnis:feature_id": "2015845",
+    "healthcare": "hospital",
+    "name": "Cornerstone Hospital Houston – Bellaire",
+    "old_name": "Columbia Medical Center - Bellaire",
+    "operator": "Cornerstone Healthcare Group",
+    "phone": "+1-713-295-5300",
+    "website": "https://www.chghospitals.com/houston-bellaire/"
+   }
+  },
+  {
+   "id": "node/356865552",
+   "kind": "hospital",
+   "name": "HealthSouth Sugar Land Rehabilitation",
+   "lon": -95.6332343,
+   "lat": 29.6044106,
+   "tags": {
+    "addr:city": "Sugar Land",
+    "addr:housenumber": "1325",
+    "addr:postcode": "77478",
+    "addr:street": "State Highway 6",
+    "amenity": "hospital",
+    "emergency": "no",
+    "gnis:feature_id": "2471208",
+    "healthcare": "hospital",
+    "name": "HealthSouth Sugar Land Rehabilitation",
+    "old_name": "Sugar Land Medical Center",
+    "operator": "Encompass Health",
+    "operator:type": "private",
+    "operator:wikidata": "Q5690400",
+    "phone": "+1 281 276 7574",
+    "website": "https://www.healthsouthsugarland.com/"
+   }
+  },
+  {
+   "id": "node/368160484",
+   "kind": "fire_station",
+   "name": "Orchard Volunteer Fire Department",
+   "lon": -95.9693268,
+   "lat": 29.6024336,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "fire_station",
+    "ele": "38",
+    "gnis:feature_id": "2334252",
+    "name": "Orchard Volunteer Fire Department",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368160694",
+   "kind": "fire_station",
+   "name": "Cy - Fair Volunteer Fire Department Station 5",
+   "lon": -95.6425734,
+   "lat": 29.8394162,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "fire_station",
+    "ele": "34",
+    "gnis:feature_id": "2334373",
+    "name": "Cy - Fair Volunteer Fire Department Station 5",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368160704",
+   "kind": "fire_station",
+   "name": "Rosenberg Fire Department Station 1",
+   "lon": -95.8053816,
+   "lat": 29.5575063,
+   "tags": {
+    "addr:housenumber": "1021",
+    "addr:postcode": "77471",
+    "addr:state": "TX",
+    "addr:street": "4th Street",
+    "amenity": "fire_station",
+    "ele": "32",
+    "gnis:feature_id": "2334372",
+    "name": "Rosenberg Fire Department Station 1",
+    "opening_hours": "24/7",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368160748",
+   "kind": "fire_station",
+   "name": "Alief Community Volunteer Fire Department",
+   "lon": -95.6676274,
+   "lat": 29.700477,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "fire_station",
+    "ele": "27",
+    "gnis:feature_id": "2334423",
+    "name": "Alief Community Volunteer Fire Department",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368160759",
+   "kind": "fire_station",
+   "name": "West I - 10 Volunteer Fire Department Station 2",
+   "lon": -95.7295619,
+   "lat": 29.77388,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "fire_station",
+    "ele": "35",
+    "gnis:feature_id": "2334454",
+    "name": "West I - 10 Volunteer Fire Department Station 2",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368160766",
+   "kind": "fire_station",
+   "name": "San Felipe - Frydek Volunteer Fire Department",
+   "lon": -96.1003246,
+   "lat": 29.796486,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "fire_station",
+    "ele": "46",
+    "gnis:feature_id": "2334439",
+    "name": "San Felipe - Frydek Volunteer Fire Department",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368160792",
+   "kind": "fire_station",
+   "name": "Sealy Fire Department",
+   "lon": -96.1569413,
+   "lat": 29.782546,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "fire_station",
+    "ele": "62",
+    "gnis:feature_id": "2334418",
+    "name": "Sealy Fire Department",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368160917",
+   "kind": "fire_station",
+   "name": "Community Volunteer Fire Department",
+   "lon": -95.6525442,
+   "lat": 29.7097268,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "fire_station",
+    "ele": "25",
+    "gnis:feature_id": "2334461",
+    "name": "Community Volunteer Fire Department",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368160922",
+   "kind": "fire_station",
+   "name": "East Bernard Volunteer Fire Department",
+   "lon": -96.0633832,
+   "lat": 29.522744,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "fire_station",
+    "ele": "37",
+    "gnis:feature_id": "2334470",
+    "name": "East Bernard Volunteer Fire Department",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368160939",
+   "kind": "fire_station",
+   "name": "Sugar Land Fire Department Station 3",
+   "lon": -95.5949027,
+   "lat": 29.5914744,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "fire_station",
+    "ele": "22",
+    "gnis:feature_id": "2334582",
+    "name": "Sugar Land Fire Department Station 3",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368160940",
+   "kind": "fire_station",
+   "name": "Sugar Land Fire Department Station 2",
+   "lon": -95.6072984,
+   "lat": 29.641042,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "fire_station",
+    "ele": "26",
+    "gnis:feature_id": "2334581",
+    "name": "Sugar Land Fire Department Station 2",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368160941",
+   "kind": "fire_station",
+   "name": "Sugar Land Fire Department Station 5",
+   "lon": -95.6309192,
+   "lat": 29.5590774,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "fire_station",
+    "ele": "21",
+    "gnis:feature_id": "2334584",
+    "name": "Sugar Land Fire Department Station 5",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368160942",
+   "kind": "fire_station",
+   "name": "Sugar Land Fire Department Station 4",
+   "lon": -95.6179846,
+   "lat": 29.5853352,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "fire_station",
+    "ele": "20",
+    "gnis:feature_id": "2334583",
+    "name": "Sugar Land Fire Department Station 4",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368160945",
+   "kind": "fire_station",
+   "name": "Missouri City Fire and Rescue Services Station 1",
+   "lon": -95.5674358,
+   "lat": 29.5821037,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "fire_station",
+    "ele": "21",
+    "gnis:feature_id": "2334588",
+    "name": "Missouri City Fire and Rescue Services Station 1",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368160946",
+   "kind": "fire_station",
+   "name": "Fresno Volunteer Fire Department",
+   "lon": -95.4560675,
+   "lat": 29.5193398,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "fire_station",
+    "ele": "21",
+    "gnis:feature_id": "2334587",
+    "name": "Fresno Volunteer Fire Department",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368160969",
+   "kind": "fire_station",
+   "name": "Missouri City Fire and Rescue Services Station 3",
+   "lon": -95.527131,
+   "lat": 29.5909771,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "fire_station",
+    "ele": "24",
+    "gnis:feature_id": "2334542",
+    "name": "Missouri City Fire and Rescue Services Station 3",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368160976",
+   "kind": "fire_station",
+   "name": "West I - 10 Volunteer Fire Department Station 5",
+   "lon": -95.7203995,
+   "lat": 29.8277735,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "fire_station",
+    "ele": "40",
+    "gnis:feature_id": "2334551",
+    "name": "West I - 10 Volunteer Fire Department Station 5",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368160997",
+   "kind": "fire_station",
+   "name": "Kendleton Volunteer Fire Department",
+   "lon": -96.0017376,
+   "lat": 29.4472963,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "fire_station",
+    "ele": "30",
+    "gnis:feature_id": "2334537",
+    "name": "Kendleton Volunteer Fire Department",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368161062",
+   "kind": "fire_station",
+   "name": "Stafford Volunteer Fire Department Station 2",
+   "lon": -95.5582106,
+   "lat": 29.6330996,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "fire_station",
+    "ele": "25",
+    "gnis:feature_id": "2334591",
+    "name": "Stafford Volunteer Fire Department Station 2",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368161063",
+   "kind": "fire_station",
+   "name": "Stafford Volunteer Fire Department Station 1",
+   "lon": -95.556197,
+   "lat": 29.615227,
+   "tags": {
+    "addr:city": "Stafford",
+    "addr:housenumber": "2710",
+    "addr:state": "TX",
+    "addr:street": "North Main Street",
+    "amenity": "fire_station",
+    "ele": "26",
+    "gnis:feature_id": "2334590",
+    "name": "Stafford Volunteer Fire Department Station 1",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368161064",
+   "kind": "fire_station",
+   "name": "Thompsons Volunteer Fire Department",
+   "lon": -95.5853794,
+   "lat": 29.496427,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "fire_station",
+    "ele": "20",
+    "gnis:feature_id": "2334589",
+    "name": "Thompsons Volunteer Fire Department",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368161070",
+   "kind": "fire_station",
+   "name": "Houston Fire Department Station 38",
+   "lon": -95.4677444,
+   "lat": 29.7901872,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "fire_station",
+    "ele": "22",
+    "gnis:feature_id": "2334716",
+    "name": "Houston Fire Department Station 38",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368161215",
+   "kind": "fire_station",
+   "name": "Houston Fire Department Station 73",
+   "lon": -95.5708276,
+   "lat": 29.672776,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "fire_station",
+    "ele": "25",
+    "gnis:feature_id": "2334750",
+    "name": "Houston Fire Department Station 73",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368161219",
+   "kind": "fire_station",
+   "name": "Houston Fire Department Station 60",
+   "lon": -95.5248414,
+   "lat": 29.7331826,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "fire_station",
+    "ele": "21",
+    "gnis:feature_id": "2334738",
+    "name": "Houston Fire Department Station 60",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368161230",
+   "kind": "fire_station",
+   "name": "Houston Fire Department Station 86",
+   "lon": -95.6378446,
+   "lat": 29.7562869,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "fire_station",
+    "ele": "28",
+    "gnis:feature_id": "2334759",
+    "name": "Houston Fire Department Station 86",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368161231",
+   "kind": "fire_station",
+   "name": "Houston Fire Department Station 90",
+   "lon": -95.6694929,
+   "lat": 29.7889282,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "fire_station",
+    "ele": "31",
+    "gnis:feature_id": "2334760",
+    "name": "Houston Fire Department Station 90",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368161236",
+   "kind": "fire_station",
+   "name": "Houston Fire Department Station 77",
+   "lon": -95.5438158,
+   "lat": 29.8223466,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "fire_station",
+    "ele": "29",
+    "gnis:feature_id": "2334753",
+    "name": "Houston Fire Department Station 77",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368161261",
+   "kind": "fire_station",
+   "name": "Beasley Volunteer Fire Department",
+   "lon": -95.80867,
+   "lat": 29.5183643,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "fire_station",
+    "ele": "28",
+    "gnis:feature_id": "2470859",
+    "name": "Beasley Volunteer Fire Department",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368161280",
+   "kind": "fire_station",
+   "name": "City of Piney Point Village Fire Department",
+   "lon": -95.5129,
+   "lat": 29.7821,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "fire_station",
+    "ele": "23",
+    "gnis:feature_id": "2470874",
+    "name": "City of Piney Point Village Fire Department",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368161284",
+   "kind": "fire_station",
+   "name": "Fire Station Number 2",
+   "lon": -95.5208,
+   "lat": 29.6308,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "fire_station",
+    "ele": "21",
+    "gnis:feature_id": "2470898",
+    "name": "Fire Station Number 2",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368161286",
+   "kind": "fire_station",
+   "name": "Fire Station Number 3",
+   "lon": -95.5942,
+   "lat": 29.5919,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "fire_station",
+    "ele": "22",
+    "gnis:feature_id": "2470900",
+    "name": "Fire Station Number 3",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368161287",
+   "kind": "fire_station",
+   "name": "Fire Station Number 3",
+   "lon": -95.527129,
+   "lat": 29.590884,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "fire_station",
+    "ele": "24",
+    "gnis:feature_id": "2470901",
+    "name": "Fire Station Number 3",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368161299",
+   "kind": "fire_station",
+   "name": "Fire Station Number 4",
+   "lon": -95.6186,
+   "lat": 29.5858,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "fire_station",
+    "ele": "20",
+    "gnis:feature_id": "2470902",
+    "name": "Fire Station Number 4",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368161300",
+   "kind": "fire_station",
+   "name": "Houston Fire Station Number 38",
+   "lon": -95.4677045,
+   "lat": 29.7901909,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "fire_station",
+    "ele": "21",
+    "gnis:feature_id": "2470948",
+    "name": "Houston Fire Station Number 38",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368161441",
+   "kind": "fire_station",
+   "name": "Missouri City Fire Department",
+   "lon": -95.5269,
+   "lat": 29.6056,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "fire_station",
+    "ele": "23",
+    "gnis:feature_id": "2471006",
+    "name": "Missouri City Fire Department",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368162241",
+   "kind": "police",
+   "name": "Stafford Police Department",
+   "lon": -95.55531,
+   "lat": 29.615271,
+   "tags": {
+    "addr:city": "Stafford",
+    "addr:housenumber": "2702",
+    "addr:state": "TX",
+    "addr:street": "North Main Street",
+    "amenity": "police",
+    "ele": "25",
+    "gnis:feature_id": "2375884",
+    "name": "Stafford Police Department",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368162248",
+   "kind": "police",
+   "name": "Houston Police Department - Fondren Patrol",
+   "lon": -95.5099624,
+   "lat": 29.6587549,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "police",
+    "ele": "20",
+    "gnis:feature_id": "2375877",
+    "name": "Houston Police Department - Fondren Patrol",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368162282",
+   "kind": "police",
+   "name": "Sealy Police Department",
+   "lon": -96.1568715,
+   "lat": 29.7823271,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "police",
+    "ele": "57",
+    "gnis:feature_id": "2375933",
+    "name": "Sealy Police Department",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368162283",
+   "kind": "police",
+   "name": "Kendleton Police Department",
+   "lon": -95.9961904,
+   "lat": 29.4496312,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "police",
+    "ele": "30",
+    "gnis:feature_id": "2375934",
+    "name": "Kendleton Police Department",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368162297",
+   "kind": "police",
+   "name": "San Felipe Police Department",
+   "lon": -96.100325,
+   "lat": 29.7964726,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "police",
+    "ele": "46",
+    "gnis:feature_id": "2375932",
+    "name": "San Felipe Police Department",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368162320",
+   "kind": "police",
+   "name": "Harris County Sheriff's Office",
+   "lon": -95.7187794,
+   "lat": 29.8024228,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "police",
+    "ele": "36",
+    "gnis:feature_id": "2375967",
+    "name": "Harris County Sheriff's Office",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368162368",
+   "kind": "police",
+   "name": "Meadows Place Police Department",
+   "lon": -95.5771746,
+   "lat": 29.6468265,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "police",
+    "ele": "26",
+    "gnis:feature_id": "2375994",
+    "name": "Meadows Place Police Department",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368162450",
+   "kind": "police",
+   "name": "Houston Police Department - Gulfton",
+   "lon": -95.4853497,
+   "lat": 29.7169926,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "police",
+    "ele": "19",
+    "gnis:feature_id": "2375815",
+    "name": "Houston Police Department - Gulfton",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368162458",
+   "kind": "police",
+   "name": "Beasley Police Department",
+   "lon": -95.9150737,
+   "lat": 29.496152,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "police",
+    "ele": "33",
+    "gnis:feature_id": "2375824",
+    "name": "Beasley Police Department",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368162468",
+   "kind": "police",
+   "name": "Houston Police Department - Ranchester",
+   "lon": -95.5440621,
+   "lat": 29.7066176,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "police",
+    "ele": "22",
+    "gnis:feature_id": "2375843",
+    "name": "Houston Police Department - Ranchester",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368162471",
+   "kind": "police",
+   "name": "Missouri City Police Department",
+   "lon": -95.5668701,
+   "lat": 29.5819438,
+   "tags": {
+    "addr:city": "Missouri City",
+    "addr:housenumber": "3849",
+    "addr:postcode": "77459",
+    "addr:state": "TX",
+    "addr:street": "Cartwright Road",
+    "amenity": "police",
+    "ele": "21",
+    "gnis:feature_id": "2375846",
+    "name": "Missouri City Police Department",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/368162698",
+   "kind": "police",
+   "name": "San Felipe Police Department",
+   "lon": -96.0962151,
+   "lat": 29.7987678,
+   "tags": {
+    "addr:state": "TX",
+    "amenity": "police",
+    "ele": "47",
+    "gnis:feature_id": "2376016",
+    "name": "San Felipe Police Department",
+    "source": "USGS Geonames"
+   }
+  },
+  {
+   "id": "node/5721141880",
+   "kind": "fire_station",
+   "name": "HCESD 48 Fire Station #5",
+   "lon": -95.7381973,
+   "lat": 29.8161466,
+   "tags": {
+    "amenity": "fire_station",
+    "name": "HCESD 48 Fire Station #5"
+   }
+  },
+  {
+   "id": "node/6014073608",
+   "kind": "fire_station",
+   "name": "Pleak Fire Department",
+   "lon": -95.8065139,
+   "lat": 29.4889652,
+   "tags": {
+    "addr:city": "Richmond",
+    "addr:housenumber": "6621",
+    "addr:postcode": "77469",
+    "addr:state": "TX",
+    "addr:street": "Farm to Market 2218",
+    "amenity": "fire_station",
+    "fax": "+1 281-239-8725",
+    "name": "Pleak Fire Department",
+    "phone": "+1 281-342-3692",
+    "website": "https://pleakfd.com/"
+   }
+  },
+  {
+   "id": "node/10916239280",
+   "kind": "hospital",
+   "name": "Westpark Springs",
+   "lon": -95.7610781,
+   "lat": 29.6943822,
+   "tags": {
+    "addr:city": "Richmond",
+    "addr:housenumber": "6902",
+    "addr:postcode": "77407",
+    "addr:state": "TX",
+    "addr:street": "South Peek Road",
+    "amenity": "hospital",
+    "beds": "72",
+    "healthcare": "hospital",
+    "healthcare:speciality": "psychiatry",
+    "name": "Westpark Springs",
+    "phone": "+1 832 535 2770",
+    "website": "https://www.westparksprings.com"
+   }
+  },
+  {
+   "id": "node/10916981577",
+   "kind": "hospital",
+   "name": "Oceans Behavioral Hospital Of Katy",
+   "lon": -95.7485405,
+   "lat": 29.7779641,
+   "tags": {
+    "addr:city": "Katy",
+    "addr:housenumber": "455",
+    "addr:postcode": "77450",
+    "addr:state": "TX",
+    "addr:street": "Park Grove Lane",
+    "amenity": "hospital",
+    "beds": "48",
+    "healthcare": "hospital",
+    "healthcare:speciality": "psychiatry",
+    "name": "Oceans Behavioral Hospital Of Katy",
+    "phone": "+1 281 492 8888",
+    "website": "https://oceanshealthcare.com/ohc-location/katy/"
+   }
+  },
+  {
+   "id": "node/10916992315",
+   "kind": "hospital",
+   "name": "PAM Health Rehabilitation Hospital of Sugar Land",
+   "lon": -95.642451,
+   "lat": 29.5878308,
+   "tags": {
+    "addr:city": "Sugar Land",
+    "addr:housenumber": "7622",
+    "addr:postcode": "77479",
+    "addr:state": "TX",
+    "addr:street": "Branford Place",
+    "amenity": "hospital",
+    "beds": "41",
+    "healthcare": "hospital",
+    "name": "PAM Health Rehabilitation Hospital of Sugar Land",
+    "operator": "PAM Health",
+    "operator:wikidata": "Q119021882",
+    "phone": "+1 281 766 9002",
+    "website": "https://pamhealth.com/hospitals/pam-health-rehabilitation-hospital-of-sugar-land/"
+   }
+  },
+  {
+   "id": "node/10917030811",
+   "kind": "hospital",
+   "name": "Memorial Hermann Rehabilitation Hospital Katy",
+   "lon": -95.7457993,
+   "lat": 29.7757655,
+   "tags": {
+    "addr:city": "Katy",
+    "addr:housenumber": "21720",
+    "addr:postcode": "77450",
+    "addr:state": "TX",
+    "addr:street": "Kingsland Boulevard",
+    "amenity": "hospital",
+    "beds": "35",
+    "healthcare": "rehabilitation",
+    "name": "Memorial Hermann Rehabilitation Hospital Katy",
+    "operator": "Memorial Hermann Healthcare System",
+    "operator:wikidata": "Q6815444",
+    "phone": "+1 281 579 5678",
+    "website": "https://memorialhermann.org/locations/rehabilitation-hospital-katy"
+   }
+  },
+  {
+   "id": "node/10917045362",
+   "kind": "hospital",
+   "name": "First Surgical Hospital",
+   "lon": -95.4626713,
+   "lat": 29.7099774,
+   "tags": {
+    "addr:city": "Bellaire",
+    "addr:housenumber": "4801",
+    "addr:postcode": "77401",
+    "addr:state": "TX",
+    "addr:street": "Bissonnet Street",
+    "amenity": "hospital",
+    "beds": "19",
+    "healthcare": "hospital",
+    "name": "First Surgical Hospital",
+    "phone": "+1 713 275 1111",
+    "website": "https://www.firstsurgical.com"
+   }
+  },
+  {
+   "id": "node/10917051808",
+   "kind": "hospital",
+   "name": "West Chase Houston Hospital",
+   "lon": -95.5561649,
+   "lat": 29.7114513,
+   "tags": {
+    "addr:city": "Houston",
+    "addr:housenumber": "6011",
+    "addr:postcode": "77072",
+    "addr:state": "TX",
+    "addr:street": "West Sam Houston Parkway South",
+    "amenity": "hospital",
+    "beds": "10",
+    "healthcare": "hospital",
+    "name": "West Chase Houston Hospital",
+    "operator": "West Chase Houston Hospital",
+    "operator:wikidata": "Q140420686",
+    "website": "https://wchh.care/"
+   }
+  },
+  {
+   "id": "node/10917052751",
+   "kind": "hospital",
+   "name": "Atrium Medical Center",
+   "lon": -95.5881322,
+   "lat": 29.6462764,
+   "tags": {
+    "addr:city": "Stafford",
+    "addr:housenumber": "11929",
+    "addr:postcode": "77477",
+    "addr:state": "TX",
+    "addr:street": "West Airport Boulevard",
+    "amenity": "hospital",
+    "beds": "68",
+    "healthcare": "hospital",
+    "name": "Atrium Medical Center",
+    "phone": "+1 281 207 8200",
+    "website": "https://www.atriummedicalcenter.com/"
+   }
+  },
+  {
+   "id": "node/12449812655",
+   "kind": "fire_station",
+   "name": "Fulshear-Simonton Fire Department #3",
+   "lon": -95.8281539,
+   "lat": 29.684987,
+   "tags": {
+    "addr:housenumber": "26051",
+    "addr:street": "Fulshear-Gaston Road",
+    "amenity": "fire_station",
+    "name": "Fulshear-Simonton Fire Department #3",
+    "start_date": "2010",
+    "website": "https://fsfd.org/"
+   }
+  }
+ ]
+}

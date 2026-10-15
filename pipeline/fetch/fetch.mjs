@@ -34,6 +34,14 @@ export const GAUGE_CHAIN = [
 /* Fort Bend County FIPS for OpenFEMA filtering. */
 const FBC_FIPS = "48157";
 
+/* Gauges whose observed stage/flood series are cached as well as their metadata.
+ * The gauge-failure redundancy path (pipeline/derive/gauge_redundancy.py) estimates
+ * the Richmond stage from these upstream gauges when RMOT2 is stale, and a run-time
+ * gate there checks that NWPS and USGS report the SAME datum for them — the
+ * "San Felipe trap" documented in docs/DATA-SOURCES.md is exactly a silent offset
+ * between sources, and it must not be discovered by a wrong flood forecast. */
+const STAGEFLOW_LIDS = ["HPDT2", "BAWT2"];
+
 /* ---------------- helpers ---------------- */
 async function fetchJson(url, { tries = 3, timeoutMs = 45000 } = {}) {
   let lastErr;
@@ -72,6 +80,15 @@ async function fetchNwpsChain(manifest) {
     try {
       const data = await fetchJson(url);
       await save(`nwps/${g.lid}.json`, data);
+      if (STAGEFLOW_LIDS.includes(g.lid)) {
+        // Metadata alone is not enough to verify a datum; the observed series is.
+        try {
+          const sf = await fetchJson(`${url}/stageflow`);
+          await save(`nwps/${g.lid}_stageflow.json`, sf);
+        } catch (e) {
+          console.log(`    (stageflow cache for ${g.lid} failed: ${e})`);
+        }
+      }
       const obs = data?.status?.observed;
       const fc = data?.status?.forecast;
       out.push({

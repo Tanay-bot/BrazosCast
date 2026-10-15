@@ -15,6 +15,8 @@ to refresh `data/raw/` and rewrite `data/raw/manifest.json`.
 | Fort Bend County GIS | `gisweb.fortbendcountytx.gov/arcgis/rest/services` | none | ❌ **522** | Origin down on every retry. Blocks the county FEMA-zone FeatureServer. |
 | **FEMA NFHL (national)** | `hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer` | none | ✅ 200 | Point query at Richmond → `FLD_ZONE AE, ZONE_SUBTY FLOODWAY`. Layer **28 = Flood Hazard Zones**. |
 | FBCAD open data hub | `fbcad-open-data-hub-fortbend.hub.arcgis.com` | none | ✅ 200 | Parcels via ArcGIS Hub (`?f=geojson`). |
+| **USGS Harvey inundation (Brazos, upper reach)** | `sciencebase.gov/catalog/file/get/5aa02374e4b0b1c392e68400` | none | ✅ 200 | **Validation layer.** Item of data release doi:**10.5066/F7VH5N3N** (SIR 2018-5070). `pipeline/fetch/fetch_harvey_inundation.mjs` caches the 2 MB `Brazos_upper.zip` + readme to `data/raw/harvey/` with a receipt. Three layers, **EPSG:6579**: mapped inundation extent (`brazos_upper_final`, 576 km², **not OGC-valid as shipped**), mapped area boundary (948 km², the evaluated-set definition), 44 surveyed high-water marks with NAVD88 water-surface elevations (35 on the Brazos main stem). USGS public domain (CC0). **Nature, and it bounds every conclusion drawn from it:** the extent is a water surface *interpolated between the surveyed high-water marks* and clipped to the boundary — a survey-anchored estimate, **not satellite-observed water edges**, and one maximum extent rather than a time series. The 377 MB `Depth_Brazos_upper.zip` is deliberately **not** fetched (no raster is needed to intersect polygons, and it would dwarf `data/raw/`). Used by `pipeline/derive/harvey_validation.py`; see [FINDINGS.md](./FINDINGS.md) §11. The same cached gauge record is replayed hourly by `pipeline/derive/backcast.py` to produce the lead time the app would have given in 2017 (§13). |
+| **OpenStreetMap (Overpass)** | `overpass-api.de/api/interpreter` | none | ⚠️ **only light queries** | Routing destinations: 59 hospitals / fire / police stations cached to `data/raw/osm_facilities.json` by `pipeline/fetch/fetch_facilities.mjs`. **Node-only queries over this box return in ~2 s; the same query with `way` added returns 502/504 on every endpoint tried.** Mirrors `overpass.kumi.systems`, `maps.mail.ru/osm/tools/overpass` refused or timed out. A missing User-Agent is refused. Data © OpenStreetMap contributors, **ODbL** — attribution is in the app footer and each cached record keeps its raw tags. |
 
 ## Corrections to the plan/spec (important)
 
@@ -40,6 +42,22 @@ From `data/raw/openfema/nfip_claims_48157_v3.json` (7,389 claims, 1978-05 → 20
 This is the single best justification chart for the app: *the county's floodplain map did not warn
 the two-thirds of residents who actually claimed.* Reproduce with `pipeline` once we add the
 analysis step.
+
+## The observed-flooding layer, and what it turned out to be
+
+The Harvey extent above was fetched to close the one open QC item left in `FINDINGS.md` §5 —
+*"validate thresholds against the USGS Harvey observed-inundation layer before shipping"* — after
+the route through OpenFEMA claim points was closed by their 0.1° privacy coarsening (§5, R5). It
+found that the thresholds run low as a uniform constant — **+22.3 ft** by a best-cut search and
+**+23.7 ft** by a probit fit, which also measures a **per-street spread of 11.4 ft (1 sd)** — with
+**zero false negatives** and an **AUC of 0.809**. It also independently corroborated the **+24.7 ft** datum gap that
+`threshold_correction.py` had discarded as irreconcilable — which is the one thing the "datum trap"
+below was always warning about, arriving from the opposite direction.
+
+**What applying it would score** is measured on the same 1,187 outcomes and recorded as
+`correction_would_score`: accuracy 0.422 → 0.760 and the false-positive rate 0.887 → 0.153, against
+**167 segments that flooded and would be called dry**. It is in-sample on one event — an upper bound,
+not a result — and no correction has been applied; see §11.
 
 ## The datum trap (still live, handle on ingest)
 

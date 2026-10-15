@@ -70,26 +70,33 @@ day)" as fix #2, and its reasoning was that a per-reach conversion "kills the
 discharge (00060) for the Richmond gauge — 9,690 paired observations. So the
 route was built and tested. **It is unusable, on three measured grounds:**
 
-1. **The discharge does not lie in the rating's support.** A plain power-law
-   rating (`R² = 0.908`) is badly biased across the flood range: it predicts
-   **39.3 ft where the record shows 55.0 ft** at the largest observed flow — a
-   **15.7 ft** error at the one event that matters most.
-2. **A rating that fits gives an impossible answer.** A shifted power-law rating
-   (the standard hydrologic form) fits the whole record to **0.34 ft** median
-   error — and then yields a **78.5 ft median threshold**, with **860 of 1,614**
-   segments needing a discharge beyond anything the gauge has measured. It
-   asserts that the median corridor road floods at a level larger than any on
-   record. That is extrapolation dressed as measurement.
+1. **The rating was itself defective at the top of the record — and that was a
+   real bug, now fixed.** Two closed forms were fitted and both failed on the same
+   point, the largest event on record (2017-08-31, Hurricane Harvey: 55.01 ft at
+   120,000 cfs). A plain power law predicts **39.3 ft** there (15.7 ft low); the
+   standard shifted power law predicts **71.6 ft** (16.6 ft high) while fitting
+   the low-flow bulk to 0.34 ft. The errors point in opposite directions because
+   the observed rating *flattens* at high stage — 102,000 cfs gives 54.65 ft, not
+   64 — and no three-parameter power form bends that way. `gauge_rating.py` now
+   uses a monotone PCHIP curve through the median stage of 40 log-spaced flow
+   bins, with the record peak as an exact knot: median 0.28 ft, above 35 ft 1.12
+   ft, max 4.0 ft, error at the peak 0.00 ft (was 16.6).
+2. **The threshold discharges still do not lie in the rating's support.**
+   **860 of 1,614** segments need a discharge beyond anything the gauge has
+   measured, so converting the column directly yields a **57.3 ft median
+   threshold**. It asserts that the median corridor road needs a flood larger
+   than any on record. That is extrapolation dressed as measurement.
 3. **The column is not a gauge discharge at all.** The mainstem levelpath's
    hydrotable carries **225 sub-reaches** whose discharges at a single stage span
    **3,229 to 232,824 cms**. It is not comparable across reaches, which is the
    same reason the earlier rating-curve attempt failed.
 
-Route rejected, and the evidence is recorded in
+Route rejected *as a direct conversion*, and the evidence is recorded in
 `road_thresholds.summary.json` under `known_defect` so it cannot be re-proposed
-without confronting the measurement. `pipeline/derive/gauge_rating.py` is kept as
-a working, independently useful artifact (it converts any future flow to gauge
-stage), not as part of the threshold chain.
+without confronting the measurement. The rejection is about the conversion route,
+not about the rating: the rating was fixed in the process, and route R1 in
+`threshold_correction.py` uses it to convert **per reach**, which is the version
+that is worth testing against real inundation.
 
 ### A6. What is actually shipped, and the defect that remains.
 
@@ -120,13 +127,23 @@ false. Same table as A1, after Step 1:
 The review's core complaint — *half the corridor's streets flood eleven feet
 below official minor-flood stage* — **still stands at 49.7%.** Step 1 removed one
 visible absurdity (SH 6) and made the rest honest; it did not fix the primitive.
-Only Step 3 can, and Step 3 needs data.
+Only Step 3 can.
+
+> **Step 6 update.** "Still stands" now has a size. Against the observed Harvey
+extent the thresholds over-predict by **+22.3 ft, uniformly** (§ Step 6): streets
+that this table says flood at 33 ft flood near 55 ft. The complaint was right,
+the population it describes is larger than the 49.7% figure suggests, and the error
+is a constant rather than the along-river trend the blocks below describe.
 
 Residual error, unchanged and now documented: the HAND reference changes bed
 elevation along the corridor, so `−0.92 ft/mile, r = −0.64` remains. Closing it
 needs **new data, not new code**: a HAND re-run from the DEM (not in this repo),
-or per-reach channel bed elevations (`usgs_elev_table.csv` has 15 rows, one per
-gauge).
+or per-reach channel bed elevations in the gauge's own vertical datum.
+(`usgs_elev_table.csv` does hold `dem_adj_elevation` — **15 rows covering 9
+distinct gauge reaches**, one row per crosswalk source rather than one per gauge —
+but those elevations and the gauge's zero datum differ by +24.7 ft at the gauge
+itself, so they cannot be used as-is. Step 3 below tests that and the four other
+routes.)
 
 So the review's "30 minutes" for fix #1 and "half a day" for fix #2 are both
 wrong: #1 is partial and #2 is not available. The plan below is reordered
@@ -157,60 +174,321 @@ remaining defect is declared rather than hidden.
 
 **Verified:** gates pass; `tsc --noEmit` clean; `vite build` exit 0.
 
-### Step 2 — Isolation stage: *when can I no longer leave?*
+### Step 2 — Isolation stage: *when can I no longer leave?* **DONE**
 
-The upgrades document's Tier 1, and the one change that alters what the product
-*is*. Ship `isolation_ft` per segment: the stage at which a node loses its last
-route to safety. Always ≤ the flood stage.
+`pipeline/derive/isolation.py` ships `isolation_ft`, `isolation_gap_ft` and
+`isolation_status` per segment, and the app's verdict line now leads with the
+isolation number ("You lose your last way out Saturday 8:00 PM · 121 hours until
+you are cut off").
 
-- Rebuild topology properly — split segments at every shared vertex, or node the
-  network with `osmnx` and join thresholds by `osmid` — before publishing any
-  number. The prototype's endpoint snapping misses T-intersections and
-  over-reports isolation.
-- Union-find sweep across stage; refuge = any node touching an edge that survives
-  major stage.
-- Gates: isolation ≤ flood stage for every segment; monotone across stage.
+**Results, at the thresholds from Step 1:**
 
-**Acceptance:** the count of segments cut off before their own street floods, on
-corrected topology, with the gates passing and the app's verdict line leading
-with the isolation number.
+- **230 of 1,614 segments are cut off before their own street floods** (median
+gap 2.8 ft, max 19.6 ft). US Highway 90A: street 34.8 ft, cut off 18.1 ft.
+- **883 have no modelled dry refuge at any stage** — shipped as an explicit
+`isolation_status = "no_dry_refuge"` rather than a silent null, because it is the
+most severe answer this stage can give, not missing data.
 
-### Step 3 — Close the threshold defect (needs new data)
+**What the topology fix was actually worth.** The upgrades document's prototype
+used one edge per segment, endpoints only. That collapses 8,987 vertices to 1,866
+and fragments the corridor into 286 components (largest 183) instead of 116
+(largest 2,148). **Running this implementation on the prototype's own graph
+reproduces its published 152 exactly**; the corrected topology raises it to 230
+and drops the no-refuge count from 1,052 to 883. The max-vs-min aggregation choice
+makes no difference (230 either way), so the whole difference is topology — which
+is precisely the flaw the prototype's author flagged as a caveat and could not fix.
 
-Acquire what Step 1 could not produce: per-reach channel bed elevations (to turn
-local HAND depth into gauge stage), or a DEM to re-run HAND. Then re-derive and
-re-check the gates. **This is the only step that can remove the 11 classified
-highways from `known_defect`.**
+**Two things checked rather than assumed.** `unary_union` inserts zero new
+vertices — the extract is already fully noded (2,037 exact shared junctions), so no
+geometric noding was needed and none was written. And 196 features are multipart
+with parts that do not touch, so edges are built per part; chaining across parts
+would have invented links. The first draft did exactly that and the gate caught it.
 
-### Step 4 — Routing and reverse routing
+**Gates:** isolation ≤ the segment's own flood stage for every segment; the
+union-find bottleneck cross-checked against an independent BFS at 20 sampled
+stages (boundaries included) on all 8,987 nodes; the topology fix asserted to
+improve on endpoint-only connectivity; and `isolation_status` asserted consistent
+with every value. The export step refuses to run if the field is missing, so
+forgetting to re-run this stage fails loudly instead of shipping a half-empty
+payload.
 
-Replace the six-nearest-by-centroid list in `app/src/main.ts` with Dijkstra on the
-proper graph. Weight flooded edges at 1e6 instead of deleting them, so a fully-cut
-network returns "every route out crosses water, the shallowest is X" rather than
-nothing. Route to real OSM destinations (hospital, fire_station). Add reverse
-routing: can an ambulance reach *you*.
+**Known limits (in the summary):** the refuge bar is a choice, not a measurement
+(45 ft → 863 no-refuge, 55 ft → 910); the bounding-box clip means escape outside
+the study area is not counted (treating the box edge as an exit would give 674
+no-refuge and 408 trapped); and absolute stages inherit the Step 3 defect.
 
-### Step 5 — Gauge-failure redundancy
+### Step 3 — Close the threshold defect. **DONE — closed by measurement, not by a correction.**
 
-When RMOT2 is stale > 2 h, estimate Richmond stage from upstream HPDT2/BAWT2
-shifted by the derived median lag, labelled as estimated, widened to the measured
-IQR. The travel-time table becomes an operational redundancy path.
+Five routes to a physically-correct conversion were built and tested
+(`pipeline/derive/threshold_correction.py`). Every one is closed by a number that
+is recomputed at run time, and **no correction is applied** — the thresholds ship
+unchanged, because a correction that cannot be validated would be worse than a
+declared defect. What the step produced instead:
 
-### Step 6 — Harvey validation (needs new data)
+* each closure recorded with its measurement in
+  `data/derived/threshold_correction.json`, so no route can be re-proposed
+  without confronting the number that killed it;
+* the one asset from the investigation that **does** validate: a datum-free
+  relative channel-bed profile recovered by integrating NWM reach slopes and
+  checked against the six gauge bed elevations in `usgs_elev_table.csv` at
+  **r = 0.986** (`data/derived/bed_profile.json`);
+* a real bug fixed in `gauge_rating.py` — a **16.6 ft** error at the Harvey peak;
+* R1, the closest route to reopening, fully implemented and anchored: at the
+  gauge's own sub-reach it returns HAND within 2.6 ft, and it moves US 90A
+  16.5 → 30.5 ft, State Highway 6 14.2 → 27.5 and Grand Parkway 15.2 → 28.8.
 
-USGS observed inundation for Aug–Sep 2017 intersected with the road graph. This
-adjudicates whether the corrected thresholds are actually better, and converts the
-weakest claim into the most rigorous one.
+R1 still cannot ship, and the reason is measured rather than assumed: it is not a
+lift (in-record it moves 645 segments up and 117 down), so it **redistributes** the
+below-action set — 17 of the 18 classified highways are lifted and 17 different
+ones are pushed below action (net 18) — and the hybrid (convert in range, keep
+HAND otherwise) is non-monotone, with 637 segments reporting a *later* flood
+stage than higher ground nearby.
 
-**Acceptance:** confusion matrix in `README.md`, including a measured
-false-positive rate.
+**Conclusion: this is a data problem, not a code problem, and the route most
+likely to work is already written.** Reopening needs one of: a DEM to re-run HAND
+against the correct drainage, per-reach bed elevations in the gauge's own
+vertical datum, or USGS/NOAA Harvey inundation **polygons**. The OpenFEMA claim
+points cannot substitute — they are privacy-coarsened to 0.1°, ~11 km per cell,
+so 7,387 claims collapse onto six latitudes.
 
-### Step 7 — Uncertainty, demo, human layer
+> **Step 6 update: the third of those was obtained, and it reframes this section.**
+The observed extent puts the required correction at **+22.3 ft, a constant** —
+within 2.4 ft of R2's discarded datum gap (+24.7 ft) and 2.8 ft of R1's median
+lift (+25.1 ft). So R2's "irreconcilable" constant was pointing at the right
+number and R1's magnitude is **8–9 ft short** of what the observation needs. The
+data problem still needs the DEM or the bed elevations to make the correction
+*shippable*, but its size is no longer a mystery.
 
-Bootstrapped ensemble ("37 of 50 runs reach your street"), the Harvey backcast
-alert timeline, islands by connected component, three-tier notifications,
-household card, low-bandwidth `?text=1`, PWA offline cache, multilingual
-build-time templates.
+### Step 4 — Routing and reverse routing. **DONE**
+
+`pipeline/derive/routing.py` builds the stage; the app runs the search.
+
+**The graph is shared, not rebuilt.** The routing stage imports `isolation.build()` and
+asserts its node and edge counts equal `isolation.summary.json`, so the routes the app
+draws lie on the same **8,987-node / 8,970-edge** network the isolation number was
+computed on. If either builder drifts, the run fails instead of quietly describing a
+different road network in each panel.
+
+**Destinations are real, and only on the network.** 59 hospitals, fire stations and
+police stations inside the corridor box were fetched from OpenStreetMap
+(`pipeline/fetch/fetch_facilities.mjs`, cached). A facility is accepted only if a graph
+node is within 400 m of it — **9 accepted, 50 rejected**. The rejections are the point:
+the road extract is a bounding-box clip, so a Sugar Land hospital snapped to the
+corridor edge would advertise a route along roads that were never modelled. The nearest
+route ends 370 m from the furthest accepted station, and the app says so on screen.
+
+**Flooded edges are weighted, not deleted** (1e6 per flooded segment), so a dry route
+always beats a wet one of any length, and when every route is wet the search still
+answers — "crosses water on 3 segments, deepest floods at 24.1 ft" — instead of
+returning nothing.
+
+**Results at the shipped thresholds:**
+
+- **806 of 1,614** segments have a modelled route to a responder at some stage; **197**
+  to a hospital, which is the number that decides whether an ambulance can get in.
+- **609 lose that route before their own street floods** — help stops reaching them
+  earlier than the flood reaches them. Largest gaps: FM 762 (street 37.1 ft, cut
+  **20.8**), Town Center Blvd (54.5 → 40.3), Macek Rd (34.3 → 20.8), Crabb River Rd
+  (32.5 → 20.8). Median cut stage 30.0 ft.
+
+The 808 segments with no route to a responder **at any stage** are in road-network
+fragments the clipped extract does not connect — a limit of the study area, and the app
+says exactly that rather than reporting it as a real barrier.
+
+**Reverse routing is the same field, read outward from the responders.** The multi-source
+search from all facility nodes answers "who can reach me"; because the road graph is
+undirected the physical path is the same one the forward search finds, and that symmetry
+is stated in the summary and the module rather than dressed up as an asymmetry the data
+does not have.
+
+**Verified:** the pipeline's 8 gates pass (graph identity, snap bounds both ways,
+independence of BFS vs the bottleneck at 16 stages, a hospital subset can never be cut
+before the responder superset, non-vacuity at 5 ft, payload array alignment); the artifact
+is byte-identical on re-run; `tsc --noEmit` and `vite build` are clean; and the app's
+owndependent max-min Dijkstra was checked **in the browser** against the pipeline's
+union-find bottleneck — **31 segments, 0 mismatches, max |diff| 0.000 ft**.
+
+### Step 5 — Gauge-failure redundancy. **DONE — and the trigger was wrong.**
+
+The plan said: estimate Richmond stage from HPDT2/BAWT2 shifted by the derived
+median lag whenever RMOT2 is stale by more than 2 hours, label it estimated, widen
+to the measured IQR. `pipeline/derive/gauge_redundancy.py` builds exactly that and
+then **measures** it, 5-fold leave-events-out over 20 flood events, against the
+estimator that actually competes with it — the last Richmond observation you
+already have:
+
+| staleness | persistence | upstream shift | anchored |
+|---|---|---|---|
+| 2 h | **0.22 ft** | 2.52 ft | 0.22 ft |
+| 12 h | **1.32** | 2.52 | 1.28 |
+| 18 h | 1.99 | 2.52 | **1.86** |
+| 24 h | 2.66 | 2.52 | **2.37** |
+| 30 h | 3.33 | 2.52 | **2.80** |
+| 48 h | 5.35 | **2.52** | 3.63 |
+| 72 h | 7.88 | **2.52** | 3.94 |
+
+**The 2 h trigger is wrong, and the table says why.** The upstream transfer errs a
+constant ~2.5 ft — it does not degrade with staleness, which is precisely its
+value — so below about a day it is *worse* than the reading already on screen. The
+regimes are therefore derived from the errors rather than chosen:
+
+- **under 18 h** → the last observation, with its age attached
+- **18–30 h** → the anchored estimate (last observation + the transfer's change)
+- **beyond 30 h** → the upstream estimate, with the measured band
+
+The band is the training-fold error IQR, −1.56 / +1.01 ft, and its **coverage is
+measured out-of-sample at 44%** against a nominal 50% — reported rather than
+assumed, and gated: a band that does not cover about what it claims fails the run.
+
+**A prerequisite that is a gate, not a footnote.** The transfer is fitted on USGS
+gage height and applied to NWPS values in production, and docs/DATA-SOURCES.md
+documents a live "San Felipe trap" where the same gauge appears in two vertical
+datums. So the module re-checks NWPS against USGS on the cached upstream series
+every run: they agree within **0.24 ft** over 29 overlapping days on both gauges.
+A silent offset here would have become a wrong flood stage.
+
+**In the app:** a stale gauge shows an `estimated` badge and the band, the source
+line reads `ESTIMATED · NWPS Hempstead → RMOT2`, and when the upstream stage falls
+below the range the transfer was fitted on (it is fitted on flood events, so this
+is the normal condition in a quiet river) the estimate says it is **clamped to the
+fitted floor and that the band does not describe it** — a floor, not a value.
+
+**Verified:** gates pass (datum agreement, derived regimes ordered, beats
+persistence where shipped, band coverage measured, and the largest lag + gap fits
+inside the 719 h live observed window); the app's piecewise-linear transfer matches
+the pipeline's on a 13-point grid for both gauges exactly; and all four staleness
+regimes were driven in a real browser by shifting the clock — fresh, 11 h (last
+observation), 25 h (anchored), 41 h (upstream, clamped and disclosed).
+
+### Step 6 — Harvey validation. **DONE — and it settles Step 3's open question.**
+
+The plan said this "needs new data". It did, and the data was found and fetched: the USGS
+flood-inundation extent for the upper Brazos from Hurricane Harvey (doi:10.5066/F7VH5N3N,
+SIR 2018-5070), cached by the new `pipeline/fetch/fetch_harvey_inundation.mjs` and scored in
+`pipeline/derive/harvey_validation.py`. It replaced the observation route R5 had closed on
+privacy-coarsened claim points.
+
+**Acceptance met:** confusion matrix in `README.md`, with a measured false-positive rate.
+
+At the observed peak (55.15 ft), on the 1,187 segments inside the mapped boundary:
+
+| | observed flooded | observed dry | total |
+|---|---|---|---|
+| model flooded | 414 | **686** | 1,100 |
+| model dry | **0** | 87 | 87 |
+
+accuracy 0.422 · **false-positive rate 0.887** · recall 1.000 · precision 0.376, against a modelled
+prevalence of 92.7% and an observed 34.9%.
+
+**Four things this settles, none of which were knowable from the repo before.**
+
+1. **The error is calibration, not discrimination.** AUC 0.809 — the HAND threshold does rank ground
+   that flooded above ground that did not. Only the absolute mapping to gauge stage is wrong.
+2. **The magnitude is +22.3 ft, and it is a constant.** Fitting on one half of the corridor and
+   testing on the other: constant offset 0.709/0.844 test accuracy, offset + along-river slope
+   0.622/0.831 (with recall collapsing to 0.16/0.08), uncorrected 0.440/0.387. This **confirms R3's
+   corrected premise** — the physical correction is a constant offset — over the −0.92 ft/mile trend
+   the shipped summary names as the error.
+3. **R2's discarded datum gap was the signal.** R2 recovered a +24.7 ft constant and closed it as an
+   irreconcilable vertical-reference problem; R1's median lift is +25.1 ft. The observation says
+   +22.3 ft — **within 3 ft of both**, from unrelated inputs. The route written off as unresolvable
+   was pointing at the right number.
+4. **R1 is not enough.** Its conversion lands **8.3–9.0 ft short** of what the observation requires
+   on the three named highways, independently explaining why it redistributes the below-action set
+   rather than lifting it. `to_reopen`'s "observed inundation extent" item is marked satisfied by a
+   run-time cross-check in `threshold_correction.py`.
+
+**Still not applied, and on purpose.** One event, one extent, and a constant fitted to a single
+flood with no second flood to test it on is a new unvalidated number in place of an old one — the
+same rule that closed all five routes in Step 3. What changed is that the defect is now *measured*
+(22.3 ± a few ft, uniform) rather than *declared* (−0.92 ft/mile, unexplained).
+
+**One thing the test cannot do, stated rather than exploited.** A single-instant extent cannot
+validate a low threshold — a segment wet at the record peak is equally consistent with flooding at
+17 ft and at 55 ft — so the 20 below-action segments (17 of which Harvey reached) are reported and
+explicitly **not** treated as vindicated. That needs a series of extents at successive stages.
+
+The observation is a water surface interpolated between 44 surveyed high-water marks, not satellite
+water edges, and one maximum extent rather than a time series. Limits in FINDINGS §11.
+
+### Step 7 — Uncertainty, demo, human layer. **IN PROGRESS — uncertainty and backcast shipped.**
+
+The step lists eight things. The uncertainty ensemble and the Harvey backcast are done;
+the rest are not, and are listed at the end of this section as outstanding.
+
+**The uncertainty ensemble is done, and it is the item that consumes Step 6 rather
+than sitting beside it.** "31 hours" is one run of one model; the same evidence that
+measured the +22 ft bias also measures how far apart two streets with the *same*
+threshold can be — and that number is much larger:
+
+| quantity | value | estimator |
+|---|---|---|
+| corridor-wide lift (bias) | **+22.30 ft** | best-cut search (maximises correct classifications) |
+| corridor-wide lift (bias) | **+23.72 ft** | probit MLE, 90% CI +22.9..+24.6 |
+| **per-street spread** | **σ = 11.36 ft (1 sd)** | probit MLE, 90% CI 10.0..12.7 |
+
+The first is a bias, which one corrects. The second is *not* a bias and cannot be
+corrected by an offset: it says two streets the model puts at the same stage can be
+11 ft apart. That is the honest uncertainty a household faces, so
+`pipeline/derive/ensemble.py` draws each street's true stage from the measured
+distribution, adds the forecast's own measured error, and the app answers with a
+**distribution**:
+
+| street threshold | point estimate | ensemble |
+|---|---|---|
+| 30 ft | 138 h (certain) | **27 of 50** cross, median 162 h [147–216] |
+| 45 ft | 158 h | **4 of 50** cross |
+| 50 ft | 169 h | **0 of 50** cross |
+
+**Verified:** the algorithm is implemented twice — Python and TypeScript — and the
+app reproduces the pipeline's **16-row verification grid exactly**, counts and all
+three quantiles, including the rows that exercise the forecast-error path (mulberry32
++ Box-Muller with drawn values rounded identically on both sides, so an ulp difference
+between libm and V8 cannot change a reported count). Gates assert the forecast-error
+curve passes through its measured knots and is monotone, that a higher threshold never
+crosses more often, and that the grid is not uniformly certain. Render latency is
+unchanged at **6.2 ms median over 24 slider steps** because the ensemble is cached on
+the selection, never recomputed while the stage moves.
+
+**The Harvey backcast alert timeline is also done, and it is the item that makes the
+lead-time claim checkable rather than plausible.** Every number in this repo was a
+forecast scored against one observed instant; none had produced a lead time for the
+flood that happened. `pipeline/derive/backcast.py` runs the app's own rule backwards
+over the observed 2017 gauge record (241 hourly points, Aug 22 – Sep 1):
+
+| tier | onset | before the crest |
+|---|---|---|
+| action 20 ft | Aug 27 09:00 | **109 h** |
+| minor 45 ft | Aug 28 14:00 | 80 h |
+| moderate 48 ft | Aug 28 21:00 | 73 h |
+| major 50 ft | Aug 29 01:00 | 69 h |
+
+The median street's own alert landed **96 h before the crest** (69–102 h), with 1,469
+of 1,614 segments reaching their threshold inside the window. **What is observed and
+what is not is stated rather than blurred:** the onsets and the crest are observed; the
+per-street onset that precedes them is the model, because the only street-level
+observation in the project is one event-maximum extent. The window ends two hours after
+the crest, so the recession is not reported at all.
+
+**It also priced the decision this plan has been carrying since Step 3.** Applying the
+measured correction would silence **969 of the 1,469** streets the shipped rule warns in
+time and delay the rest by a median of **71 h**; what it buys is measured on the peak —
+accuracy 0.422 → 0.760 and the false-positive rate 0.887 → 0.153, at 167 genuinely
+flooded segments reclassified dry. `harvey_validation.py` now records that in-sample
+score (`correction_would_score`), so "not applied" rests on a number on each side
+instead of an argument on one.
+
+**Verified:** the app recomputes the tier onsets from its own replay series and the flag
+counts from its own road list and matches the pipeline's **13-stage + 4-onset grid on all
+17 rows**; gates require the hourly crest to agree with the published 15-minute peak, the
+crest to fall in the build-up half of the window, flag counts to be monotone in stage and
+never higher under the correction, quantiles ordered, correcting a threshold never to
+alert *earlier*, and the correction to silence some but not all warned streets — a
+trade-off that is not being measured fails the run.
+
+**Still to do in this step:** islands by connected component, three-tier notifications,
+household card, low-bandwidth `?text=1`, PWA offline cache, multilingual build-time
+templates.
 
 ### Cut
 
@@ -225,13 +503,20 @@ build-time templates.
 | order | work | status |
 |---|---|---|
 | 1 | threshold gates, crossing repair, confidence | **done** |
-| 2 | isolation stage, true topology | next |
-| 3 | close the threshold defect (new data) | needs data |
-| 4 | routing + reverse routing | — |
-| 5 | gauge redundancy | — |
-| 6 | Harvey validation | needs data |
-| 7 | demo + human layer | — |
+| 2 | isolation stage, true topology | **done** |
+| 3 | five correction routes tested; all closed by measurement | **done** |
+| 4 | routing + reverse routing | **done** |
+| 5 | gauge redundancy (trigger corrected by measurement) | **done** |
+| 6 | Harvey validation (observed extent; error measured at +22.3 ft, a constant) | **done** |
+| 7 | uncertainty ensemble (lead time as a distribution) | **done** |
+| 7 | Harvey backcast alert timeline | **done** |
+| 7 | islands by connected component, notifications, household card, `?text=1`, PWA, i18n | — |
 
 Steps 1–2 are correctness and must land before any number goes to a judge. Steps
 4–5 are what distinguish this from a dashboard. Step 6 is what proves 1–3 were
-right.
+right — and what it proved is more specific than expected: the thresholds are not
+noise and their error is not the shape the summary described, but a **uniform
+~22 ft offset** that already existed in the repo as a datum gap nobody could
+justify. The correction itself stays unapplied until a second event can test it,
+which makes a **second observed extent** (the 2016 flood, or a NOAA/other Harvey
+product) the highest-value outstanding item in this plan.

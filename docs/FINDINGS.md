@@ -129,12 +129,12 @@ Output: `data/derived/road_thresholds.geojson`.
 1. *Discharge through the wrong rating curve.* Mapping `threshold_discharge_cfs` via the Richmond
    rating implied **38% of streets flood at action stage** — implausible. The file spans 442 NWM
    reaches; a tributary's discharge is not comparable to the mainstem's. Rejected. Re-confirmed with
-   the gauge's own fitted rating (9,690 paired daily observations, `gauge_rating.py`): a plain power
-   law errs **15.7 ft at the largest observed event**, and a shifted power-law rating that fits the
-   record to 0.34 ft median error yields a **78.5 ft median threshold**, with **860 of 1,614**
-   segments needing a discharge beyond anything the gauge has measured. The column is also not a
-   single-reach discharge at all: the mainstem levelpath's hydrotable carries 225 sub-reaches whose
-   discharges at one stage span **3,229–232,824 cms**. The route is unusable, and now measurably so.
+   the gauge's own rating (9,690 paired daily observations, `gauge_rating.py`): it yields a **57.3 ft
+   median threshold**, with **860 of 1,614** segments needing a discharge beyond anything the gauge
+   has measured. The column is also not a single-reach discharge at all: the mainstem levelpath's
+   hydrotable carries 225 sub-reaches whose discharges at one stage span **3,229–232,824 cms**. The
+   route is unusable *as a direct conversion*, and now measurably so — but it is usable **per reach**,
+   which is a different test entirely (see *The five routes*, below).
 2. *Per-catchment rows poisoning the minimum.* A road has one row per catchment it crosses, and
    those rows reference **different reaches**. Simonton Road's rows ran 2.6 → 51.9 ft: the low values
    were referenced to a small tributary ("2.6 ft above that creek"), not the Brazos. Taking the
@@ -151,18 +151,207 @@ Output: `data/derived/road_thresholds.geojson`.
    Parkway, whose 16–19 ft values run the length of the corridor rather than concentrating at a
    crossing. Those segments are now flagged rather than silently shipped.
 
-**Open defect — declared, not hidden.** Treating `threshold_hand_ft` as the Richmond gauge stage
-leaves a residual systematic error: the HAND reference changes bed elevation along the corridor, and
-regressing the thresholds on distance from the gauge gives **−0.92 ft/mile, r = −0.64**. Eleven
-classified highway segments (US 90A, Grand Parkway) still sit below action stage in
-`road_thresholds.summary.json` under `known_defect`. Closing this properly needs either a HAND re-run
-from the DEM (not in this repo) or per-reach channel bed elevations to convert local HAND depth to
-gauge stage (`usgs_elev_table.csv` has 15 rows, one per gauge). Both are new data, not new code.
+**Open defect — declared, not hidden, and its magnitude is now measured (§11).** Treating
+`threshold_hand_ft` as the Richmond gauge stage leaves a residual systematic error: the HAND reference
+changes bed elevation along the corridor, and regressing the thresholds on distance from the gauge
+gives **−0.92 ft/mile, r = −0.64**. Thirteen classified highway segments (**11 unique ways** — US 90A,
+Grand Parkway, State Highway 6) still sit below action stage in `road_thresholds.summary.json` under
+`known_defect`, every one flagged `confidence: "low"`.
 
-**Open QC item:** validate thresholds against the USGS Harvey observed-inundation layer before
-shipping. 76.3% of mainstem segments flooding at the 45 ft minor stage is high and unverified.
+Against the observed Harvey extent the error is **+22.3 ft, uniform** — not the along-river trend this
+paragraph describes, which a spatial holdout shows does not generalise where a constant does (§11).
+The `confidence: "low"` flags are on the right segments for the right reason; what changes is that the
+correction's size is known rather than assumed.**Open QC item — NOW CLOSED (§11).** Validate thresholds against the USGS Harvey observed-inundation
+layer before shipping: 76.3% of mainstem segments flooding at the 45 ft minor stage was high and
+unverified. It is verified now, and it is too high — the observed extent puts the model's prevalence
+at 92.7% against an actual 34.9%, with a measured false-positive rate of 0.887 and the required
+correction at **+22.3 ft**.
 
-## 6. Inundation bands — PROVISIONAL (`pipeline/derive/inundation.py`)
+### A real bug found here: the gauge rating was wrong at the top of the record
+
+While testing the conversion the rating itself was measured, and it failed at the one point that
+matters most. At the largest event on record — **2017-08-31, Hurricane Harvey: 55.01 ft at
+120,000 cfs** — the plain power law predicted **39.3 ft** (15.7 ft low) and the standard shifted
+power law predicted **71.6 ft** (16.6 ft high), while fitting the low-flow bulk to 0.34 ft.
+
+Two closed forms erring in *opposite* directions is the diagnostic: the observed curve **flattens**
+at high stage (102,000 cfs gives 54.65 ft, not 64), and no three-parameter power form bends that way.
+This is not scatter — the top of the record is clean and monotone (53.26 ft at 95,000 cfs, 54.65 at
+102,000, 55.01 at 120,000).
+
+`gauge_rating.py` now uses a **monotone PCHIP** curve through the median stage of 40 log-spaced flow
+bins, with the record peak appended as an exact knot, and a local power-law tail above the record.
+Measured before → after:
+
+| metric | power law | shifted power law | **PCHIP** |
+|---|---|---|---|
+| median abs error | 0.87 ft | 0.34 ft | **0.28 ft** |
+| stage > 35 ft | — | 2.73 ft | **1.12 ft** |
+| stage > 45 ft | — | ~5–9 ft | **1.14 ft** |
+| max abs error | — | 16.57 ft | **4.01 ft** |
+| error at the observed peak | 15.7 ft | −16.57 ft | **0.00 ft** |
+
+Gated at run time: the rating must be non-decreasing in flow, strictly increasing across its 40
+knots, monotone in its extrapolation tail, and within 1.5 ft above 35 ft.
+
+### The five routes to closing the defect, each closed by a measurement
+
+`pipeline/derive/threshold_correction.py` builds and tests every route to a physically-correct
+conversion. **All five are closed, and no correction is applied** — a correction that cannot be
+validated would be worse than a declared defect. Each closure is recomputed at run time into
+`threshold_correction.json`, so a route cannot be re-proposed without confronting its measurement.
+
+| route | verdict | the measurement that closes it |
+|---|---|---|
+| **R1** discharge through each reach's own rating | works, cannot ship | it is not a lift — in-record **645 up, 117 down** — so it *redistributes* the below-action set: **17 of 18 lifted, 17 new, net 18**; the hybrid is non-monotone (637 segments invert) because 1,014 of 1,776 segments need discharge beyond the record |
+| **R2** per-reach bed elevations, absolute | unresolvable datum — **but the number was right (§11)** | `usgs_elev_table.csv` **does** hold `dem_adj_elevation`, for its 15 gauge crosswalk rows (**9 distinct reaches**); they form a clean monotone profile, but at the gauge itself that elevation (51.4 ft) and the gauge's own zero datum (26.73 ft) differ by **+24.7 ft**, which would put the median corridor road above any flood on record. Observed flooding independently requires **+22.3 ft**, **within 2.4 ft** of that gap — so taking it literally was closer to the truth than discarding it was |
+| **R3** the flat-pool correction the review asked for | premise corrected | applying `HAND + [bed(x) − bed(gauge)]` **adds** slope rather than removing it — the bed drops 0.53 ft/mile downstream, the same sign as the observed −0.92 ft/mile threshold trend |
+| **R4** re-reference HAND to the Brazos | reference not identifiable | the mechanism is real (every sub-20-ft segment sits 2,000+ m from the Brazos but 8–200 m from a tributary), but NWM flowlines over-correct the median by **+26.6 ft**; and of 145 sampled segments only 59 have *any* drainage cell within 2.5 km of the real HAND raster, **none** of them off-branch |
+| **R5** validate against observed flooding | **no longer closed — superseded by §11** | as a *claim-point* route it is still closed: the 7,389 OpenFEMA NFIP claims (**3,928 Harvey**, 6,662 with depth) are privacy-coarsened to 0.1° — **6 distinct latitudes × 8 longitudes**, ~11 km per cell. But the same section listed observed inundation **as polygons** as the way to reopen it, and that is now fetched and scored: §11 measures the error at **+22.3 ft**, a constant |
+
+**Shipped instead: the validated bed profile.** Integrating NWM reach slope × length downstream gives a
+datum-free relative channel-bed profile that reproduces the six gauge bed elevations in
+`usgs_elev_table.csv` at **r = 0.986** (offset spread −0.44 to +11.35 m — the size of the unresolvable
+datum gap), with an implied slope of 0.53 ft/mile. No DEM is needed and only differences are
+meaningful. This is what a future DEM-based re-run has to agree with.
+
+**Honest limits of this stage.** The refuges and thresholds it reasons about are the *uncorrected*
+ones — now measured at **+22.3 ft low, uniformly** (§11) — so its absolute numbers move when the
+primitive is fixed; the structure is what it contributes.
+R1's analysis runs on the pre-export fimpact table (1,776 ways, 819 classified, 18 below action); the
+shipped artifacts carry 1,614 segments (13 rows / 11 ways below action), so those counts are not the
+same population and are labelled as such. And when this section was written nothing here had been
+adjudicated against observed inundation. **It now has been (§11), and the result is narrower and more
+useful than "unproven": the thresholds are not noise (AUC 0.809), their error is a uniform
+**+22.3 ft** rather than the along-river trend this section describes, and two of the five routes
+closed above turn out to have landed within 3 ft of that number.** What remains unproven is whether
+the correction generalises — one event, one extent, so it is measured but not applied.
+
+## 6. Isolation stage — "when can I no longer leave?" (`pipeline/derive/isolation.py`)
+
+The question above is "when does my street flood?". The question that actually kills people is
+**"when do I lose my last way out?"** — a different number, and never later than the first. This
+stage adds `isolation_ft`, `isolation_gap_ft` and `isolation_status` to every segment.
+
+At the shipped thresholds: **230 of 1,614 segments are cut off before their own street floods**
+(median gap 2.8 ft, max 19.6 ft). **883 have no modelled dry refuge at all**
+(`isolation_status = "no_dry_refuge"`). Largest gaps — you are trapped eleven to seventeen feet
+before your own street goes under: US Highway 90A (street 34.8 ft, cut off **18.1 ft**, gap 16.7),
+FM 762 (16.3), West Grand Parkway South (15.9), Ellis Creek Boulevard (15.5), Gateway Boulevard
+(13.5), Macek Road (13.5), Crabb River Road (11.7), Jackson Street (9.7), Fort Street (8.3),
+Houston Street (7.4).
+
+**Method.** A graph with a node at every vertex, edges carrying their segment's threshold. A refuge
+is a node incident to a segment surviving the 50 ft major stage. Isolation is the widest-path
+bottleneck to that set, computed in **one descending union-find pass** rather than one per stage,
+then cross-checked by an independent BFS at every sampled stage. A segment's isolation is the
+**max** over its vertices — "do I still have a way out?" is an existence question, so the last exit
+to go is the one that matters — capped by the segment's own threshold, because once your street is
+under water you cannot leave either.
+
+**The topology was the entire story.** An earlier prototype built one edge per segment, endpoints
+only. That graph collapses **8,987 vertices to 1,866** and fragments the corridor into **286
+components (largest 183 nodes)** instead of **116 (largest 2,148)**. Under-connection removes paths,
+so it reports isolation early. Running this implementation on the prototype's own graph reproduces
+its published **152** trapped segments exactly; correcting the topology raises that to **230** and
+drops the no-refuge count from 1,052 to 883. The max-vs-min aggregation choice makes **no
+difference** on this data (230 either way), so the number rests on the topology alone.
+
+*Two things we checked and did not need.* `unary_union` inserts **zero** new vertices across these
+1,614 segments — the extract is already fully noded and 2,037 vertices are exact shared junctions,
+so no geometric noding was required, only using all vertices. And 196 features are multipart with
+parts that do not touch, so edges are built per part; chaining across parts would invent links
+between fragments that do not touch.
+
+**Caveats, and they matter.** Reachability is a road-network property, not a safety guarantee: a
+refuge node is ground the modelled water does not reach at 50 ft — not a shelter, and not validated
+against where people actually went. Absolute stages inherit the `−0.92 ft/mile` error above, so they
+move when that primitive is fixed. The corridor is a **bounding-box clip**, so roads are cut at its
+edge and escape to high ground *outside* the study area is not counted as an exit: treating the box
+edge as an exit instead moves no-refuge 883 → 674 and trapped 230 → 408. Finally the refuge bar is a
+choice, not a measurement — at 45 ft, 863 segments would have no refuge; at 55 ft, 910.
+
+## 7. Routing — ways out to real destinations (`pipeline/derive/routing.py`)
+
+§6 answers *"when do I lose my last way out?"* against any dry ground. That is the right
+survival question but not an actionable one: it does not say **where** to go, and it does
+not answer the question a household actually asks in an emergency — *can an ambulance
+reach me?* This stage puts real destinations on **the same graph** §6 was computed on.
+
+**The graph is imported, not rebuilt.** `routing.py` calls `isolation.build()` and asserts
+its node/edge counts match `isolation.summary.json` — 8,987 nodes, 8,970 edges. If the two
+builders ever drift, the run fails, because the routes the app draws must lie on the
+network the isolation number describes.
+
+**Destinations.** 59 hospitals, fire stations and police stations inside the corridor box
+were fetched from OpenStreetMap (`pipeline/fetch/fetch_facilities.mjs`, cached to
+`data/raw/osm_facilities.json`; Overpass answers only *light* node-only queries for this
+box — adding `way` to the same query returns a 502/504 gateway timeout on the main instance
+and every mirror tried, which is recorded in the script). A facility is accepted only when a graph node is within **400 m**
+of it: **9 accepted, 50 rejected.** The rejections are the substance of the check — the
+road extract is a bounding-box clip, so a Sugar Land hospital snapped to the corridor edge
+would advertise a route along roads that were never modelled. The furthest accepted station
+is 370 m from the network, the nearest rejection is 561 m, and the app states the snap
+distance on screen.
+
+**Method.** Edge cost is `metres + 1e6` when the segment is under water at the current
+stage. A flooded edge is therefore *weighted, not deleted*: a dry route always beats a wet
+one of any length, and when every route is wet the search still answers — "crosses water on
+3 segments, deepest floods at 24.1 ft" — instead of returning nothing. The cut stage is the
+widest-path (max-min) bottleneck to the facility set, the same one-pass descending
+union-find §6 uses, seeded with the 9 facility nodes.
+
+**Results at the shipped thresholds.**
+
+| | segments |
+|---|---|
+| a modelled route to a responder at some stage | **806** of 1,614 |
+| a modelled route to a **hospital** at some stage | **197** of 1,614 |
+| lose that route **before their own street floods** | **609** |
+| no route to a responder at any stage | 808 |
+
+Median cut stage 30.0 ft (p25 29.4, p75 40.3). Largest gaps — help stops reaching you well
+before the water does: **FM 762** (street 37.1 ft, cut **20.8**, gap 16.3), Town Center Blvd
+(54.5 → 40.3), B F Terry Blvd (54.5 → 40.3), Macek Rd (34.3 → 20.8), Crabb River Rd
+(32.5 → 20.8).
+
+The 808 segments with no route at any stage sit in road-network **fragments the clipped
+extract does not connect** — the same 116-component structure §6 documents. That is a limit
+of the study area, not a real barrier, and the app says so verbatim rather than reporting
+it as an emergency.
+
+**Reverse routing.** "Can help get in" is the same field read outward from the responders:
+a multi-source search seeded from all facility nodes. Because the road graph is
+*undirected*, the physical path is identical to the forward route — the queries differ in
+framing, not in geometry — and that symmetry is stated in the module and the summary rather
+than dressed up as an asymmetry the data does not have. What the reverse direction adds is
+concrete: it is the question that matters when you cannot drive out yourself, it names the
+station, and it runs in one pass instead of one per destination.
+
+**Two bugs this stage caught, and they are the argument for the gates.** First, the
+aggregation inherited `widest_path`'s seed convention (`None` = "you are the destination"),
+so a street that *touches a station* read as having **no route at all** — the exact opposite
+of the truth. A facility node now carries its own road's threshold. Second, the app's
+independent max-min Dijkstra came back infinite on every segment in the first browser run,
+because it seeded the *query* node with Infinity instead of the *target set*: a query node
+initialised that way reports an uncut route no matter what lies between it and the
+destination. Both were caught by checks, not by reading.
+
+**Verified.** 8 pipeline gates pass — graph identity with §6, snap bounds asserted in both
+directions, BFS vs the bottleneck at 16 stages on all 8,987 nodes, the hospital set (a
+subset) can never be cut before the responder superset, non-vacuity at 5 ft, and payload
+array alignment. The artifact is byte-identical on re-run. And the app's own Dijkstra — a
+second, independent implementation in another language — was checked **in a real browser**
+against the pipeline's union-find bottleneck: **31 segments, 0 mismatches, max |diff|
+0.000 ft.**
+
+**Caveats.** A route is a corridor road-network path, not a driving instruction and not a
+safety guarantee: the clip means a route cannot leave the study area, thresholds inherit the
+`−0.92 ft/mile` HAND-as-stage error so cut stages move when that primitive is fixed, and OSM
+facility positions are volunteer-mapped points rather than a dispatch feed — a station may be
+closed or relocated.
+
+## 8. Inundation bands — PROVISIONAL (`pipeline/derive/inundation.py`)
 
 Inundation = cells where HAND < stage. Getting there surfaced an unresolved unit question:
 
@@ -179,7 +368,7 @@ are presented as authoritative.** Stage→area: 40 ft 13.16 km², 45 ft 13.51 km
 50 ft 13.84 km². The area barely grows with stage, i.e. nearly all low-HAND cells are already
 wet by 40 ft — another reason to distrust the scale until confirmed.
 
-## 7. Forecast benchmark (`pipeline/models/forecast.py`, `lstm.py`)
+## 9. Forecast benchmark (`pipeline/models/forecast.py`, `lstm.py`)
 
 Holdout **2016–2017** (contains the 2016 flood and Harvey); trained ≤ 2015. RMSE in feet.
 
@@ -223,3 +412,367 @@ appear. A 26-year hourly NWM-forced corpus would be the fair retry.
 **Not done:** the NWS-official and NWM-retrospective head-to-head. Archived AHPS forecasts are not
 published openly, and the NWM retrospective needs the kerchunk/Zarr route. Tracked as the one
 remaining benchmark task rather than claimed.
+
+## 10. Gauge-failure redundancy — and a trigger the data contradicts (`pipeline/derive/gauge_redundancy.py`)
+
+What does the product report if RMOT2 goes down? Step 5 of the upgrade plan asked for the upstream
+gauges to stand in, triggered at 2 hours of staleness. That method is built here and then measured,
+and the measurement corrects the trigger.
+
+**Method.** Richmond(t) ≈ T(upstream(t − lag)), where `lag` is the medians in §1 (Hempstead 48 h,
+San Felipe 31 h) and T is a monotone piecewise-linear transfer fitted as the median Richmond stage
+of 12 quantile bins of upstream stage. Piecewise-linear rather than the PCHIP used in
+`gauge_rating.py`, deliberately: the identical interpolation is re-implemented in the browser, and
+linear interpolation through bin medians is trivially reproducible in both languages — which is now
+an asserted property, not a hope (see §7).
+
+**The measurement, 5-fold leave-events-out over 20 flood events, 4,133 paired hours.** Three
+estimators — the last observation you already have (persistence), the plan's upstream shift, and an
+anchored variant that applies the transfer as a *change* from the last real reading:
+
+| staleness | persistence | upstream shift | anchored |
+|---|---|---|---|
+| 2 h | **0.22 ft** | 2.52 ft | 0.22 ft |
+| 6 h | **0.66** | 2.52 | 0.66 |
+| 12 h | **1.32** | 2.52 | 1.28 |
+| 18 h | 1.99 | 2.52 | **1.86** |
+| 24 h | 2.66 | 2.52 | **2.37** |
+| 30 h | 3.33 | 2.52 | **2.80** |
+| 48 h | 5.35 | **2.52** | 3.63 |
+| 72 h | 7.88 | **2.52** | 3.94 |
+
+The upstream transfer errs a **constant** ~2.5 ft — it does not degrade with staleness, which is
+exactly what makes it useful, but it also means that below about a day it is *worse* than the
+reading already on the screen. **So the plan's 2 h trigger is wrong, and the regimes are derived
+from the errors instead of chosen:** under 18 h the last observation (with its age attached),
+18–30 h the anchored estimate, beyond 30 h the upstream estimate. At the crossover the anchored
+variant wins, and it loses again by 72 h because its own anchor is then two days stale.
+
+**The band is measured, not assumed.** The quoted uncertainty is the training-fold error IQR,
+−1.56 / +1.01 ft, and its **out-of-sample coverage is 44%** against a nominal 50%. The honest
+reading is that it is a 44% band, slightly under-covering because the error distribution drifts
+between events; the run fails outright if coverage leaves 30–70%, so the band cannot quietly become
+decoration. It is also **asymmetric and biased low**, i.e. the transfer slightly overestimates.
+
+**A prerequisite with teeth.** T is fitted on USGS gage height and applied to NWPS values, and
+`docs/DATA-SOURCES.md` documents a live "San Felipe trap" where one gauge appears in two vertical
+datums. The module therefore re-checks NWPS against USGS on the cached upstream series **every
+run**: they agree within **0.24 ft** over 29 overlapping days on both gauges (mean −0.008 and
+−0.042 ft). A silent offset here would have become a wrong flood stage, so this is a gate, not a
+footnote. It needs `nwps/{HPDT2,BAWT2}_stageflow.json`, now cached by `pipeline/fetch/fetch.mjs`.
+
+**A defect the browser test found.** The transfer is fitted on flood events; at the time of writing
+the river is at 9 ft, below the entire fitted range, so the estimate **clamps to the fitted floor**
+(11.17 ft here) while the app was still quoting the flood-range band. That is a lie by omission —
+the band does not describe a clamped value — so the app now names the clamped gauge and says the
+number is a floor, not a value.
+
+**In the app:** the `estimated` badge (striped, distinct from the severity pill), the band, a source
+line reading `ESTIMATED · NWPS Hempstead → RMOT2 (stale 41 h)`, and an explicit note when the last
+observation is the better answer explaining *why* the app is not estimating yet.
+
+**Verified.** Gates pass: datum agreement, enough paired hours, monotone transfer, ordered derived
+regimes, the shipped estimator beats persistence where it is used, band coverage measured in range,
+and the largest lag + gap (120 h) fits inside the 719 h live observed window. The app's transfer
+matches the pipeline's exactly on a 13-point grid for both gauges. All four staleness regimes were
+driven **in a real browser** by shifting the clock: fresh, 11 h (last observation, no badge), 25 h
+(anchored, both gauges, clamp disclosed) and 41 h (upstream shift, 11.17 ft, badge, clamp disclosed).
+
+**Caveats.** The transfer describes 20 Brazos flood events, not the river in general; it is an
+estimate of a stage, not a forecast; upstream gauges can fail independently of RMOT2, in which case
+there is no estimate rather than a worse one; and a datum change at any of the three gauges
+invalidates it silently — which is why the datum gate runs every build.
+
+## 11. Harvey validation — the thresholds, adjudicated against observed flooding
+
+*(§11 closes with the fitted error model `(L, sigma)`; §12 propagates it into the product.)*
+
+Every number in §1–§10 is internally consistent. None had been checked against water that arrived.
+Section 5 listed this as an **open QC item** ("validate thresholds against the USGS Harvey
+observed-inundation layer before shipping") and section 5's R5 closed the observation route because
+the only in-repo observation, 3,928 Harvey NFIP claims, is privacy-coarsened to 0.1° — six distinct
+latitudes across the county. This stage reopens it with polygon data.
+
+**Source.** USGS data release [doi:10.5066/F7VH5N3N](https://doi.org/10.5066/F7VH5N3N), the Brazos
+the River item of *Characterization of peak streamflows and flood inundation … Hurricane Harvey*
+(SIR 2018-5070). `pipeline/fetch/fetch_harvey_inundation.mjs` caches the 2 MB upper-reach package
+to `data/raw/harvey/` with content assertions (zip magic and byte count, plus a string the payload
+must contain), because ScienceBase answers errors with an HTML 200. The 377 MB depth raster is
+deliberately not fetched: polygon intersection needs no raster.
+
+**Three layers, all EPSG:6579:** the mapped inundation extent (`brazos_upper_final`, one polygon,
+576 km² as shipped and **not OGC-valid** — repaired per-part with `buffer(0)` rather than dropped),
+the mapped area boundary (948 km²), and 44 surveyed high-water marks with NAVD88 water-surface
+elevations, 35 of them on the Brazos main stem. The release readme states the extent is *"derived
+from the water-surface elevation surveyed at high-water marks"*, interpolated with ESRI Topo to
+Raster. **It is a survey-anchored estimate, not a satellite water edge, and one maximum extent
+rather than a time series.** Everything below is bounded by that.
+
+**Method.** Predicted flooded at the Harvey peak if `flood_stage_ft <= 55.15 ft` (the observed RMOT2
+maximum, from the same cached USGS series the app's replay uses); observed flooded if the segment
+geometry intersects the extent. The evaluated set is the **1,187 of 1,614 segments whose centroid
+lies inside the mapped boundary** — the release supplies no observation outside it, so scoring those
+segments would manufacture both error types.
+
+| | observed flooded | observed dry | total |
+|---|---|---|---|
+| model flooded | 414 | **686** | 1,100 |
+| model dry | **0** | 87 | 87 |
+
+accuracy **0.422** · false-positive rate **0.887** · recall **1.000** · precision **0.376**. Modelled
+prevalence 92.7%, observed 34.9%. Restricting by *any part* of a segment inside the boundary instead
+of the centroid moves this to 0.417 accuracy, and scoring the whole corridor without the boundary
+restriction gives 0.417 — the headline is not an artifact of where the boundary was drawn.
+
+**The errors run one way only.** Zero false negatives: no segment was observed flooded that the model
+called dry. The defect is an inability to say "dry", never a false all-clear.
+
+**Discrimination works; calibration does not.** As a ranking score the threshold gives **AUC 0.809**
+(observed-wet median 30.6 ft against observed-dry 37.6 ft). The HAND height genuinely separates
+ground that flooded from ground that did not. What fails is the mapping from HAND to gauge stage.
+
+**The magnitude, and its functional form.** The stage best reproducing the extent is **32.85 ft
+against an observed peak of 55.15 ft — a lift of +22.3 ft** (accuracy 0.422 → 0.769, FPR 0.887 →
+0.230). Fitting on one half of the corridor and testing on the other:
+
+| fitted correction | test accuracy | FPR | recall |
+|---|---|---|---|
+| none | 0.440 / 0.387 | 0.993 / 0.746 | 1.000 / 1.000 |
+| constant offset | **0.709 / 0.844** | 0.229 / 0.069 | 0.629 / 0.444 |
+| offset + along-river slope | 0.622 / 0.831 | 0.018 / 0.006 | 0.158 / 0.083 |
+
+(upstream→downstream / downstream→upstream.) **The constant transfers; the linear form does not,
+and its recall collapses** — it is a bad model that happens to score well only by predicting almost
+nothing wet. This independently confirms R3's corrected premise in `threshold_correction.py`
+("under normal flow the physical correction is a constant offset") and contradicts the shipped
+summary's account of the error as the −0.92 ft/mile trend. The trend is real in the thresholds
+(**−0.826 ft/mile, r = −0.503** recomputed on the evaluated set) but it is not the shape of the
+error.
+
+**Two closed routes predicted this.** R2 recovered a **+24.7 ft** constant between the gauge reach's
+`dem_adj_elevation` (51.4 ft) and the gauge's own zero datum (26.73 ft), and closed as
+irreconcilable. R1's median lift over all segments is **+25.1 ft**, set aside because nothing could
+say whether the magnitude was right. The extent says **+22.3 ft**: **Δ +2.41** and **Δ +2.78** from
+entirely different inputs. The datum gap was the signal, not a nuisance. This also settles R1's open
+question in the negative — for State Highway 6, the Grand Parkway and US 90A its conversion lands
+**8.3–9.0 ft short** of what the observation requires, which is why it redistributes the below-action
+set instead of lifting it.
+
+**What Harvey reached, on the roads §5 already flagged:** US Highway 90A 13/56 (23%), East US Highway
+90A 33/71 (46%), West Grand Parkway South 11/26 (42%), State Highway 6 South 29/35 (83%) — against a
+model that calls all four 100% flooded.
+
+**A blind spot that is stated rather than exploited.** 20 segments sit below the 20 ft action stage,
+and Harvey reached 17 of them (85%). That looks like vindication of §5's most criticised number and
+it is **not**: a segment observed wet at the record peak is equally consistent with flooding at 17 ft
+and at 55 ft. A point-in-time extent carries no information about a low threshold — it can only
+*refute* thresholds it found dry. Adjudicating those 20 needs a series of extents at successive
+stages, which this release does not provide.
+
+**What applying it would score, since that had never been measured.** The decision not to apply the
+correction was argued from principle — one event, no second flood to test on — and the *price* of that
+decision was never priced. So the same test the shipped thresholds had just failed is run on the
+corrected rule, `flooded iff (threshold + lift) <= peak`, on the same 1,187 outcomes:
+
+| rule | accuracy | false-positive rate | recall | precision |
+|---|---|---|---|---|
+| shipped | 0.422 | 0.887 | **1.000** | 0.376 |
+| corrected, best-cut lift (+22.30 ft) | **0.769** | 0.230 | 0.768 | 0.641 |
+| corrected, probit lift (+23.72 ft) | 0.760 | **0.153** | 0.597 | 0.677 |
+
+This is **in-sample** — fitted and tested on the same 1,187 outcomes — so it is an upper bound on
+what the correction would do, and the out-of-sample spatial holdout above (0.709 / 0.844) is the
+weaker, honest test. The trade is visible in one column: the correction buys the ability to say
+*DRY* at the price of **167 segments that flooded and would now be called dry**, against zero misses
+for the shipped rule. For a life-safety product that is not obviously a good trade, and one event
+cannot say which is right. It is recorded in `correction_would_score`.
+
+**No correction is applied**, on the same principle that closed all five routes: a constant fitted to
+one event, with no second event to test it on, would be a new unvalidated number replacing an old
+one. `threshold_correction.py` now cross-checks `harvey_validation.json` at run time, so the two
+artifacts cannot drift into different stories about the same thresholds, and its `to_reopen` item
+"observed inundation extent for Harvey as polygons" is marked satisfied. Gates now require the
+corrected rule to actually improve accuracy and the false-positive rate on the fitting event (or the
+lift would not be the lift), to never recall more than a rule that floods everything, and its
+implied cutoff to stay within 3 ft of the independently fitted best-cut stage.
+
+**Verified.** All gates pass: the release's extent is asserted to be OGC-invalid as shipped (so the
+repair path cannot silently become dead code), the evaluated set is non-trivial, no segment outside
+the mapped boundary intersects the extent, the confusion cells sum, the FPR is a proportion, and the
+AUC is asserted above chance — because if the threshold ever stopped discriminating the observed
+extent, that would mean *the comparison* had broken, not the model. The artifact is byte-identical on
+re-run. `threshold_correction.py`'s closures are numerically unchanged by the cross-check.
+
+### The error model — a bias *and* a spread, and only the first is a correction
+
+The best-cut search gives one number, the constant the corridor is off by. That number is precise and
+it is not the uncertainty a household faces. So the same 1,187 observed outcomes are refitted as a
+probit, modelling the true flood stage of segment *i* as `tau_i = T_i + L + eps_i` with
+`eps ~ N(0, sigma)`, and `P(wet_i) = Phi((S - L - T_i)/sigma)` — identified from the cross-section
+even though each segment contributes a single binary observation:
+
+| quantity | value | 90% CI (bootstrap over segments, seeded) |
+|---|---|---|
+| lift `L` (the bias) | **+23.72 ft** | +22.90 .. +24.60 |
+| **per-street spread `sigma`** | **+11.36 ft** | +10.03 .. +12.73 |
+
+The two estimates of the lift agree to **1.4 ft** (best-cut +22.30, probit +23.72); they optimise
+different objectives, so exact agreement would be a coincidence, and both are recorded in
+`estimators_of_the_same_lift` so neither can be quoted as *the* number without the other.
+
+`sigma` is the larger and more consequential quantity, and it is **not** a bias — no offset corrects
+it. It says two streets the model assigns the same threshold can be 11 ft apart, which is why the
+corrected model is still only ~76% accurate. It is also a **limit**: it is unexplained variance from
+ONE event, so it absorbs genuine per-reach differences (culverts, levees, the HAND reference error),
+any error in the extent itself, and everything this model cannot see. A gate requires it stay above
+1 ft, because a collapsing sigma would contradict the measured per-segment error rate.
+
+**Limits.** One event, one extent: this measures agreement with the best available reconstruction of
+Harvey and cannot be repeated on another flood from data in this repo. The extent is interpolated
+from 44 high-water marks and clipped to a boundary that the readme says was lined up with the extent
+itself, so it may under-represent the flood — which would *inflate* false positives; most of them sit
+near the separating threshold (median 36.4 ft, p10 30.3 ft) rather than far below it. It is the event
+maximum against the gauge maximum, so the downstream crest travel time of §1 is not resolved. Roads
+are lines, so any part of a segment inside the extent counts as flooded — which matches what a
+threshold means (a low point submerging) but not a road that is mostly dry. And absolute stages still
+inherit the very defect this test measures; that is the point, not an escape from it.
+
+## 12. Uncertainty ensemble — lead time as a distribution (`pipeline/derive/ensemble.py`)
+
+§11 ended with two fitted numbers, and they play different roles. The lift (+23.72 ft) is a **bias**
+one corrects. The per-street spread (**sigma = 11.36 ft, 1 sd**) is **not** — no offset removes it,
+and it is why the corrected model is still only ~76% accurate. Two streets the model puts at the same
+stage can be eleven feet apart. That is the uncertainty a household actually faces, and a point
+estimate cannot express it, so this stage asks the question 50 times.
+
+**Method.** Per member: draw the street's true stage as `threshold + L + sigma*N(0,1)`; perturb the
+forecast points by a random walk whose cumulative sd at each horizon equals the *measured* RMSE there
+(1.16 ft at +1 d, 2.16 at +2, 3.57 at +3, 5.37 at +5, 6.06 at +7, from the benchmark in §9), leaving
+observed points untouched; then take the first crossing. Report the count that cross, the quantiles
+over those that do, and the number that never arrive.
+
+| street threshold | point estimate | ensemble | spread source |
+|---|---|---|---|
+| 20 ft | 129 h | 42/50 cross, median 152 h [140–173] | threshold only (replay) |
+| 30 ft | 138 h | **27/50**, median 162 h [147–216] | threshold only (replay) |
+| 45 ft | 158 h | **4/50**, median 186 h | threshold only (replay) |
+| 50 ft | 169 h | **0/50** | threshold only (replay) |
+
+On the replay hydrograph the spread is **entirely** threshold-driven, because the series is observed
+rather than forecast: 27/50 cross at a 30 ft threshold, against 50/50 with the lift and sigma both
+zeroed. That is the whole finding in one comparison — the same evidence that says the thresholds are
+low also says we cannot be certain a given street floods at all.
+
+**The algorithm is implemented twice, and the app reproduces the pipeline exactly.** This is the same
+check the crest transfer and the Dijkstra already get, and it is the reason the ensemble is auditable
+rather than asserted: `app/src/main.ts` mirrors `ensemble.py` line for line, both use mulberry32
+(`Math.imul` is the low 32 bits of the product, which is why the Python side masks) with Box-Muller,
+and drawn values are rounded to 6 dp on both sides so that libm and V8 differing in the last ulp
+cannot move a draw across a hydrograph point and change a reported count. The pipeline emits a
+**16-row verification grid** — 8 thresholds x {observed-only, a slice treated as forecast} — and the
+app matches **every row on the crossing count and all three quantiles**, including the rows that
+exercise the forecast-error path. Note the quantile convention had to match too: numpy's default
+`linear` interpolation is `(n-1)*p/100`, which the TypeScript side reimplements rather than
+approximating.
+
+**Gates:** the forecast-error curve passes through its measured knots and is asserted monotone in
+horizon; the PRNG is asserted reproducible; a higher threshold must never cross more often (the
+ensemble is asserted not inverted); a crossing count cannot exceed the member count; quantiles must be
+ordered; and the grid must contain at least one uncertain row, so a silently-degenerate ensemble
+fails the run. The bootstrap that produced `sigma` is **seeded**, and the artifact is byte-identical
+on re-run including it.
+
+**In the app** the block sits under the point estimate, headed *"Uncertainty · with the measured
+threshold error applied"*, and says in the panel why the two disagree — at the peak stage the headline
+floors at 0 h while the ensemble says most runs never arrive, and the block reconciles them by naming
+the shipped threshold, the corrected one, and the fact that the correction is measured from one event
+and deliberately not applied. The block is reported **beside** the point estimate, never in place of
+it. Render cost is unchanged — median **6.2 ms** over 24 slider steps, max 13 ms — because the
+ensemble is cached on the selection and never recomputed while the stage moves.
+
+**Limits.** This is not a probability of flooding and not a confidence interval on a measured
+quantity: `sigma` is unexplained variance from a single event. The forecast-error curve is measured
+on this gauge's *daily* record and is applied here to an *hourly* hydrograph; beyond the +7 d knot it
+is held flat rather than extrapolated, which is conservative. Replay carries no forecast uncertainty
+because its hydrograph is observed, so that spread understates what a live forecast would carry. And
+the ensemble inherits §11's dependence on one event: it distributes the error that was measured, it
+does not make that error smaller.
+
+## 13. Harvey backcast — the lead time, counted (`pipeline/derive/backcast.py`)
+
+§12 answers with a distribution, but every number in this project is still a forecast of a flood that
+has not happened yet, scored against a single observed instant. The app's headline is a **lead time**
+— *"water reaches your street in 96 hours"* — and no artifact had produced one for the flood that
+actually occurred. This stage runs the app's own rule backwards over the observed record: an hourly
+mean resample of USGS `08114000`, 2017-08-22 00:00 to 09-01 00:00, 241 points — the same series the
+app's replay mode loads, so the backcast is computed on the app's own data rather than a second
+resample of the same file.
+
+**What is observed and what is not — this is the whole design.** The record yields two things that are
+pure observation: when the gauge crossed each NWS category, and the crest. It yields **no per-street
+timing at all**, because the only street-level observation in the project is one event-maximum extent
+(§11) and a single instant cannot say when water arrived anywhere. So the artifact reports onsets and
+lead times that are observed, and marks the street-level onset that precedes them as the model — in
+its schema (`validated_per_street: false`), in the app panel, and in its own limits. The replay window
+also ends **two hours after the crest**, so the recession is not observed at all: the artifact says
+when tiers were *crossed* and never claims when they *cleared*.
+
+| tier | onset | before the crest | hours above |
+|---|---|---|---|
+| action 20 ft | Aug 27 09:00 | **109 h** | 112 |
+| minor 45 ft | Aug 28 14:00 | 80 h | 83 |
+| moderate 48 ft | Aug 28 21:00 | 73 h | 76 |
+| major 50 ft | Aug 29 01:00 | 69 h | 72 |
+
+Across the corridor, the app's own alert for each segment — the first observed hour at or above its
+shipped threshold — landed **96 h before the crest** at the median (69 h at p10, 102 h at p90),
+with **1,469 of 1,614** segments reaching their threshold inside the window. Four days of warning is
+the product's claim, and Harvey is the one event where it can be counted instead of asserted.
+
+**The flag counts are §11's defect expressed over time, and the trade has a price on both sides.**
+
+| stage | segments flagged, shipped | with the measured correction |
+|---|---|---|
+| 20 ft (action) | 22 | **0** |
+| 45 ft (minor) | 1,232 | 32 |
+| 50 ft (major) | 1,337 | 59 |
+| 55.13 ft (crest) | 1,469 | 500 |
+
+Applying the lift is not a free improvement: it would **silence 969 of the 1,469 streets** the shipped
+rule warns in time at all within the window, and delay the rest by a **median of 71 h** (p90 88 h).
+What it buys back is measured on the peak in §11 — accuracy 0.422 → 0.760, false-positive rate 0.887 →
+0.153, against **167 genuinely flooded segments that would be reclassified dry**. So the standing
+decision not to apply the correction now has a measured cost on each side rather than an argument on
+one. Note the two populations are not the same and are not added together: the 969 is over all 1,614
+corridor segments, the 167 over the 1,187 inside the mapped boundary.
+
+**Implemented twice, like the ensemble.** `app/src/main.ts` recomputes the tier onsets from its own
+replay series and the flag counts from its own road list, then checks both against the grid the
+pipeline emits — **13 stages x {shipped, corrected} plus 4 tier onsets, all 17 rows matched**. That is
+the same cross-language check the ensemble, the crest transfer and the Dijkstra get, and it is why the
+timeline is drawn from arithmetic the browser performs rather than from numbers it was handed.
+
+**Gates.** The series must be hourly; the hourly crest must agree with the published 15-minute peak
+(55.15 ft) to within 0.05 ft, so two artifacts cannot quietly disagree about one flood; the crest must
+fall in the second half of the window, so a truncated record cannot pass as the build-up; every tier
+must be crossed, in stage order, inside the window, with hours above it; flag counts must be monotone
+in stage and the corrected count never above the shipped one; the curve must actually rise; the
+lead-time quantiles must be ordered and non-negative; correcting a threshold must never alert
+*earlier*; and the correction must silence **some but not all** warned streets — a trade-off that is
+not being measured fails the run.
+
+**In the app** the block appears in replay mode as *"What BrazosCast would have sent"*, one bar per
+category drawn from its onset **to the crest**, so the bar length is literally the lead time, with the
+lead time labelled. The stage slider then answers a different and consistent question — *at 51.00 ft
+the app flags 1,355 of 1,614 segments; with the measured correction, 79* — which is why the block
+reacts to the slider without pretending the slider is a clock. Its render cost is small and was
+measured after the change: the timeline DOM is built once and cached, the per-render work is one pass
+over the 1,614 segments, and 24 slider steps cost a median **4 ms**, max **6.4 ms** — inside the range
+the ensemble block was recorded at (§12).
+
+**Limits.** No per-street timing here is validated, and the lead time is measured to the **gauge**
+crest: the crest travels downstream during the event (§1), so a street below Richmond crests later
+than the gauge it is keyed to. The recession is outside the window. The flag counts inherit the
+threshold defect this stage measures rather than fixes, and the corrected counts apply a constant
+fitted to one event — which is exactly why they are reported and not shipped. One event: this backcast
+cannot be repeated on another flood from data in this repo.

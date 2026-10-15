@@ -1,0 +1,367 @@
+{
+  "generated_at": "2026-10-15T14:58:37.461547+00:00",
+  "step": "UPGRADE-PLAN.md Step 7 \u2014 uncertainty ensemble",
+  "question": "given what the 2017 flood measured about these thresholds, when does water reach this street, as a distribution?",
+  "answer_template": "{crossing} of {of} runs reach this street within the window",
+  "parameters": {
+    "members": 50,
+    "seed": 20261014,
+    "lift_ft": 23.72,
+    "per_street_sigma_ft": 11.36,
+    "lift_ci90_ft": [
+      22.9,
+      24.6
+    ],
+    "sigma_ci90_ft": [
+      10.03,
+      12.73
+    ],
+    "forecast_rmse_knots_ft": [
+      [
+        1.0,
+        1.159335767351426
+      ],
+      [
+        2.0,
+        2.1626943913098886
+      ],
+      [
+        3.0,
+        3.568178711656254
+      ],
+      [
+        5.0,
+        5.365043746179423
+      ],
+      [
+        7.0,
+        6.057353872726056
+      ]
+    ],
+    "forecast_rmse_beyond_measured_ft": 6.057
+  },
+  "method": {
+    "threshold": "true flood stage = shipped threshold + lift + sigma*N(0,1), the probit model fitted in harvey_validation.py",
+    "hydrograph": "forecast points are perturbed by a random walk whose cumulative sd at each horizon equals the measured RMSE there; observed points are left alone, so in replay only the threshold term is active",
+    "prng": "mulberry32 + Box-Muller, identical in both languages",
+    "reported_hours": "quantiles over the members that cross; the count is the headline and 'never_h' is always reported too"
+  },
+  "sources": {
+    "threshold_error": "data/derived/harvey_validation.json (USGS SIR 2018-5070 extent, doi:10.5066/F7VH5N3N)",
+    "forecast_error": "data/derived/model_forecast_benchmark.csv (xgboost, holdout 2016-17, which contains Harvey)"
+  },
+  "replay_demonstration": [
+    {
+      "threshold_ft": 20.0,
+      "point_estimate_h": 129.0,
+      "ensemble": {
+        "members": 50,
+        "crossing": 42,
+        "of": 50,
+        "median_h": 152.0,
+        "p10_h": 140.0,
+        "p90_h": 172.9,
+        "never_h": 8
+      }
+    },
+    {
+      "threshold_ft": 25.0,
+      "point_estimate_h": 133.0,
+      "ensemble": {
+        "members": 50,
+        "crossing": 34,
+        "of": 50,
+        "median_h": 157.5,
+        "p10_h": 144.3,
+        "p90_h": 205.1,
+        "never_h": 16
+      }
+    },
+    {
+      "threshold_ft": 30.0,
+      "point_estimate_h": 138.0,
+      "ensemble": {
+        "members": 50,
+        "crossing": 27,
+        "of": 50,
+        "median_h": 162.0,
+        "p10_h": 147.2,
+        "p90_h": 215.8,
+        "never_h": 23
+      }
+    },
+    {
+      "threshold_ft": 35.0,
+      "point_estimate_h": 144.0,
+      "ensemble": {
+        "members": 50,
+        "crossing": 18,
+        "of": 50,
+        "median_h": 166.0,
+        "p10_h": 153.1,
+        "p90_h": 212.9,
+        "never_h": 32
+      }
+    },
+    {
+      "threshold_ft": 40.0,
+      "point_estimate_h": 149.0,
+      "ensemble": {
+        "members": 50,
+        "crossing": 10,
+        "of": 50,
+        "median_h": 173.0,
+        "p10_h": 160.8,
+        "p90_h": 202.4,
+        "never_h": 40
+      }
+    },
+    {
+      "threshold_ft": 45.0,
+      "point_estimate_h": 158.0,
+      "ensemble": {
+        "members": 50,
+        "crossing": 4,
+        "of": 50,
+        "median_h": 186.0,
+        "p10_h": 172.2,
+        "p90_h": 208.9,
+        "never_h": 46
+      }
+    },
+    {
+      "threshold_ft": 50.0,
+      "point_estimate_h": 169.0,
+      "ensemble": {
+        "members": 50,
+        "crossing": 0,
+        "of": 50,
+        "median_h": null,
+        "p10_h": null,
+        "p90_h": null,
+        "never_h": 50
+      }
+    }
+  ],
+  "replay_spread_is_threshold_only": {
+    "threshold_30ft": {
+      "members": 50,
+      "crossing": 27,
+      "of": 50,
+      "median_h": 162.0,
+      "p10_h": 147.2,
+      "p90_h": 215.8,
+      "never_h": 23
+    },
+    "lift_and_sigma_zero": {
+      "members": 50,
+      "crossing": 50,
+      "of": 50,
+      "median_h": 138.0,
+      "p10_h": 138.0,
+      "p90_h": 138.0,
+      "never_h": 0
+    }
+  },
+  "verification_grid": [
+    {
+      "threshold_ft": 15.0,
+      "forecast_from": null,
+      "mode": "observed_only",
+      "members": 50,
+      "crossing": 47,
+      "of": 50,
+      "median_h": 148.0,
+      "p10_h": 133.0,
+      "p90_h": 170.6,
+      "never_h": 3
+    },
+    {
+      "threshold_ft": 15.0,
+      "forecast_from": 80,
+      "mode": "third_forecast",
+      "members": 50,
+      "crossing": 46,
+      "of": 50,
+      "median_h": 146.5,
+      "p10_h": 132.5,
+      "p90_h": 174.0,
+      "never_h": 4
+    },
+    {
+      "threshold_ft": 22.5,
+      "forecast_from": null,
+      "mode": "observed_only",
+      "members": 50,
+      "crossing": 40,
+      "of": 50,
+      "median_h": 156.0,
+      "p10_h": 142.8,
+      "p90_h": 196.8,
+      "never_h": 10
+    },
+    {
+      "threshold_ft": 22.5,
+      "forecast_from": 80,
+      "mode": "third_forecast",
+      "members": 50,
+      "crossing": 40,
+      "of": 50,
+      "median_h": 153.5,
+      "p10_h": 136.8,
+      "p90_h": 180.8,
+      "never_h": 10
+    },
+    {
+      "threshold_ft": 28.0,
+      "forecast_from": null,
+      "mode": "observed_only",
+      "members": 50,
+      "crossing": 29,
+      "of": 50,
+      "median_h": 159.0,
+      "p10_h": 145.8,
+      "p90_h": 198.4,
+      "never_h": 21
+    },
+    {
+      "threshold_ft": 28.0,
+      "forecast_from": 80,
+      "mode": "third_forecast",
+      "members": 50,
+      "crossing": 29,
+      "of": 50,
+      "median_h": 156.0,
+      "p10_h": 145.4,
+      "p90_h": 202.8,
+      "never_h": 21
+    },
+    {
+      "threshold_ft": 33.4,
+      "forecast_from": null,
+      "mode": "observed_only",
+      "members": 50,
+      "crossing": 21,
+      "of": 50,
+      "median_h": 167.0,
+      "p10_h": 151.0,
+      "p90_h": 210.0,
+      "never_h": 29
+    },
+    {
+      "threshold_ft": 33.4,
+      "forecast_from": 80,
+      "mode": "third_forecast",
+      "members": 50,
+      "crossing": 19,
+      "of": 50,
+      "median_h": 171.0,
+      "p10_h": 149.0,
+      "p90_h": 205.8,
+      "never_h": 31
+    },
+    {
+      "threshold_ft": 38.0,
+      "forecast_from": null,
+      "mode": "observed_only",
+      "members": 50,
+      "crossing": 14,
+      "of": 50,
+      "median_h": 172.5,
+      "p10_h": 157.2,
+      "p90_h": 224.4,
+      "never_h": 36
+    },
+    {
+      "threshold_ft": 38.0,
+      "forecast_from": 80,
+      "mode": "third_forecast",
+      "members": 50,
+      "crossing": 15,
+      "of": 50,
+      "median_h": 167.0,
+      "p10_h": 149.2,
+      "p90_h": 221.6,
+      "never_h": 35
+    },
+    {
+      "threshold_ft": 42.5,
+      "forecast_from": null,
+      "mode": "observed_only",
+      "members": 50,
+      "crossing": 6,
+      "of": 50,
+      "median_h": 174.0,
+      "p10_h": 165.5,
+      "p90_h": 205.0,
+      "never_h": 44
+    },
+    {
+      "threshold_ft": 42.5,
+      "forecast_from": 80,
+      "mode": "third_forecast",
+      "members": 50,
+      "crossing": 7,
+      "of": 50,
+      "median_h": 180.0,
+      "p10_h": 147.6,
+      "p90_h": 209.4,
+      "never_h": 43
+    },
+    {
+      "threshold_ft": 47.0,
+      "forecast_from": null,
+      "mode": "observed_only",
+      "members": 50,
+      "crossing": 3,
+      "of": 50,
+      "median_h": 204.0,
+      "p10_h": 195.2,
+      "p90_h": 220.8,
+      "never_h": 47
+    },
+    {
+      "threshold_ft": 47.0,
+      "forecast_from": 80,
+      "mode": "third_forecast",
+      "members": 50,
+      "crossing": 5,
+      "of": 50,
+      "median_h": 166.0,
+      "p10_h": 160.8,
+      "p90_h": 216.4,
+      "never_h": 45
+    },
+    {
+      "threshold_ft": 52.0,
+      "forecast_from": null,
+      "mode": "observed_only",
+      "members": 50,
+      "crossing": 0,
+      "of": 50,
+      "median_h": null,
+      "p10_h": null,
+      "p90_h": null,
+      "never_h": 50
+    },
+    {
+      "threshold_ft": 52.0,
+      "forecast_from": 80,
+      "mode": "third_forecast",
+      "members": 50,
+      "crossing": 4,
+      "of": 50,
+      "median_h": 165.0,
+      "p10_h": 152.9,
+      "p90_h": 170.8,
+      "never_h": 46
+    }
+  ],
+  "limits": [
+    "sigma is unexplained variance from ONE event: it absorbs real per-reach differences (culverts, levees, the HAND reference error) and everything the model cannot see, so it is an uncertainty budget, not a mechanism",
+    "this is not a probability of flooding and not a confidence interval on a measured quantity",
+    "the forecast error curve is measured on this gauge's daily record, and is applied here to an hourly hydrograph",
+    "replay mode carries no forecast uncertainty because the series is observed, so its spread understates what a live forecast would carry",
+    "the lift is not applied to the shipped thresholds anywhere in the app; the ensemble is reported alongside the point estimate, never in place of it"
+  ]
+}

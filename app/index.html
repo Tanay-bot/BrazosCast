@@ -37,11 +37,25 @@
       <div class="sev-stripe" id="sevStripe"></div>
       <div class="answer-in">
         <div>
-          <div class="eyebrow"><span class="pill" id="sevPill">—</span> <span id="addrOut">no street selected</span></div>
+          <div class="eyebrow"><span class="pill" id="sevPill">—</span> <span class="pill est" id="estPill" style="display:none">stage estimated</span> <span id="addrOut">no street selected</span></div>
           <h1 class="verdict" id="verdict">Enter an address to see your lead time</h1>
           <p class="sub" id="sub">The river is a number. Your street is the answer.</p>
         </div>
         <div class="count"><b id="hours">—</b><span id="hoursLab">hours of lead time</span></div>
+      </div>
+      <!-- Uncertainty ensemble (pipeline/derive/ensemble.py). The point estimate above is
+           one run of one model; this is the same question asked across the measured error. -->
+      <div class="ens" id="ens" hidden>
+        <div class="ens-title">Uncertainty<span>·</span>with the measured threshold error applied</div>
+        <div class="ens-head"><b id="ensCount">—</b><span id="ensLab">runs reach this street</span></div>
+        <div class="ens-grid" id="ensGrid" aria-hidden="true"></div>
+        <div class="ens-bar">
+          <span class="ens-span" id="ensSpan"></span>
+          <i class="ens-tick" id="ensTick"></i>
+          <i class="ens-point" id="ensPoint"></i>
+        </div>
+        <p class="ens-meta"><span id="ensRange">—</span><span id="ensNever">—</span></p>
+        <p class="ens-note" id="ensNote"></p>
       </div>
       <div class="prov" id="prov"></div>
     </section>
@@ -62,6 +76,7 @@
           <span class="lg"><span class="sw" style="background:var(--flood)"></span>Under water at this stage</span>
           <span class="lg"><span class="sw" style="background:var(--you)"></span>Your segment</span>
           <span class="lg"><span class="sw" style="background:var(--levee)"></span>Levee-protected (HAND unreliable)</span>
+          <span class="lg"><span class="sw" style="background:#10261d"></span>Modelled route to a destination</span>
         </div>
       </section>
 
@@ -81,7 +96,7 @@
         </section>
 
         <section class="card">
-          <div class="card-h"><h2>Streets nearest you</h2><span class="note" id="exitNote">pick a street first</span></div>
+          <div class="card-h"><h2>Ways out</h2><span class="note" id="exitNote">pick a street first</span></div>
           <div class="card-b" id="exits"><p class="muted">Enter an address, or click a road on the map.</p></div>
         </section>
       </div>
@@ -92,12 +107,34 @@
       <div class="hgwrap"><canvas id="chart" height="300"></canvas></div>
     </section>
 
+    <!-- Harvey backcast (pipeline/derive/backcast.py). Replay only: 2017 is the one flood
+         in the record, so it is the one place the app's lead time can be counted rather
+         than asserted. The onsets and the crest are observed; which street floods when is
+         not, and the block separates the two instead of blurring them. -->
+    <section class="card bc" id="bcCard" hidden>
+      <div class="card-h"><h2>What BrazosCast would have sent</h2>
+        <span class="note" id="bcNote">—</span></div>
+      <div class="card-b">
+        <div class="bc-tl" id="bcTl"></div>
+        <p class="bc-stage" id="bcStage"></p>
+        <p class="bc-sum" id="bcSum"></p>
+        <p class="bc-cav" id="bcCav"></p>
+      </div>
+    </section>
+
     <footer class="src">
       <p><b>Where the numbers come from.</b> Live stage and official forecast: NOAA NWPS <code>RMOT2</code> (USGS <code>08114000</code>), action 20 ft · flood 45 ft · moderate 48 ft · major 50 ft.
       Per-street flood thresholds: NOAA-OWP HAND FIM (<code>hand_fim_4_9_9_0/12070104</code>), mainstem levelpath.
       Crest lead times: derived in-repo by cross-correlating historical gauge peaks (<code>pipeline/analyze/travel_time_subdaily.py</code>).
+      Way out: computed in-repo from the road graph (<code>pipeline/derive/isolation.py</code>) — the stage at which every dry route off a street is cut.
+      If <code>RMOT2</code> stops reporting, the stage is estimated from the upstream gauges (<code>pipeline/derive/gauge_redundancy.py</code>), labelled as estimated with a measured uncertainty band — and only once the last observation is too old for that to be the better answer.
+      Routing: shortest path on that same graph to real OpenStreetMap destinations — hospitals, fire and police stations (<code>pipeline/derive/routing.py</code>), flooded segments weighted rather than removed so a fully-cut network still reports the best crossing.
+      Harvey backcast: the observed 2017 gauge record replayed through the same rule (<code>pipeline/derive/backcast.py</code>) — what the app <em>would</em> have sent, with the onsets and the crest observed and the per-street timing not.
       Flood zones: FEMA NFHL. Claims context: OpenFEMA.</p>
       <p class="disc">A working prototype. Road depths are modelled, never observed. Flood extents are provisional pending a unit check on the HAND raster.
+      A refuge is ground the modelled water does not reach at 50 ft — not a shelter — and routes leaving the mapped corridor are not counted, so a street
+      marked “no dry route out”, or one with no modelled route to a responder, may still have one outside the study area.
+      Destinations are volunteer-mapped OSM points, not a dispatch feed.
       12 inches of moving water carries most cars away — never drive through water.</p>
     </footer>
   </main>

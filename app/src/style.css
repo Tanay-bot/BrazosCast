@@ -66,6 +66,11 @@ a{color:var(--water)}
   color:var(--fg-dim);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .pill{font:600 10px/1 var(--f-mono);letter-spacing:.06em;padding:4px 7px;border-radius:4px;
   background:var(--sev,var(--fg-faint));color:#fff}
+/* Estimated, not measured: kept visually distinct from the severity pill so the two
+   are never confused, and striped so it survives a greyscale print or screenshot. */
+.pill.est{background:repeating-linear-gradient(135deg,var(--action),var(--action) 5px,
+  color-mix(in srgb,var(--action) 62%,#000) 5px,color-mix(in srgb,var(--action) 62%,#000) 10px);
+  color:#fff}
 .verdict{font-size:clamp(26px,4.2vw,44px);font-weight:700;line-height:1.03;margin-top:10px}
 .verdict em{font-style:normal;color:var(--sev,var(--fg))}
 .sub{margin-top:9px;font-size:14.5px;color:var(--fg-dim);max-width:62ch}
@@ -134,7 +139,51 @@ input[type=range]{width:100%;margin:0;accent-color:var(--water);height:26px}
 .src p+p{margin-top:10px}
 .disc{color:var(--fg-faint)}
 
+/* uncertainty ensemble — one square per run, then the p10..p90 span with the shipped
+   point estimate marked on the same axis for contrast */
+.ens{margin-top:14px;padding-top:12px;border-top:1px solid var(--line-soft)}
+.ens-head{display:flex;align-items:baseline;gap:8px}
+.ens-head b{font:600 26px/1 var(--f-display);color:var(--water)}
+.ens-head span{font-size:13px;color:var(--fg-dim)}
+.ens-grid{display:flex;flex-wrap:wrap;gap:3px;margin:9px 0 10px}
+.ens-grid i{width:9px;height:9px;border-radius:2px;background:transparent;border:1px solid var(--line)}
+.ens-grid i.on{background:var(--water);border-color:var(--water)}
+.ens-bar{position:relative;height:8px;background:var(--sunk);border-radius:4px}
+.ens-span{position:absolute;top:0;height:8px;background:color-mix(in srgb,var(--water) 45%,transparent);border-radius:4px}
+.ens-tick{position:absolute;top:-3px;width:2px;height:14px;background:var(--water);border-radius:1px}
+.ens-point{position:absolute;top:-3px;width:2px;height:14px;background:var(--fg-dim);border-radius:1px}
+.ens-title{margin-bottom:8px;font:600 10.5px/1.4 var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--fg-dim)}
+.ens-title span{margin:0 6px;color:var(--fg-faint)}
+.ens-meta{margin-top:7px;font:400 12px/1.6 var(--f-mono);color:var(--fg-dim)}
+.ens-meta span+span::before{content:"\00b7";margin:0 7px;color:var(--fg-faint)}
+.ens-note{margin-top:8px;font-size:12.5px;color:var(--fg-dim);line-height:1.55}
+
+/* Harvey backcast timeline — one bar per NWS category, drawn from its onset to the
+   observed crest, so the bar LENGTH is the lead time. The browser recomputes every
+   number here and checks it against the pipeline's grid. */
+.bc{margin-top:16px}
+.bc-tl{display:grid;gap:9px}
+.bc-row{display:grid;grid-template-columns:104px minmax(0,1fr) 176px;gap:12px;align-items:center}
+.bc-lab{display:flex;align-items:baseline;gap:7px;font-size:13px;color:var(--c,var(--fg))}
+.bc-lab b{font-weight:600;text-transform:capitalize}
+.bc-lab i{font:400 11px/1 var(--f-mono);font-style:normal;color:var(--fg-dim)}
+.bc-track{position:relative;height:12px;background:var(--sunk);border-radius:6px;overflow:hidden}
+/* right:0 anchors every band's END at the crest, so its LENGTH is exactly the lead
+   time — the left edge is all that is set inline. */
+.bc-band{position:absolute;top:0;bottom:0;right:0;left:0;
+  background:linear-gradient(90deg,color-mix(in srgb,var(--c,var(--fg)) 35%,transparent),var(--c,var(--fg)));
+  border-radius:6px 0 0 6px}
+.bc-crest{position:absolute;top:-2px;bottom:-2px;right:0;width:3px;background:var(--major);border-radius:2px}
+.bc-lead{font:400 12px/1.3 var(--f-mono);color:var(--fg-dim);text-align:right}
+.bc-lead b{color:var(--fg);font-weight:600}
+.bc-stage{margin-top:13px;font-size:13.5px;color:var(--fg-dim)}
+.bc-stage b{font-family:var(--f-mono);font-weight:600;color:var(--fg)}
+.bc-sum{margin-top:10px;font-size:13.5px;color:var(--fg-dim);line-height:1.55;max-width:80ch}
+.bc-sum b{font-family:var(--f-mono);font-weight:600;color:var(--fg)}
+.bc-cav{margin-top:9px;font-size:12.5px;color:var(--fg-faint);line-height:1.55;max-width:84ch}
+
 @media (max-width:900px){
+  .bc-row{grid-template-columns:80px minmax(0,1fr) 118px;gap:8px}
   .cols{grid-template-columns:1fr}
   .answer-in{grid-template-columns:1fr;gap:14px;align-items:start}
   .count{text-align:left}

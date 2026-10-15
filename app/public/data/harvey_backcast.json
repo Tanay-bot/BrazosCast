@@ -1,0 +1,257 @@
+{
+  "generated_at": "2026-10-15T14:58:38.615161+00:00",
+  "step": "UPGRADE-PLAN.md Step 7 \u2014 Harvey backcast alert timeline",
+  "question": "on the only real flood in the record, what would BrazosCast have told a household, and how much of that warning is it entitled to claim?",
+  "answer": "the action stage was crossed 109 h before the observed crest and the median street's threshold 96 h before it, so the lead time the product promises is real in the one event where it can be counted \u2014 but the rule would have flagged 1469 of 1614 segments at the crest, and the measured correction would silence 969 streets that the shipped rule warned in time",
+  "event": {
+    "name": "RMOT2",
+    "label": "Hurricane Harvey (Aug\u2013Sep 2017)",
+    "gauge": {
+      "lid": "RMOT2",
+      "usgs": "08114000"
+    },
+    "source": "USGS 08114000 observed gage height, cached in-repo",
+    "window": {
+      "from": "2017-08-22T00:00:00+00:00",
+      "to": "2017-09-01T00:00:00+00:00",
+      "hours": 240.0,
+      "n_points": 241,
+      "resample": "1-hour mean, as app/public/data/replay-harvey.json"
+    },
+    "crest": {
+      "stage_ft": 55.13,
+      "at": "2017-08-31T22:00:00+00:00",
+      "hours_from_start": 238.0,
+      "note": "the window ends 2 h after the crest, so the recession is not observed and 'clears' is not reported rather than extrapolated"
+    }
+  },
+  "tiers": [
+    {
+      "tier": "action",
+      "stage_ft": 20.0,
+      "onset_h": 129.0,
+      "onset_at": "2017-08-27T09:00:00+00:00",
+      "hours_before_crest": 109.0,
+      "hours_above": 112,
+      "last_above_at": "2017-09-01T00:00:00+00:00",
+      "last_above_h": 240.0,
+      "peak_above_ft": 35.13
+    },
+    {
+      "tier": "minor",
+      "stage_ft": 45.0,
+      "onset_h": 158.0,
+      "onset_at": "2017-08-28T14:00:00+00:00",
+      "hours_before_crest": 80.0,
+      "hours_above": 83,
+      "last_above_at": "2017-09-01T00:00:00+00:00",
+      "last_above_h": 240.0,
+      "peak_above_ft": 10.13
+    },
+    {
+      "tier": "moderate",
+      "stage_ft": 48.0,
+      "onset_h": 165.0,
+      "onset_at": "2017-08-28T21:00:00+00:00",
+      "hours_before_crest": 73.0,
+      "hours_above": 76,
+      "last_above_at": "2017-09-01T00:00:00+00:00",
+      "last_above_h": 240.0,
+      "peak_above_ft": 7.13
+    },
+    {
+      "tier": "major",
+      "stage_ft": 50.0,
+      "onset_h": 169.0,
+      "onset_at": "2017-08-29T01:00:00+00:00",
+      "hours_before_crest": 69.0,
+      "hours_above": 72,
+      "last_above_at": "2017-09-01T00:00:00+00:00",
+      "last_above_h": 240.0,
+      "peak_above_ft": 5.13
+    }
+  ],
+  "street_lead_time": {
+    "definition": "hours between a segment's own alert (first observed hour at or above its shipped threshold) and the observed gauge crest",
+    "measured_against": "the GAUGE crest, which is observed",
+    "validated_per_street": false,
+    "why_not": "the only street-level observation is a single event-maximum extent (harvey_validation.py); it cannot say when water arrived at a street, so the onset that precedes the crest is the model",
+    "segments": 1614,
+    "segments_reaching_threshold": 1469,
+    "p10_h": 69.0,
+    "median_h": 96.0,
+    "p90_h": 102.0,
+    "min_h": 2.0,
+    "max_h": 135.0,
+    "note": "the crest moves downstream during the event, so a street below Richmond crests later than the gauge it is keyed to (FINDINGS section 1) \u2014 this number is against the gauge"
+  },
+  "correction_tradeoff": {
+    "not_applied": true,
+    "lift_ft": 23.72,
+    "flags_at_crest": {
+      "stage_ft": 55.13,
+      "shipped": 1469,
+      "corrected": 500,
+      "of": 1614
+    },
+    "streets_reaching_threshold_shipped": 1469,
+    "streets_silent_in_window_after_correction": 969,
+    "hours_of_warning_given_up": {
+      "p10": 34.8,
+      "median": 71.0,
+      "p90": 88.0,
+      "n": 500
+    },
+    "adjudication_at_the_peak": {
+      "basis": "flooded iff (threshold + lift) <= observed peak, scored on the same evaluated set as the shipped confusion matrix",
+      "in_sample": true,
+      "why_that_matters": "fitted and tested on the same 1,187 outcomes, so it is an upper bound on what the correction would do rather than an out-of-sample result; spatial_holdout below is the out-of-sample test and it is weaker",
+      "shipped": {
+        "lift_ft": 0.0,
+        "cutoff_stage_ft": 55.15,
+        "tp": 414,
+        "fp": 686,
+        "fn": 0,
+        "tn": 87,
+        "n": 1187,
+        "accuracy": 0.42207245155855094,
+        "false_positive_rate": 0.88745148771022,
+        "false_negative_rate": 0.0,
+        "recall": 1.0,
+        "precision": 0.37636363636363634,
+        "prevalence_observed": 0.34877843302443134,
+        "prevalence_modelled": 0.9267059814658803
+      },
+      "variants": {
+        "probit_lift": {
+          "lift_ft": 23.72,
+          "cutoff_stage_ft": 31.43,
+          "tp": 247,
+          "fp": 118,
+          "fn": 167,
+          "tn": 655,
+          "n": 1187,
+          "accuracy": 0.7598989048020219,
+          "false_positive_rate": 0.15265200517464425,
+          "false_negative_rate": 0.4033816425120773,
+          "recall": 0.5966183574879227,
+          "precision": 0.6767123287671233,
+          "prevalence_observed": 0.34877843302443134,
+          "prevalence_modelled": 0.3074978938500421
+        },
+        "best_cut_lift": {
+          "lift_ft": 22.3,
+          "cutoff_stage_ft": 32.85,
+          "tp": 318,
+          "fp": 178,
+          "fn": 96,
+          "tn": 595,
+          "n": 1187,
+          "accuracy": 0.7691659646166807,
+          "false_positive_rate": 0.23027166882276842,
+          "false_negative_rate": 0.2318840579710145,
+          "recall": 0.7681159420289855,
+          "precision": 0.6411290322580645,
+          "prevalence_observed": 0.34877843302443134,
+          "prevalence_modelled": 0.41786015164279694
+        }
+      },
+      "reading": "applying the measured lift moves accuracy 0.422 -> 0.760 and the false-positive rate 0.887 -> 0.153, and recall 1.000 -> 0.597: the correction buys the ability to say DRY at the price of missing some genuinely flooded segments"
+    },
+    "reading": "the correction is not applied, and this is what that decision buys: applying it would silence the alert entirely for 969 of the 1469 streets that the shipped rule warns in time, and delay the rest by a median of 71 h. What it would buy back is measured on the peak in harvey_validation.json's correction_would_score: accuracy 0.422 -> 0.760 and the false-positive rate 0.887 -> 0.153, at the cost of 167 segments that flooded and would now be called dry. Trading a false alarm for a miss is not free in a life-safety product, and one event cannot say which trade is right."
+  },
+  "method": {
+    "tiers": "the first and last observed hour at or above each NWS category stage",
+    "flags": "a segment is flagged iff its flood_stage_ft is at or below the stage; the corrected rule uses flood_stage_ft + the measured probit lift",
+    "population": "all 1614 segments in road_thresholds.geojson, the same population the app counts over",
+    "adjudication": "the peak is the only adjudicable instant and is read from harvey_validation.json, never recomputed here"
+  },
+  "sources": {
+    "hydrograph": "data/raw/usgs/iv/08114000_20170822.json (USGS 08114000)",
+    "thresholds": "data/derived/road_thresholds.geojson (OWP HAND, isolation-enriched)",
+    "threshold_error": "data/derived/harvey_validation.json (USGS SIR 2018-5070 extent, doi:10.5066/F7VH5N3N)"
+  },
+  "verification_grid": {
+    "flag_counts": [
+      {
+        "stage_ft": 10.0,
+        "shipped": 0,
+        "corrected": 0
+      },
+      {
+        "stage_ft": 15.0,
+        "shipped": 2,
+        "corrected": 0
+      },
+      {
+        "stage_ft": 20.0,
+        "shipped": 22,
+        "corrected": 0
+      },
+      {
+        "stage_ft": 25.0,
+        "shipped": 51,
+        "corrected": 0
+      },
+      {
+        "stage_ft": 30.0,
+        "shipped": 265,
+        "corrected": 0
+      },
+      {
+        "stage_ft": 33.4,
+        "shipped": 808,
+        "corrected": 0
+      },
+      {
+        "stage_ft": 35.0,
+        "shipped": 919,
+        "corrected": 0
+      },
+      {
+        "stage_ft": 40.0,
+        "shipped": 1134,
+        "corrected": 4
+      },
+      {
+        "stage_ft": 45.0,
+        "shipped": 1232,
+        "corrected": 32
+      },
+      {
+        "stage_ft": 48.0,
+        "shipped": 1276,
+        "corrected": 46
+      },
+      {
+        "stage_ft": 50.0,
+        "shipped": 1337,
+        "corrected": 59
+      },
+      {
+        "stage_ft": 52.0,
+        "shipped": 1372,
+        "corrected": 106
+      },
+      {
+        "stage_ft": 55.0,
+        "shipped": 1468,
+        "corrected": 458
+      }
+    ],
+    "tier_onsets_h": {
+      "action_20": 129.0,
+      "minor_45": 158.0,
+      "moderate_48": 165.0,
+      "major_50": 169.0
+    }
+  },
+  "reference_algorithm": "tier_onset(tier) = hours of the first hourly point with stage >= tier; hours_before_crest = crest_h - tier_onset; flags(stage) = count of segments with flood_stage_ft <= stage; corrected flags(stage) = count with flood_stage_ft + lift <= stage. The app recomputes all of these from its own replay series and its own road list, and must match verification_grid exactly.",
+  "limits": [
+    "no per-street timing is validated: the only street-level observation is one event-maximum extent, so the tier onsets are observed but the street onset that precedes the crest is the model",
+    "the lead time is measured to the gauge crest, and the crest travels downstream during the event, so a street away from the gauge has a different (later) crest",
+    "the replay window ends 2 h after the crest, so the falling limb is not observed: the artifact reports when tiers were crossed, not when they cleared",
+    "the flag counts inherit the threshold defect this module measures rather than fixes; the corrected counts apply one event's fitted constant, which is exactly why the app does not apply it",
+    "one event: this is a backcast of Harvey, and cannot be repeated on another flood from data in this repo"
+  ]
+}

@@ -21,18 +21,22 @@ METHOD, AND ITS KNOWN DEFECT — READ BEFORE TRUSTING ANY NUMBER
   Three repair routes were tried and REJECTED, each on measured evidence:
 
   1. Convert `threshold_discharge_cfs` through the gauge's measured USGS
-     stage/discharge rating (see gauge_rating.py). Rejected: the source's
-     threshold discharges sit mostly ABOVE the gauge's observed record, so the
-     conversion is dominated by extrapolation. A plain power-law rating gives a
-     41 ft median but errs 15.7 ft at the largest observed event; a shifted
-     power-law rating fits the record to 0.34 ft median error but yields a 78.65
-     ft median threshold across these segments — i.e. it asserts that the median
-     corridor road needs a flood larger than any on record. Both are unusable.
+     stage/discharge rating (see gauge_rating.py). Rejected at this level for one
+     reason: the source's threshold discharges sit mostly ABOVE the gauge's
+     observed record (41% of them exceed its largest flow), so converting them
+     directly is dominated by extrapolation — it yields a median corridor
+     threshold far above any flood on record, i.e. it would claim the median road
+     needs a bigger event than has ever happened here. The rating itself was
+     found to be defective at the top of the record while testing this route and
+     was rebuilt (see gauge_rating.py); the rejection is about the conversion
+     route, not about the rating anymore. The route IS implementable per reach,
+     and threshold_correction.py tests exactly that.
 
   2. Treat `threshold_discharge_cfs` as a gauge discharge at all. Rejected: it is
      not one. The mainstem levelpath's hydrotable carries 225 sub-reaches whose
      discharges at any single stage span three orders of magnitude (at 25.3 ft:
-     3,229 to 232,824 cms). The column is not comparable across reaches.
+     3,229 to 232,824 cms). The column is not comparable across reaches — each
+     segment has to be converted through ITS OWN reach's rating first.
 
   3. Drop bridge decks. Not possible from tags: `osm_roads_subset.gpkg` has no
      `bridge`, `layer` or `tunnel` column. The geometric substitute — repairing
@@ -46,9 +50,14 @@ METHOD, AND ITS KNOWN DEFECT — READ BEFORE TRUSTING ANY NUMBER
   crossing segment that could not be repaired, is marked `low` and reported in
   the summary. The defect is declared, not silenced.
 
-  Closing it properly needs one of: a HAND re-run from the DEM (the DEM is not in
-  this repo), or per-reach channel bed elevations to convert local HAND depth to
-  gauge stage (not in this repo — usgs_elev_table.csv has 15 rows, one per gauge).
+  Closing it properly needs one of: a HAND re-run from the DEM (only the HAND
+  raster is in this repo, not the DEM it was cut from), or per-reach channel bed
+  elevations in the gauge's own vertical datum to convert local HAND depth to
+  gauge stage. `usgs_elev_table.csv` does hold `dem_adj_elevation` — 15 rows for 9
+  distinct gauge reaches, one row per crosswalk source rather than one per gauge —
+  but those elevations and the gauge's zero datum cannot be reconciled with
+  anything in this repo. See `threshold_correction.py`, which tests all five routes
+  to a correction and closes each one on a measurement rather than a guess.
 
 Usage: <env>/bin/python pipeline/derive/road_thresholds.py
 Output: data/derived/road_thresholds.geojson, .json, .summary.json
@@ -211,7 +220,12 @@ def main():
         "flooded_by_stage": {str(s): int((ms <= s).sum())
                              for s in (9.2, ACTION_FT, 33.4, FLOOD_FT, 50.0, 55.1)},
         "along_river_slope_ft_per_mile": {"value": float(slope), "r": r,
-                                          "note": "systematic error of HAND-as-stage; not yet corrected"},
+                                          "note": ("systematic error of HAND-as-stage; not corrected. Its MAGNITUDE is "
+                                                     "measured against the observed 2017 Harvey extent in "
+                                                     "data/derived/harvey_validation.json (README, FINDINGS "
+                                                     "section 11): about +22 ft, uniform — this along-river "
+                                                     "trend is a property of the thresholds, not the shape "
+                                                     "of the error")},
         "known_defect": {
             "summary": ("threshold_hand_ft is a HAND height referenced to the nearest drainage, "
                         "not the Richmond gauge stage; the HAND reference changes bed elevation "
@@ -238,8 +252,11 @@ def main():
                                                       "max": float(cap["max"])},
             },
             "closing_it_needs": ("a HAND re-run from the DEM (DEM not in this repo) or per-reach "
-                                 "channel bed elevations to convert local HAND depth to gauge stage "
-                                 "(usgs_elev_table.csv has 15 rows, one per gauge)"),
+                                 "channel bed elevations in the gauge's own vertical datum; "
+                                 "usgs_elev_table.csv has 15 rows for 9 gauge reaches, but those "
+                                 "elevations cannot be reconciled with the gauge zero datum. See "
+                                 "threshold_correction.py, which tests all five routes and closes "
+                                 "each one on a measurement."),
         },
         "method": ("threshold_hand_ft on the Brazos mainstem levelpath treated as Richmond gauge "
                    "stage, with crossing segments (within 15 m of an NWM stream line) repaired from "

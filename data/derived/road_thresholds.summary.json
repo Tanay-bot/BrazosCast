@@ -30,7 +30,7 @@
   "along_river_slope_ft_per_mile": {
     "value": -0.9187395806950794,
     "r": -0.6381906519834765,
-    "note": "systematic error of HAND-as-stage; not yet corrected"
+    "note": "systematic error of HAND-as-stage; not corrected. Its MAGNITUDE is measured against the observed 2017 Harvey extent in data/derived/harvey_validation.json (README, FINDINGS section 11): about +22 ft, uniform \u2014 this along-river trend is a property of the thresholds, not the shape of the error"
   },
   "known_defect": {
     "summary": "threshold_hand_ft is a HAND height referenced to the nearest drainage, not the Richmond gauge stage; the HAND reference changes bed elevation along the corridor, so a systematic along-river error remains.",
@@ -115,11 +115,11 @@
     ],
     "rejected_route_discharge_rating": {
       "reason": "source threshold discharges lie mostly above the gauge's observed record",
-      "rating_model": "inverted rating: stage_ft = s0 + (flow_cfs / a)^(1/c)",
-      "rating_median_abs_error_ft": 0.34195805518787203,
-      "rating_median_abs_error_ft_stage_above_35": 2.7332041351204417,
+      "rating_model": "monotone PCHIP through median stage of 40 log-spaced flow bins, peak anchored; power-law tail above the record",
+      "rating_median_abs_error_ft": 0.2807425145665903,
+      "rating_median_abs_error_ft_stage_above_35": 1.116923574707755,
       "observed_flow_cfs_max": 120000.0,
-      "resulting_median_threshold_ft": 78.50928983435949,
+      "resulting_median_threshold_ft": 57.342074796363434,
       "extrapolated_segments": 860
     },
     "rejected_route_discharge_column": {
@@ -133,7 +133,7 @@
         "max": 232823.79874783108
       }
     },
-    "closing_it_needs": "a HAND re-run from the DEM (DEM not in this repo) or per-reach channel bed elevations to convert local HAND depth to gauge stage (usgs_elev_table.csv has 15 rows, one per gauge)"
+    "closing_it_needs": "a HAND re-run from the DEM (DEM not in this repo) or per-reach channel bed elevations in the gauge's own vertical datum; usgs_elev_table.csv has 15 rows for 9 gauge reaches, but those elevations cannot be reconciled with the gauge zero datum. See threshold_correction.py, which tests all five routes and closes each one on a measurement."
   },
   "method": "threshold_hand_ft on the Brazos mainstem levelpath treated as Richmond gauge stage, with crossing segments (within 15 m of an NWM stream line) repaired from non-crossing neighbours within 300 m. Segments below action stage, unrepaired crossings and levee-protected segments are flagged confidence=low. See known_defect for the residual systematic error and the rejected alternatives."
 }

@@ -1,0 +1,170 @@
+{
+  "applied": false,
+  "reason": "the one workable route (R1) is written and internally anchored but cannot be validated with the data in this repo, and applying it to part of the corridor would make the published thresholds internally inconsistent; a correction that cannot be validated would be worse than a declared defect",
+  "shipped_thresholds": "unchanged (HAND-as-stage, crossing repair, low-confidence flags)",
+  "closures": {
+    "R1_discharge_rating": {
+      "sub_reaches": 225,
+      "feature_ids": 73,
+      "levels_per_sub_reach": 84,
+      "non_monotone_sub_reach_ratings": 0,
+      "non_monotone_if_grouped_by_feature_id": 56,
+      "hydroids_shared_with_the_road_table": 133,
+      "hydroids_in_the_road_table": 133,
+      "segments_resolved_to_a_sub_reach": 1776,
+      "intrinsic_validation_at_the_gauge_sub_reach": [
+        {
+          "hand_ft": 15,
+          "implied_stage_ft": 16.47,
+          "error_ft": 1.47
+        },
+        {
+          "hand_ft": 20,
+          "implied_stage_ft": 18.94,
+          "error_ft": -1.06
+        },
+        {
+          "hand_ft": 25,
+          "implied_stage_ft": 22.42,
+          "error_ft": -2.58
+        },
+        {
+          "hand_ft": 30,
+          "implied_stage_ft": 28.57,
+          "error_ft": -1.43
+        },
+        {
+          "hand_ft": 35,
+          "implied_stage_ft": 38.57,
+          "error_ft": 3.57
+        },
+        {
+          "hand_ft": 40,
+          "implied_stage_ft": 50.91,
+          "error_ft": 10.91
+        }
+      ],
+      "segments_within_the_gauged_record": 762,
+      "segments_beyond_it": 1014,
+      "classified_highways": 819,
+      "classified_highways_below_action": {
+        "hand_as_stage": 18,
+        "of_which_in_record": 18,
+        "lifted_above_action": 17,
+        "still_below_after_conversion": 1,
+        "newly_below_after_conversion": 17,
+        "net_after_conversion": 18
+      },
+      "conversion_direction": {
+        "up": 645,
+        "down": 117,
+        "median_delta_in_record_ft": 8.294994007822751,
+        "median_delta_all_ft": 25.083728916837202
+      },
+      "named_highways": {
+        "State Highway 6": {
+          "n": 103,
+          "hand_min_ft": 14.2,
+          "converted_min_ft": 27.5
+        },
+        "Grand Parkway": {
+          "n": 25,
+          "hand_min_ft": 15.2,
+          "converted_min_ft": 28.8
+        },
+        "US Highway 90A": {
+          "n": 149,
+          "hand_min_ft": 16.5,
+          "converted_min_ft": 30.5
+        }
+      },
+      "hybrid_is_monotone": false,
+      "hybrid_overlap_ft": 25.353254451157405,
+      "hybrid_inverted_segments": 637,
+      "verdict": "implementable, anchored, and it moves the named offenders to realistic stages, but it cannot be shipped: it is not a lift (it moves some segments DOWN), so it redistributes the below-action set rather than removing it, and the hybrid (convert in range, keep HAND otherwise) is non-monotone because two thirds of segments need a discharge beyond the gauged record"
+    },
+    "R2_absolute_bed_elevation": {
+      "gauge_reach_anchor_elevation_ft": 51.4435712,
+      "gauge_zero_datum_ft": 26.73,
+      "constant_shift_if_taken_literally_ft": 24.7135712,
+      "verdict": "unusable as an absolute correction: the gauge zero datum and dem_adj_elevation are in irreconcilable vertical references"
+    },
+    "R3_flat_pool_premise": {
+      "bed_slope_ft_per_mile": 0.5259387650127044,
+      "observed_threshold_trend_ft_per_mile": -0.9187395806950794,
+      "verdict": "premise corrected: the bed profile has the same sign as the threshold trend, so adding it increases slope; under normal flow the physical correction is a constant offset"
+    },
+    "R4_bed_reference": {
+      "nwm_proximity_correction_ft": {
+        "median": 26.577526551895087,
+        "mean": 27.07792927670334,
+        "p90": 51.30731831787165,
+        "min": -57.75131402293523,
+        "max": 119.49711340212835
+      },
+      "hand_raster_reference_check": {
+        "segments_checked": 145,
+        "reference_within_2_5km": 59,
+        "reference_outside_mainstem_branch": 0
+      },
+      "offenders_below_action": 22,
+      "verdict": "unimplementable in-repo: the NWM-proximity form over-corrects the median past any flood on record, and the HAND raster cannot identify the reference drainage for most segments"
+    },
+    "R5_observation": {
+      "claims": 7389,
+      "claims_with_depth": 6662,
+      "harvey_claims": 3928,
+      "distinct_latitudes": 6,
+      "distinct_longitudes": 8,
+      "max_coordinate_decimals": 1,
+      "coordinate_cell_km": 11.1,
+      "verdict": "no point validation available FROM CLAIMS: their coordinates are privacy-coarsened to 0.1 degrees, so per-segment validation is impossible offline. This closure is about the claim-point route only \u2014 the polygon route named in to_reopen was obtained and is scored in pipeline/derive/harvey_validation.py ",
+      "closed_only_for_claims": "this closure is about OpenFEMA claim coordinates and still holds for them; observed inundation as POLYGONS (USGS SIR 2018-5070) is now available and is used in pipeline/derive/harvey_validation.py"
+    }
+  },
+  "validated_asset": "data/derived/bed_profile.json",
+  "harvey_validation_cross_check": {
+    "available": true,
+    "module": "pipeline/derive/harvey_validation.py",
+    "measured_lift_required_ft": 22.3,
+    "R2_datum_gap_ft": 24.7135712,
+    "R2_difference_ft": 2.4135712,
+    "R1_median_lift_all_segments_ft": 25.083728916837202,
+    "R1_difference_ft": 2.7837289168372017,
+    "R1_named_highway_shortfall_ft": {
+      "State Highway 6": {
+        "shipped_ft": 14.2,
+        "R1_ft": 27.5,
+        "measured_lift_applied_ft": 36.5,
+        "R1_short_by_ft": 9.0
+      },
+      "Grand Parkway": {
+        "shipped_ft": 15.2,
+        "R1_ft": 28.8,
+        "measured_lift_applied_ft": 37.5,
+        "R1_short_by_ft": 8.7
+      },
+      "US Highway 90A": {
+        "shipped_ft": 16.5,
+        "R1_ft": 30.5,
+        "measured_lift_applied_ft": 38.8,
+        "R1_short_by_ft": 8.3
+      }
+    },
+    "settled": "the magnitude is real and is a CONSTANT: the observed extent requires each segment to flood about 22 ft later than its threshold says, R2's discarded datum gap (+24.7 ft) and R1's median lift (+25.1 ft) both land within 3 ft of that, and a linear along-river correction does not generalise off-sample where the constant does (0.709/0.844 test accuracy, against 0.622/0.831 with a slope term and 0.440/0.387 uncorrected)",
+    "and_it_also_settled": "R1's magnitude is NOT enough: for the three named highways its conversion lands 8-9 ft short of what the observation requires, which is the opposite of the R1-is-unusable argument and independently confirms why R1 redistributes the below-action set instead of lifting it",
+    "still_applied": false,
+    "why_still_not_applied": "one event, one extent; the observation bounds the correction but a constant fitted to a single flood, with no second flood to test it on, is a new unvalidated number in place of an old one"
+  },
+  "to_reopen": [
+    "the R1 conversion is written and anchored; an observed Harvey inundation extent would settle whether its magnitude is right, after which it can ship for the whole corridor",
+    "a DEM, to re-run HAND against the correct drainage (with the gauge's vertical datum documented)",
+    "per-reach channel bed elevations in the gauge's own vertical datum",
+    "observed inundation extent for Harvey as polygons (USGS/NOAA), not coarsened points \u2014 SATISFIED by pipeline/derive/harvey_validation.py (USGS SIR 2018-5070 extent, doi:10.5066/F7VH5N3N); see harvey_validation_cross_check for what it settled"
+  ],
+  "acceptance_for_any_future_correction": [
+    "the gauge's own reach must come back unchanged (HAND = stage there)",
+    "the corrected profile must agree with bed_profile.json",
+    "it must be validated against observed extent, with a reported false-positive rate"
+  ]
+}

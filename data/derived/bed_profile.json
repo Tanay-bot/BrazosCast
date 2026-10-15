@@ -1,0 +1,67 @@
+{
+  "method": "integrate NWM reach Slope x Length downstream from each reach to the outlet; a datum-free relative profile (only differences are meaningful)",
+  "anchors": [
+    {
+      "feature_id": 3123790,
+      "lid": "SLNT2",
+      "integrated_rise_m": 15.121900066224043,
+      "dem_adj_elevation_m": 13.62,
+      "zero_datum_ft": 0.0
+    },
+    {
+      "feature_id": 3121538,
+      "lid": "HPDT2",
+      "integrated_rise_m": 47.065180711462745,
+      "dem_adj_elevation_m": 35.713,
+      "zero_datum_ft": 107.67
+    },
+    {
+      "feature_id": 3122690,
+      "lid": "BAWT2",
+      "integrated_rise_m": 34.240090358296584,
+      "dem_adj_elevation_m": 28.90329,
+      "zero_datum_ft": 0.0
+    },
+    {
+      "feature_id": 3123784,
+      "lid": "RMOT2",
+      "integrated_rise_m": 15.235290063359571,
+      "dem_adj_elevation_m": 15.68,
+      "zero_datum_ft": 26.73
+    },
+    {
+      "feature_id": 3124642,
+      "lid": "ROST2",
+      "integrated_rise_m": 4.4784398777846945,
+      "dem_adj_elevation_m": 0.93595296,
+      "zero_datum_ft": 0.0
+    },
+    {
+      "feature_id": 3124654,
+      "lid": "WCBT2",
+      "integrated_rise_m": 1.5564199785585515,
+      "dem_adj_elevation_m": 0.162,
+      "zero_datum_ft": 0.0
+    }
+  ],
+  "anchor_count": 6,
+  "anchor_elevations_monotone_downstream": true,
+  "anchor_order": [
+    3121538,
+    3122690,
+    3123784,
+    3123790,
+    3124642,
+    3124654
+  ],
+  "correlation_integrated_vs_dem_m": 0.9861409036087577,
+  "offset_spread_m": {
+    "mean": -3.7805130159476987,
+    "min": -11.352180711462744,
+    "max": 0.4447099366404288,
+    "std": 3.8415896094253963
+  },
+  "implied_slope_from_gauge_to_outlet_ft_per_mile": 0.5259387650127044,
+  "gauge_zero_datum_ft": 26.73,
+  "verdict": "relative profile validated (r above the gate); absolute elevations are NOT usable because the gauge zero datum and dem_adj_elevation are in irreconcilable vertical references"
+}

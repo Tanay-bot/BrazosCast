@@ -1,0 +1,341 @@
+{
+  "generated_at": "2026-10-15T14:58:35.728277+00:00",
+  "step": "UPGRADE-PLAN.md Step 6 \u2014 Harvey validation",
+  "question": "do the street thresholds reproduce the flooding that actually happened?",
+  "answer": "no, and the error is calibration rather than discrimination: at the observed peak the model marks 93% of the evaluated corridor flooded where 35% was, with recall 1.00 but a false-positive rate of 0.89",
+  "applied": false,
+  "peak": {
+    "stage_ft": 55.15,
+    "at": "2017-08-31 22:15:00+00:00",
+    "gauge": "RMOT2",
+    "source": "USGS 08114000 observed gage height, cached in-repo",
+    "basis": "instantaneous maximum of the 15-minute series \u2014 the commensurate state for an event-maximum extent",
+    "hourly_mean_peak_ft": 55.135,
+    "hourly_mean_note": "app/public/data/replay-harvey.json peaks at this value because it is an hourly mean resample; the 0.02 ft difference is a resampling artifact, not a disagreement"
+  },
+  "observation": {
+    "dataset": "USGS flood-inundation extent, upper Brazos River, Aug-Sep 2017",
+    "doi": "10.5066/F7VH5N3N",
+    "report": "USGS SIR 2018-5070 (Watson and others, 2018)",
+    "cached_by": "pipeline/fetch/fetch_harvey_inundation.mjs",
+    "nature": "water surface interpolated between 44 surveyed high-water marks and clipped to the mapped area boundary \u2014 a survey-anchored estimate, not a satellite water edge, and one maximum extent rather than a time series",
+    "extent_valid_as_shipped": false,
+    "extent_area_km2": 576.6,
+    "boundary_area_km2": 948.2,
+    "hwm": {
+      "n": 44,
+      "n_with_stage": 44,
+      "waterbody_mainstem": 35,
+      "stage_min_ft": 19.57,
+      "stage_max_ft": 165.46
+    }
+  },
+  "method": {
+    "model": "flooded at the Harvey peak iff flood_stage_ft <= peak stage",
+    "observed": "segment geometry intersects the mapped inundation extent",
+    "evaluated_set": "segments whose centroid lies inside the mapped area boundary",
+    "why": "outside the boundary the release supplies no observation, so scoring those segments would manufacture both error types",
+    "scored_at_peak": "the extent is the maximum of the event, so the commensurate model state is the maximum stage; the crest moves downstream during the event, so no single gauge reading is simultaneous with every location (FINDINGS section 1)"
+  },
+  "confusion_matrix": {
+    "tp": 414,
+    "fp": 686,
+    "fn": 0,
+    "tn": 87,
+    "n": 1187,
+    "accuracy": 0.42207245155855094,
+    "false_positive_rate": 0.88745148771022,
+    "false_negative_rate": 0.0,
+    "recall": 1.0,
+    "precision": 0.37636363636363634,
+    "prevalence_observed": 0.34877843302443134,
+    "prevalence_modelled": 0.9267059814658803
+  },
+  "sensitivity_to_evaluated_set": {
+    "centroid_inside_boundary": {
+      "tp": 414,
+      "fp": 686,
+      "fn": 0,
+      "tn": 87,
+      "n": 1187,
+      "accuracy": 0.42207245155855094,
+      "false_positive_rate": 0.88745148771022,
+      "false_negative_rate": 0.0,
+      "recall": 1.0,
+      "precision": 0.37636363636363634,
+      "prevalence_observed": 0.34877843302443134,
+      "prevalence_modelled": 0.9267059814658803
+    },
+    "any_part_inside_boundary": {
+      "tp": 416,
+      "fp": 705,
+      "fn": 0,
+      "tn": 87,
+      "n": 1208,
+      "accuracy": 0.4163907284768212,
+      "false_positive_rate": 0.8901515151515151,
+      "false_negative_rate": 0.0,
+      "recall": 1.0,
+      "precision": 0.3710972346119536,
+      "prevalence_observed": 0.3443708609271523,
+      "prevalence_modelled": 0.9279801324503312
+    },
+    "whole_corridor_unrestricted": {
+      "tp": 416,
+      "fp": 1053,
+      "fn": 0,
+      "tn": 145,
+      "n": 1614,
+      "accuracy": 0.3475836431226766,
+      "false_positive_rate": 0.8789649415692822,
+      "false_negative_rate": 0.0,
+      "recall": 1.0,
+      "precision": 0.2831858407079646,
+      "prevalence_observed": 0.2577447335811648,
+      "prevalence_modelled": 0.9101610904584883
+    }
+  },
+  "diagnosis": {
+    "auc_discrimination": 0.8094490378786459,
+    "best_reproducing_stage_ft": 32.85,
+    "offset_vs_observed_peak_ft": -22.3,
+    "at_best_stage": {
+      "stage_ft": 32.849999999999895,
+      "correct": 913,
+      "accuracy": 0.7691659646166807,
+      "fpr": 0.23027166882276842,
+      "recall": 0.7681159420289855
+    },
+    "observed_wet_threshold_median_ft": 30.6,
+    "observed_dry_threshold_median_ft": 37.6,
+    "note": "discrimination is above chance, so the HAND height does rank ground that flooded above ground that did not; what is wrong is the absolute mapping from HAND to Richmond gauge stage",
+    "threshold_error_model": {
+      "lift_ft": 23.72,
+      "per_street_sigma_ft": 11.36,
+      "lift_ci90_ft": [
+        22.9,
+        24.6
+      ],
+      "sigma_ci90_ft": [
+        10.03,
+        12.73
+      ],
+      "n_bootstrap": 400,
+      "bootstrap_seed": 7,
+      "model": "probit: true flood stage = shipped threshold + L + N(0, sigma); P(observed wet) = Phi((peak - L - threshold)/sigma)",
+      "reading": "L is the corridor-wide average the threshold is off by; sigma is how far apart two streets with the same threshold can be. The second is much larger, and it is the one a household faces.",
+      "not_a_confusion_interval": "sigma is unexplained variance from a single event, not a confidence interval on a measured quantity"
+    }
+  },
+  "estimators_of_the_same_lift": {
+    "best_cut_ft": 22.3,
+    "probit_mle_ft": 23.72,
+    "difference_ft": 1.42,
+    "which_to_quote": "the app quotes the probit fit: it uses every binary observation, and it is the fit that also yields the per-street sigma the ensemble propagates. The best-cut value maximises correct classifications on a 0.05 ft grid and is reported as the simpler corroborating estimate; the two agree to 1.4 ft",
+    "why_they_differ": "different objective functions on the same data \u2014 one counts misclassifications, the other maximises likelihood \u2014 so exact agreement would be a coincidence"
+  },
+  "correction_would_score": {
+    "basis": "flooded iff (threshold + lift) <= observed peak, scored on the same evaluated set as the shipped confusion matrix",
+    "in_sample": true,
+    "why_that_matters": "fitted and tested on the same 1,187 outcomes, so it is an upper bound on what the correction would do rather than an out-of-sample result; spatial_holdout below is the out-of-sample test and it is weaker",
+    "shipped": {
+      "lift_ft": 0.0,
+      "cutoff_stage_ft": 55.15,
+      "tp": 414,
+      "fp": 686,
+      "fn": 0,
+      "tn": 87,
+      "n": 1187,
+      "accuracy": 0.42207245155855094,
+      "false_positive_rate": 0.88745148771022,
+      "false_negative_rate": 0.0,
+      "recall": 1.0,
+      "precision": 0.37636363636363634,
+      "prevalence_observed": 0.34877843302443134,
+      "prevalence_modelled": 0.9267059814658803
+    },
+    "variants": {
+      "probit_lift": {
+        "lift_ft": 23.72,
+        "cutoff_stage_ft": 31.43,
+        "tp": 247,
+        "fp": 118,
+        "fn": 167,
+        "tn": 655,
+        "n": 1187,
+        "accuracy": 0.7598989048020219,
+        "false_positive_rate": 0.15265200517464425,
+        "false_negative_rate": 0.4033816425120773,
+        "recall": 0.5966183574879227,
+        "precision": 0.6767123287671233,
+        "prevalence_observed": 0.34877843302443134,
+        "prevalence_modelled": 0.3074978938500421
+      },
+      "best_cut_lift": {
+        "lift_ft": 22.3,
+        "cutoff_stage_ft": 32.85,
+        "tp": 318,
+        "fp": 178,
+        "fn": 96,
+        "tn": 595,
+        "n": 1187,
+        "accuracy": 0.7691659646166807,
+        "false_positive_rate": 0.23027166882276842,
+        "false_negative_rate": 0.2318840579710145,
+        "recall": 0.7681159420289855,
+        "precision": 0.6411290322580645,
+        "prevalence_observed": 0.34877843302443134,
+        "prevalence_modelled": 0.41786015164279694
+      }
+    },
+    "reading": "applying the measured lift moves accuracy 0.422 -> 0.760 and the false-positive rate 0.887 -> 0.153, and recall 1.000 -> 0.597: the correction buys the ability to say DRY at the price of missing some genuinely flooded segments"
+  },
+  "spatial_holdout": {
+    "fit_upstream_test_downstream": {
+      "fit_n": 403,
+      "test_n": 784,
+      "best_offset_on_fit_ft": -23.900000000000095,
+      "linear_fit_intercept_ft": -26.0,
+      "linear_fit_slope_ft_per_mile": -0.5,
+      "test_accuracy": {
+        "uncorrected": 0.44005102040816324,
+        "constant_offset": 0.7091836734693877,
+        "linear_offset": 0.6224489795918368
+      },
+      "test_fpr": {
+        "uncorrected": 0.9932126696832579,
+        "constant_offset": 0.22850678733031674,
+        "linear_offset": 0.01809954751131222
+      },
+      "test_recall": {
+        "uncorrected": 1.0,
+        "constant_offset": 0.6286549707602339,
+        "linear_offset": 0.15789473684210525
+      }
+    },
+    "fit_downstream_test_upstream": {
+      "fit_n": 784,
+      "test_n": 403,
+      "best_offset_on_fit_ft": -22.300000000000104,
+      "linear_fit_intercept_ft": -26.2,
+      "linear_fit_slope_ft_per_mile": 0.6,
+      "test_accuracy": {
+        "uncorrected": 0.3870967741935484,
+        "constant_offset": 0.8436724565756824,
+        "linear_offset": 0.8312655086848635
+      },
+      "test_fpr": {
+        "uncorrected": 0.7462235649546828,
+        "constant_offset": 0.06948640483383686,
+        "linear_offset": 0.006042296072507553
+      },
+      "test_recall": {
+        "uncorrected": 1.0,
+        "constant_offset": 0.4444444444444444,
+        "linear_offset": 0.08333333333333333
+      }
+    }
+  },
+  "named_offenders": {
+    "US Highway 90A": {
+      "segments": 56,
+      "min_threshold_ft": 17.0,
+      "median_threshold_ft": 33.1,
+      "observed_wet": 13,
+      "observed_wet_share": 0.23214285714285715,
+      "modelled_wet": 56,
+      "modelled_wet_share": 1.0,
+      "earliest_observed_wet_stage_ft": 32.1
+    },
+    "East US Highway 90A": {
+      "segments": 71,
+      "min_threshold_ft": 16.5,
+      "median_threshold_ft": 31.0,
+      "observed_wet": 33,
+      "observed_wet_share": 0.4647887323943662,
+      "modelled_wet": 71,
+      "modelled_wet_share": 1.0,
+      "earliest_observed_wet_stage_ft": 29.7
+    },
+    "West Grand Parkway South": {
+      "segments": 26,
+      "min_threshold_ft": 15.6,
+      "median_threshold_ft": 35.2,
+      "observed_wet": 11,
+      "observed_wet_share": 0.4230769230769231,
+      "modelled_wet": 26,
+      "modelled_wet_share": 1.0,
+      "earliest_observed_wet_stage_ft": 19.6
+    },
+    "State Highway 6 South": {
+      "segments": 35,
+      "min_threshold_ft": 29.3,
+      "median_threshold_ft": 31.3,
+      "observed_wet": 29,
+      "observed_wet_share": 0.8285714285714286,
+      "modelled_wet": 35,
+      "modelled_wet_share": 1.0,
+      "earliest_observed_wet_stage_ft": 30.5
+    }
+  },
+  "below_action_stage": {
+    "segments_below_action_stage": 20,
+    "observed_wet_during_harvey": 17,
+    "observed_wet_share": 0.85,
+    "can_this_validate_them": false,
+    "why_not": "NO. A segment observed wet at the record peak is equally consistent with flooding at 17 ft and at 55 ft, so a point-in-time extent carries no information about a low threshold. The observation can only refute thresholds that it found DRY; it cannot confirm a low one. Adjudicating the below-action segments needs a series of extents at successive stages, which this release does not provide.",
+    "note": "these segments claim to submerge at or below the 20 ft action stage; the observed share is reported because it is what the test can say, not because it settles the question"
+  },
+  "false_positive_severity": {
+    "false_positive_threshold_median_ft": 36.4,
+    "false_positive_threshold_p10_ft": 30.3,
+    "false_positives_within_10ft_of_observed_wet_median": 460,
+    "note": "an extent that under-represents the flood would inflate false positives; most of them sit close to the separating threshold rather than far below it"
+  },
+  "corroboration_of_closed_routes": {
+    "required_lift_ft": 22.3,
+    "R2_datum_gap_ft": 24.7135712,
+    "R2_difference_from_measured_ft": 2.41,
+    "R1_median_lift_all_segments_ft": 25.083728916837202,
+    "R1_difference_from_measured_ft": 2.78,
+    "R1_median_lift_in_record_ft": 8.294994007822751,
+    "named_highways": {
+      "State Highway 6": {
+        "shipped_ft": 14.2,
+        "R1_ft": 27.5,
+        "measured_lift_applied_ft": 36.5,
+        "R1_short_by_ft": 9.0
+      },
+      "Grand Parkway": {
+        "shipped_ft": 15.2,
+        "R1_ft": 28.8,
+        "measured_lift_applied_ft": 37.5,
+        "R1_short_by_ft": 8.7
+      },
+      "US Highway 90A": {
+        "shipped_ft": 16.5,
+        "R1_ft": 30.5,
+        "measured_lift_applied_ft": 38.8,
+        "R1_short_by_ft": 8.3
+      }
+    },
+    "reading": "three routes that were derived from entirely different inputs (a datum comparison, a discharge conversion and an observed inundation extent) land on a constant of the same sign within a few feet of each other",
+    "why_not_proof": "the measured value is a corridor-wide optimum from ONE event, R2's is computed at the gauge reach alone, and R1's median includes its extrapolated segments -- the population is not the same, the vertical references are still not formally reconcilable, and there is no second event to test the correction on"
+  },
+  "functional_form": "a constant offset generalises across halves of the corridor and a linear along-river offset does not beat it, which supports R3's conclusion in threshold_correction.py (under normal flow the physical correction is a constant offset) over the shipped summary's -0.92 ft/mile drift description",
+  "along_river": {
+    "evaluated_set_slope_ft_per_mile": -0.8261651521067234,
+    "evaluated_set_r": -0.502851369457283,
+    "road_thresholds_declared_slope_ft_per_mile": -0.9187395806950794,
+    "mean_east_mi_of_false_positives": 1.6562419358962315,
+    "mean_east_mi_of_observed_dry": 0.9827019212366965
+  },
+  "limits": [
+    "one event, one extent: this measures agreement with the best available reconstruction of Harvey, and cannot be repeated on another flood from data in this repo",
+    "the extent is survey-anchored and interpolated, not observed water edges, so a segment inside it is not proven to have been flooded as a resident experienced it",
+    "the extent is the event maximum and the model state is the gauge maximum, so the downstream crest travel time (FINDINGS section 1) is not resolved here",
+    "roads are lines: any part of a segment inside the extent counts as flooded, which matches what the threshold means (a crossing point submerging) but will not match a road with one submerged low point among dry length",
+    "absolute stages still inherit the HAND-as-stage defect this test measures \u2014 that is the point, not an escape from it"
+  ],
+  "consequence": "no correction is applied, on the same principle as threshold_correction.py: a correction fitted to one event, with no second event to test it on, would be a new unvalidated number in place of an old one. What changes is that the error is now measured rather than declared."
+}

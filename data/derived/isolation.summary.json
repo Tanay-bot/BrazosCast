@@ -1,0 +1,153 @@
+{
+  "refuge_stage_ft": 50.0,
+  "segments": 1614,
+  "graph": {
+    "nodes": 8987,
+    "edges": 8970,
+    "components": 116,
+    "refuge_nodes": 1702,
+    "snap_decimals": 7,
+    "baseline_endpoint_only": {
+      "nodes": 1866,
+      "edges": 1612,
+      "components": 286
+    }
+  },
+  "isolation_defined": 731,
+  "no_dry_refuge_reachable": 883,
+  "trapped_before_flood": 230,
+  "network_outlasts_street": 418,
+  "refuge_bar_sensitivity_no_dry_refuge": {
+    "35.0": 393,
+    "40.0": 705,
+    "45.0": 863,
+    "50.0": 883,
+    "55.0": 910
+  },
+  "isolation_ft": {
+    "median": 43.7,
+    "p25": 34.8,
+    "p75": 54.5,
+    "min": 15.6,
+    "max": 81.9
+  },
+  "gap_ft": {
+    "median": 0.0,
+    "p75": 0.9500000000000028,
+    "max": 19.6
+  },
+  "trapped_gap_ft": {
+    "n": 230,
+    "median": 2.75,
+    "p75": 4.699999999999996,
+    "max": 19.6
+  },
+  "largest_gaps": [
+    {
+      "name": "unnamed",
+      "osmid": 92543522,
+      "highway": "primary",
+      "flood_stage_ft": 35.2,
+      "isolation_ft": 15.6,
+      "gap_ft": 19.6
+    },
+    {
+      "name": "US Highway 90A",
+      "osmid": 423489801,
+      "highway": "primary",
+      "flood_stage_ft": 34.8,
+      "isolation_ft": 18.1,
+      "gap_ft": 16.7
+    },
+    {
+      "name": "FM 762",
+      "osmid": 559233709,
+      "highway": "secondary",
+      "flood_stage_ft": 37.1,
+      "isolation_ft": 20.8,
+      "gap_ft": 16.3
+    },
+    {
+      "name": "West Grand Parkway South",
+      "osmid": 1065967696,
+      "highway": "primary",
+      "flood_stage_ft": 31.5,
+      "isolation_ft": 15.6,
+      "gap_ft": 15.9
+    },
+    {
+      "name": "Ellis Creek Boulevard",
+      "osmid": 20889203,
+      "highway": "tertiary",
+      "flood_stage_ft": 33.6,
+      "isolation_ft": 18.1,
+      "gap_ft": 15.5
+    },
+    {
+      "name": "Gateway Boulevard",
+      "osmid": 20895132,
+      "highway": "tertiary",
+      "flood_stage_ft": 31.6,
+      "isolation_ft": 18.1,
+      "gap_ft": 13.5
+    },
+    {
+      "name": "Macek Road",
+      "osmid": 20904996,
+      "highway": "tertiary",
+      "flood_stage_ft": 34.3,
+      "isolation_ft": 20.8,
+      "gap_ft": 13.5
+    },
+    {
+      "name": "Crabb River Road",
+      "osmid": 1058855421,
+      "highway": "secondary",
+      "flood_stage_ft": 32.5,
+      "isolation_ft": 20.8,
+      "gap_ft": 11.7
+    },
+    {
+      "name": "Jackson Street",
+      "osmid": 908557760,
+      "highway": "primary",
+      "flood_stage_ft": 37.4,
+      "isolation_ft": 27.7,
+      "gap_ft": 9.7
+    },
+    {
+      "name": "Rabbs Crossing",
+      "osmid": 1304575613,
+      "highway": "tertiary",
+      "flood_stage_ft": 30.2,
+      "isolation_ft": 20.8,
+      "gap_ft": 9.4
+    },
+    {
+      "name": "Fort Street",
+      "osmid": 635825379,
+      "highway": "tertiary",
+      "flood_stage_ft": 46.1,
+      "isolation_ft": 37.8,
+      "gap_ft": 8.3
+    },
+    {
+      "name": "Houston Street",
+      "osmid": 194946610,
+      "highway": "primary",
+      "flood_stage_ft": 47.0,
+      "isolation_ft": 39.6,
+      "gap_ft": 7.4
+    }
+  ],
+  "checks": {
+    "stages_cross_checked": 20,
+    "nodes_per_check": 8987,
+    "isolation_le_flood_stage": true,
+    "bfs_agrees_with_bottleneck": true,
+    "topology_improves_on_endpoint_only": true
+  },
+  "method": "road graph with a node at every vertex; refuge = a node incident to a segment surviving the 50 ft major stage; isolation = widest-path bottleneck to that set, computed by one descending union-find pass and cross-checked by BFS at every sampled stage. Segment isolation is capped by the segment's own flood stage.",
+  "method_segment_aggregation": "max over the segment's vertices (last exit to go), capped by the segment's own flood_stage_ft",
+  "caveats": "Reachability is a road-network property, not a safety guarantee: a refuge node is ground the modelled water does not reach at 50 ft, not a shelter, and not validated against where people actually went. Absolute values inherit the -0.92 ft/mile HAND-as-stage error documented in road_thresholds.py, so they move when that primitive is fixed; the structure of who is trapped first is what this stage adds. The corridor is a bounding-box clip, so roads are cut at its edge: escape to high ground outside the study area is NOT counted as an exit, which under-reports reachability for fragments touching the boundary. Treating the box edge as an exit instead moves no_dry_refuge from 883 to 674 and trapped_before_flood from 230 to 408; the numbers here use the stricter reading."
+}

@@ -1,0 +1,188 @@
+{
+  "step": "Step 5 \u2014 gauge-failure redundancy",
+  "question": "If RMOT2 stops reporting, what is the Richmond stage? Answered from HPDT2/BAWT2, and only where the measurement says that beats what you already have.",
+  "method": "estimate Richmond(t) as T(upstream(t - lag)) where T is a monotone piecewise-linear transfer fitted as bin medians of upstream stage, and lag is the derived median crest lead time. Below the measured crossover the last Richmond observation is used instead, because it is closer to the truth than the transfer is.",
+  "interpolation": "piecewise-linear through binned medians, clamped outside the fitted range \u2014 chosen because the identical interpolation is re-implemented in the browser; PCHIP would not be reproducible there without a second implementation to keep in step",
+  "transfer": {
+    "HPDT2": {
+      "name": "Hempstead",
+      "usgs": "08111500",
+      "lag_h": 48.1,
+      "lag_h_used": 48,
+      "u_ft": [
+        11.24,
+        16.77,
+        20.46,
+        25.96,
+        29.18,
+        31.8,
+        34.16,
+        36.08,
+        38.45,
+        40.05,
+        43.91,
+        49.88
+      ],
+      "r_ft": [
+        11.17,
+        16.14,
+        19.45,
+        26.61,
+        29.99,
+        33.32,
+        35.64,
+        37.18,
+        39.62,
+        41.65,
+        45.0,
+        49.87
+      ]
+    },
+    "BAWT2": {
+      "name": "San Felipe",
+      "usgs": "08111850",
+      "lag_h": 30.8,
+      "lag_h_used": 31,
+      "u_ft": [
+        93.88,
+        96.04,
+        98.19,
+        101.72,
+        105.13,
+        107.59,
+        109.04,
+        111.11,
+        112.59,
+        114.2,
+        117.72,
+        125.61
+      ],
+      "r_ft": [
+        10.59,
+        16.23,
+        20.68,
+        26.57,
+        32.01,
+        34.49,
+        36.49,
+        38.74,
+        39.97,
+        42.46,
+        45.72,
+        50.24
+      ]
+    }
+  },
+  "validation": {
+    "protocol": "5-fold leave-events-out (whole flood events held out, never hours)",
+    "events": 20,
+    "hourly_rows": 4905,
+    "evaluated_rows": 4133,
+    "mae_ft_by_gap_h": {
+      "2": {
+        "persistence": 0.22,
+        "shift": 2.52,
+        "anchor": 0.22
+      },
+      "6": {
+        "persistence": 0.66,
+        "shift": 2.52,
+        "anchor": 0.66
+      },
+      "12": {
+        "persistence": 1.32,
+        "shift": 2.52,
+        "anchor": 1.28
+      },
+      "18": {
+        "persistence": 1.99,
+        "shift": 2.52,
+        "anchor": 1.86
+      },
+      "24": {
+        "persistence": 2.66,
+        "shift": 2.52,
+        "anchor": 2.37
+      },
+      "30": {
+        "persistence": 3.33,
+        "shift": 2.52,
+        "anchor": 2.8
+      },
+      "36": {
+        "persistence": 4.01,
+        "shift": 2.52,
+        "anchor": 3.15
+      },
+      "42": {
+        "persistence": 4.68,
+        "shift": 2.52,
+        "anchor": 3.42
+      },
+      "48": {
+        "persistence": 5.35,
+        "shift": 2.52,
+        "anchor": 3.63
+      },
+      "60": {
+        "persistence": 6.67,
+        "shift": 2.52,
+        "anchor": 3.86
+      },
+      "72": {
+        "persistence": 7.88,
+        "shift": 2.52,
+        "anchor": 3.94
+      }
+    },
+    "regimes": {
+      "persistence_until_h": 18,
+      "anchor_until_h": 30,
+      "shift_beyond_h": 30
+    },
+    "plan_trigger_h": 2,
+    "correction": "the plan's 2 h trigger is wrong by measurement: at 2 h staleness persistence errs 0.22 ft and the upstream transfer 2.52 ft"
+  },
+  "uncertainty": {
+    "band_ft": [
+      -1.56,
+      1.01
+    ],
+    "out_of_sample_coverage": [
+      0.437,
+      0.437
+    ],
+    "note": "coverage measured on held-out events; the band is the training-fold error IQR, not an assumption"
+  },
+  "datum_check": {
+    "HPDT2": {
+      "checked": true,
+      "days": 29,
+      "mean_ft": -0.00828077438553449,
+      "max_abs_ft": 0.23781250000000043,
+      "window": [
+        "2026-09-14",
+        "2026-10-14"
+      ]
+    },
+    "BAWT2": {
+      "checked": true,
+      "days": 29,
+      "mean_ft": -0.042235814658461136,
+      "max_abs_ft": 0.19447916666666742,
+      "window": [
+        "2026-09-14",
+        "2026-10-14"
+      ]
+    }
+  },
+  "shipped_rule": "gap <= 18: last Richmond observation. gap <= 30: anchored estimate (last observation plus the transfer's change). beyond: unanchored upstream estimate with the measured band.",
+  "checks": {
+    "datum_agree_within_ft": 0.5,
+    "regimes_derived_not_assumed": true,
+    "beats_persistence_where_shipped": true,
+    "band_coverage_measured": true,
+    "window_fits_live_api": true
+  },
+  "caveats": "The transfer is fitted from 20 flood events on the Brazos \u2014 it describes those events, and the largest gap between them and the live river is the reason the band is quoted rather than a point. It estimates a stage, not a forecast, and it inherits the USGS gage-height datums, so a datum change at any of the three gauges invalidates it silently \u2014 which is why the datum gate runs every time this builds. Upstream data can fail independently of RMOT2, so a stale upstream gauge means no estimate at all, not a worse one."
+}

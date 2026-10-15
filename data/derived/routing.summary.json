@@ -1,0 +1,634 @@
+{
+  "step": "Step 4 \u2014 routing and reverse routing",
+  "graph": {
+    "nodes": 8987,
+    "edges": 8970,
+    "segments": 1614,
+    "source": "isolation.build(feats, 'all') \u2014 the same builder isolation.py uses"
+  },
+  "max_snap_m": 400.0,
+  "facilities": {
+    "accepted": 9,
+    "rejected_off_network": 50,
+    "by_kind": {
+      "fire_station": 6,
+      "hospital": 2,
+      "police": 1
+    },
+    "accepted_list": [
+      {
+        "id": "node/356865552",
+        "kind": "hospital",
+        "name": "HealthSouth Sugar Land Rehabilitation",
+        "lon": -95.633234,
+        "lat": 29.604411,
+        "snap_m": 197.1,
+        "node": 4438
+      },
+      {
+        "id": "node/368160484",
+        "kind": "fire_station",
+        "name": "Orchard Volunteer Fire Department",
+        "lon": -95.969327,
+        "lat": 29.602434,
+        "snap_m": 103.8,
+        "node": 4538
+      },
+      {
+        "id": "node/368160704",
+        "kind": "fire_station",
+        "name": "Rosenberg Fire Department Station 1",
+        "lon": -95.805382,
+        "lat": 29.557506,
+        "snap_m": 34.3,
+        "node": 7942
+      },
+      {
+        "id": "node/368160939",
+        "kind": "fire_station",
+        "name": "Sugar Land Fire Department Station 3",
+        "lon": -95.594903,
+        "lat": 29.591474,
+        "snap_m": 307.2,
+        "node": 2811
+      },
+      {
+        "id": "node/368160945",
+        "kind": "fire_station",
+        "name": "Missouri City Fire and Rescue Services Station 1",
+        "lon": -95.567436,
+        "lat": 29.582104,
+        "snap_m": 36.1,
+        "node": 1878
+      },
+      {
+        "id": "node/368161064",
+        "kind": "fire_station",
+        "name": "Thompsons Volunteer Fire Department",
+        "lon": -95.585379,
+        "lat": 29.496427,
+        "snap_m": 28.7,
+        "node": 2522
+      },
+      {
+        "id": "node/368161286",
+        "kind": "fire_station",
+        "name": "Fire Station Number 3",
+        "lon": -95.5942,
+        "lat": 29.5919,
+        "snap_m": 369.8,
+        "node": 2811
+      },
+      {
+        "id": "node/368162471",
+        "kind": "police",
+        "name": "Missouri City Police Department",
+        "lon": -95.56687,
+        "lat": 29.581944,
+        "snap_m": 68.2,
+        "node": 1879
+      },
+      {
+        "id": "node/10916992315",
+        "kind": "hospital",
+        "name": "PAM Health Rehabilitation Hospital of Sugar Land",
+        "lon": -95.642451,
+        "lat": 29.587831,
+        "snap_m": 255.4,
+        "node": 4254
+      }
+    ],
+    "rejected_list": [
+      {
+        "id": "node/356815851",
+        "kind": "hospital",
+        "name": "Cornerstone Hospital Houston \u2013 Bellaire",
+        "lon": -95.47327,
+        "lat": 29.70801,
+        "snap_m": 15738.3,
+        "node": 2025
+      },
+      {
+        "id": "node/368160694",
+        "kind": "fire_station",
+        "name": "Cy - Fair Volunteer Fire Department Station 5",
+        "lon": -95.642573,
+        "lat": 29.839416,
+        "snap_m": 21474.6,
+        "node": 18
+      },
+      {
+        "id": "node/368160748",
+        "kind": "fire_station",
+        "name": "Alief Community Volunteer Fire Department",
+        "lon": -95.667627,
+        "lat": 29.700477,
+        "snap_m": 7545.6,
+        "node": 1701
+      },
+      {
+        "id": "node/368160759",
+        "kind": "fire_station",
+        "name": "West I - 10 Volunteer Fire Department Station 2",
+        "lon": -95.729562,
+        "lat": 29.77388,
+        "snap_m": 11256.6,
+        "node": 18
+      },
+      {
+        "id": "node/368160766",
+        "kind": "fire_station",
+        "name": "San Felipe - Frydek Volunteer Fire Department",
+        "lon": -96.100325,
+        "lat": 29.796486,
+        "snap_m": 3334.6,
+        "node": 411
+      },
+      {
+        "id": "node/368160792",
+        "kind": "fire_station",
+        "name": "Sealy Fire Department",
+        "lon": -96.156941,
+        "lat": 29.782546,
+        "snap_m": 5699.5,
+        "node": 411
+      },
+      {
+        "id": "node/368160917",
+        "kind": "fire_station",
+        "name": "Community Volunteer Fire Department",
+        "lon": -95.652544,
+        "lat": 29.709727,
+        "snap_m": 8412.7,
+        "node": 1701
+      },
+      {
+        "id": "node/368160922",
+        "kind": "fire_station",
+        "name": "East Bernard Volunteer Fire Department",
+        "lon": -96.063383,
+        "lat": 29.522744,
+        "snap_m": 7268.7,
+        "node": 4898
+      },
+      {
+        "id": "node/368160940",
+        "kind": "fire_station",
+        "name": "Sugar Land Fire Department Station 2",
+        "lon": -95.607298,
+        "lat": 29.641042,
+        "snap_m": 3479.3,
+        "node": 4477
+      },
+      {
+        "id": "node/368160941",
+        "kind": "fire_station",
+        "name": "Sugar Land Fire Department Station 5",
+        "lon": -95.630919,
+        "lat": 29.559077,
+        "snap_m": 561.1,
+        "node": 2738
+      },
+      {
+        "id": "node/368160942",
+        "kind": "fire_station",
+        "name": "Sugar Land Fire Department Station 4",
+        "lon": -95.617985,
+        "lat": 29.585335,
+        "snap_m": 1745.3,
+        "node": 4437
+      },
+      {
+        "id": "node/368160946",
+        "kind": "fire_station",
+        "name": "Fresno Volunteer Fire Department",
+        "lon": -95.456068,
+        "lat": 29.51934,
+        "snap_m": 9261.1,
+        "node": 2233
+      },
+      {
+        "id": "node/368160969",
+        "kind": "fire_station",
+        "name": "Missouri City Fire and Rescue Services Station 3",
+        "lon": -95.527131,
+        "lat": 29.590977,
+        "snap_m": 2348.4,
+        "node": 2025
+      },
+      {
+        "id": "node/368160976",
+        "kind": "fire_station",
+        "name": "West I - 10 Volunteer Fire Department Station 5",
+        "lon": -95.720399,
+        "lat": 29.827773,
+        "snap_m": 17275.2,
+        "node": 18
+      },
+      {
+        "id": "node/368160997",
+        "kind": "fire_station",
+        "name": "Kendleton Volunteer Fire Department",
+        "lon": -96.001738,
+        "lat": 29.447296,
+        "snap_m": 10363.6,
+        "node": 4898
+      },
+      {
+        "id": "node/368161062",
+        "kind": "fire_station",
+        "name": "Stafford Volunteer Fire Department Station 2",
+        "lon": -95.558211,
+        "lat": 29.6331,
+        "snap_m": 4740.6,
+        "node": 2781
+      },
+      {
+        "id": "node/368161063",
+        "kind": "fire_station",
+        "name": "Stafford Volunteer Fire Department Station 1",
+        "lon": -95.556197,
+        "lat": 29.615227,
+        "snap_m": 3139.1,
+        "node": 1992
+      },
+      {
+        "id": "node/368161070",
+        "kind": "fire_station",
+        "name": "Houston Fire Department Station 38",
+        "lon": -95.467744,
+        "lat": 29.790187,
+        "snap_m": 24267.1,
+        "node": 2781
+      },
+      {
+        "id": "node/368161215",
+        "kind": "fire_station",
+        "name": "Houston Fire Department Station 73",
+        "lon": -95.570828,
+        "lat": 29.672776,
+        "snap_m": 8366.7,
+        "node": 5379
+      },
+      {
+        "id": "node/368161219",
+        "kind": "fire_station",
+        "name": "Houston Fire Department Station 60",
+        "lon": -95.524841,
+        "lat": 29.733183,
+        "snap_m": 16209.9,
+        "node": 5379
+      },
+      {
+        "id": "node/368161230",
+        "kind": "fire_station",
+        "name": "Houston Fire Department Station 86",
+        "lon": -95.637845,
+        "lat": 29.756287,
+        "snap_m": 13653.6,
+        "node": 1701
+      },
+      {
+        "id": "node/368161231",
+        "kind": "fire_station",
+        "name": "Houston Fire Department Station 90",
+        "lon": -95.669493,
+        "lat": 29.788928,
+        "snap_m": 15369.8,
+        "node": 18
+      },
+      {
+        "id": "node/368161236",
+        "kind": "fire_station",
+        "name": "Houston Fire Department Station 77",
+        "lon": -95.543816,
+        "lat": 29.822347,
+        "snap_m": 23376.4,
+        "node": 1701
+      },
+      {
+        "id": "node/368161261",
+        "kind": "fire_station",
+        "name": "Beasley Volunteer Fire Department",
+        "lon": -95.80867,
+        "lat": 29.518364,
+        "snap_m": 2389.3,
+        "node": 8288
+      },
+      {
+        "id": "node/368161280",
+        "kind": "fire_station",
+        "name": "City of Piney Point Village Fire Department",
+        "lon": -95.5129,
+        "lat": 29.7821,
+        "snap_m": 21217.7,
+        "node": 1701
+      },
+      {
+        "id": "node/368161284",
+        "kind": "fire_station",
+        "name": "Fire Station Number 2",
+        "lon": -95.5208,
+        "lat": 29.6308,
+        "snap_m": 6002.0,
+        "node": 2025
+      },
+      {
+        "id": "node/368161287",
+        "kind": "fire_station",
+        "name": "Fire Station Number 3",
+        "lon": -95.527129,
+        "lat": 29.590884,
+        "snap_m": 2344.7,
+        "node": 2025
+      },
+      {
+        "id": "node/368161299",
+        "kind": "fire_station",
+        "name": "Fire Station Number 4",
+        "lon": -95.6186,
+        "lat": 29.5858,
+        "snap_m": 1677.0,
+        "node": 4437
+      },
+      {
+        "id": "node/368161300",
+        "kind": "fire_station",
+        "name": "Houston Fire Station Number 38",
+        "lon": -95.467704,
+        "lat": 29.790191,
+        "snap_m": 24269.2,
+        "node": 2781
+      },
+      {
+        "id": "node/368161441",
+        "kind": "fire_station",
+        "name": "Missouri City Fire Department",
+        "lon": -95.5269,
+        "lat": 29.6056,
+        "snap_m": 3338.4,
+        "node": 2025
+      },
+      {
+        "id": "node/368162241",
+        "kind": "police",
+        "name": "Stafford Police Department",
+        "lon": -95.55531,
+        "lat": 29.615271,
+        "snap_m": 3165.7,
+        "node": 1992
+      },
+      {
+        "id": "node/368162248",
+        "kind": "police",
+        "name": "Houston Police Department - Fondren Patrol",
+        "lon": -95.509962,
+        "lat": 29.658755,
+        "snap_m": 9255.8,
+        "node": 2025
+      },
+      {
+        "id": "node/368162282",
+        "kind": "police",
+        "name": "Sealy Police Department",
+        "lon": -96.156871,
+        "lat": 29.782327,
+        "snap_m": 5685.6,
+        "node": 411
+      },
+      {
+        "id": "node/368162283",
+        "kind": "police",
+        "name": "Kendleton Police Department",
+        "lon": -95.99619,
+        "lat": 29.449631,
+        "snap_m": 10064.0,
+        "node": 4898
+      },
+      {
+        "id": "node/368162297",
+        "kind": "police",
+        "name": "San Felipe Police Department",
+        "lon": -96.100325,
+        "lat": 29.796473,
+        "snap_m": 3333.1,
+        "node": 411
+      },
+      {
+        "id": "node/368162320",
+        "kind": "police",
+        "name": "Harris County Sheriff's Office",
+        "lon": -95.718779,
+        "lat": 29.802423,
+        "snap_m": 14595.5,
+        "node": 18
+      },
+      {
+        "id": "node/368162368",
+        "kind": "police",
+        "name": "Meadows Place Police Department",
+        "lon": -95.577175,
+        "lat": 29.646826,
+        "snap_m": 5423.6,
+        "node": 5379
+      },
+      {
+        "id": "node/368162450",
+        "kind": "police",
+        "name": "Houston Police Department - Gulfton",
+        "lon": -95.48535,
+        "lat": 29.716993,
+        "snap_m": 16143.0,
+        "node": 2025
+      },
+      {
+        "id": "node/368162458",
+        "kind": "police",
+        "name": "Beasley Police Department",
+        "lon": -95.915074,
+        "lat": 29.496152,
+        "snap_m": 4339.2,
+        "node": 4742
+      },
+      {
+        "id": "node/368162468",
+        "kind": "police",
+        "name": "Houston Police Department - Ranchester",
+        "lon": -95.544062,
+        "lat": 29.706618,
+        "snap_m": 12764.5,
+        "node": 5379
+      },
+      {
+        "id": "node/368162698",
+        "kind": "police",
+        "name": "San Felipe Police Department",
+        "lon": -96.096215,
+        "lat": 29.798768,
+        "snap_m": 3615.8,
+        "node": 411
+      },
+      {
+        "id": "node/5721141880",
+        "kind": "fire_station",
+        "name": "HCESD 48 Fire Station #5",
+        "lon": -95.738197,
+        "lat": 29.816147,
+        "snap_m": 15673.6,
+        "node": 18
+      },
+      {
+        "id": "node/6014073608",
+        "kind": "fire_station",
+        "name": "Pleak Fire Department",
+        "lon": -95.806514,
+        "lat": 29.488965,
+        "snap_m": 5636.3,
+        "node": 8288
+      },
+      {
+        "id": "node/10916239280",
+        "kind": "hospital",
+        "name": "Westpark Springs",
+        "lon": -95.761078,
+        "lat": 29.694382,
+        "snap_m": 1961.9,
+        "node": 18
+      },
+      {
+        "id": "node/10916981577",
+        "kind": "hospital",
+        "name": "Oceans Behavioral Hospital Of Katy",
+        "lon": -95.748541,
+        "lat": 29.777964,
+        "snap_m": 11331.6,
+        "node": 18
+      },
+      {
+        "id": "node/10917030811",
+        "kind": "hospital",
+        "name": "Memorial Hermann Rehabilitation Hospital Katy",
+        "lon": -95.745799,
+        "lat": 29.775765,
+        "snap_m": 11124.3,
+        "node": 18
+      },
+      {
+        "id": "node/10917045362",
+        "kind": "hospital",
+        "name": "First Surgical Hospital",
+        "lon": -95.462671,
+        "lat": 29.709977,
+        "snap_m": 16431.2,
+        "node": 2025
+      },
+      {
+        "id": "node/10917051808",
+        "kind": "hospital",
+        "name": "West Chase Houston Hospital",
+        "lon": -95.556165,
+        "lat": 29.711451,
+        "snap_m": 12554.7,
+        "node": 4223
+      },
+      {
+        "id": "node/10917052751",
+        "kind": "hospital",
+        "name": "Atrium Medical Center",
+        "lon": -95.588132,
+        "lat": 29.646276,
+        "snap_m": 5143.4,
+        "node": 5367
+      },
+      {
+        "id": "node/12449812655",
+        "kind": "fire_station",
+        "name": "Fulshear-Simonton Fire Department #3",
+        "lon": -95.828154,
+        "lat": 29.684987,
+        "snap_m": 4506.7,
+        "node": 5848
+      }
+    ]
+  },
+  "segments_with_route_to_responder": 806,
+  "segments_with_route_to_hospital": 197,
+  "segments_cut_off_before_their_street_floods": 609,
+  "route_cut_ft": {
+    "median": 30.0,
+    "p25": 29.4,
+    "p75": 40.3
+  },
+  "largest_gaps_to_help": [
+    {
+      "name": "FM 762",
+      "flood_stage_ft": 37.1,
+      "route_cut_ft": 20.8,
+      "gap_ft": 16.3
+    },
+    {
+      "name": "Town Center Boulevard",
+      "flood_stage_ft": 54.5,
+      "route_cut_ft": 40.3,
+      "gap_ft": 14.2
+    },
+    {
+      "name": "B F Terry Boulevard",
+      "flood_stage_ft": 54.5,
+      "route_cut_ft": 40.3,
+      "gap_ft": 14.2
+    },
+    {
+      "name": "Spacek Road",
+      "flood_stage_ft": 54.5,
+      "route_cut_ft": 40.3,
+      "gap_ft": 14.2
+    },
+    {
+      "name": "Macek Road",
+      "flood_stage_ft": 34.3,
+      "route_cut_ft": 20.8,
+      "gap_ft": 13.5
+    },
+    {
+      "name": "Southwest Freeway Frontage Road",
+      "flood_stage_ft": 53.5,
+      "route_cut_ft": 40.3,
+      "gap_ft": 13.2
+    },
+    {
+      "name": "Reading Road",
+      "flood_stage_ft": 53.2,
+      "route_cut_ft": 40.3,
+      "gap_ft": 12.9
+    },
+    {
+      "name": "Vista Drive",
+      "flood_stage_ft": 52.5,
+      "route_cut_ft": 40.3,
+      "gap_ft": 12.2
+    },
+    {
+      "name": "Crabb River Road",
+      "flood_stage_ft": 32.5,
+      "route_cut_ft": 20.8,
+      "gap_ft": 11.7
+    },
+    {
+      "name": "Plaza Drive",
+      "flood_stage_ft": 51.5,
+      "route_cut_ft": 40.3,
+      "gap_ft": 11.2
+    }
+  ],
+  "reverse_routing": "the road graph is undirected, so the path from your street to a responder is the same physical path as the responder's path to you. The two queries differ in framing, not in geometry: forward asks 'can I get out to help', reverse asks 'can help get in to me'. Both are answered from one cut-stage field; the app runs the multi-source search outward from the facilities for the reverse view.",
+  "checks": {
+    "stages_cross_checked": 16,
+    "nodes_per_check": 8987,
+    "graph_identical_to_isolation": true,
+    "facilities_verified_on_network": true,
+    "bfs_agrees_with_bottleneck": true,
+    "non_vacuous_at_5ft": true
+  },
+  "caveats": "A route is a road-network path on the modelled corridor, not a driving instruction and not a safety guarantee. The extract is a bounding-box clip, so a route cannot leave the study area and a destination outside it is rejected rather than connected. Thresholds inherit the -0.92 ft/mile HAND-as-stage error documented in road_thresholds.py, so cut stages move when that primitive is fixed. OSM facility positions are volunteer-mapped and a station may be closed or relocated; nothing here is checked against an operational dispatch feed."
+}

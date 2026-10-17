@@ -7,7 +7,7 @@
   --line:#c8d3d2; --line-soft:#dde4e3;
   --water:#1a6d93; --dry:#2e7d5b; --action:#a8761a; --minor:#c4621c;
   --moderate:#ab3a16; --major:#8f1d2e;
-  --flood:#a01b2b; --you:#1a6d93; --levee:#6b4fa0;
+  --flood:#a01b2b; --you:#1a6d93; --levee:#6b4fa0; --island:#f0a12a;
   --f-display:"Barlow Condensed",Impact,"Arial Narrow",sans-serif;
   --f-body:"Public Sans","Helvetica Neue",Helvetica,Arial,sans-serif;
   --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
@@ -19,7 +19,7 @@
   --line:#2a3639; --line-soft:#222c2e;
   --water:#3fa0c8; --dry:#49b589; --action:#d3a13f; --minor:#e0863f;
   --moderate:#d9603a; --major:#e0566c;
-  --flood:#e0566c; --you:#3fa0c8; --levee:#a98be0; color-scheme:dark;
+  --flood:#e0566c; --you:#3fa0c8; --levee:#a98be0; --island:#f4b95e; color-scheme:dark;
 }}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--f-body);
@@ -40,10 +40,20 @@ a{color:var(--water)}
 .hdr-sp{flex:1 1 auto}
 .src-tag{font:500 11px/1 var(--f-mono);padding:6px 9px;border-radius:5px;
   background:var(--surface-2);color:var(--fg-dim);border:1px solid var(--line)}
+/* Only ever visible with no connection. Coloured like the water it is about rather than
+  like an error: offline is not a failure of the page, it is the condition the page is
+  for. A tag, not a banner — it must not push the answer down on a small screen. */
+.offline-tag{font:600 10.5px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;
+  padding:6px 9px;border-radius:5px;background:var(--surface-2);color:var(--water);
+  border:1px solid color-mix(in srgb,var(--water) 45%,var(--line))}
+.offline-tag[hidden]{display:none}
 .mode{display:flex;border:1px solid var(--line);border-radius:7px;overflow:hidden;background:var(--surface)}
 .mode button{font:600 11.5px/1 var(--f-body);letter-spacing:.04em;padding:8px 11px;border:0;
   background:transparent;color:var(--fg-dim);cursor:pointer}
 .mode button[aria-pressed="true"]{background:var(--fg);color:var(--bg)}
+.view-toggle{font:600 11.5px/1 var(--f-body);letter-spacing:.04em;padding:8px 11px;border-radius:7px;
+  border:1px solid var(--line);background:var(--surface);color:var(--water);text-decoration:none}
+.view-toggle:hover{background:var(--surface-2)}
 
 .wrap{max-width:1180px;margin:0 auto;padding:18px 18px 64px}
 
@@ -57,6 +67,15 @@ a{color:var(--water)}
   border:1px solid var(--water);background:var(--water);color:#fff;cursor:pointer}
 .go:hover{filter:brightness(1.08)}
 .hint{font-size:12px;color:var(--fg-dim);margin-top:9px}
+
+/* Share row: a quiet secondary control, not a competing primary action — the
+   answer above it is the thing to read, and the link is how it gets passed on. */
+.share-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:0 22px 18px}
+.share{font:600 12px/1 var(--f-body);letter-spacing:.02em;padding:9px 13px;border-radius:7px;
+  border:1px solid var(--line);background:transparent;color:var(--water);cursor:pointer}
+.share:hover{background:var(--surface-2)}
+.share:focus-visible{outline:2px solid var(--water);outline-offset:2px}
+.share-note{font-size:12px;color:var(--fg-dim);min-width:0;overflow-wrap:anywhere}
 
 /* answer */
 .answer{margin-top:16px;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
@@ -99,6 +118,45 @@ a{color:var(--water)}
 .chain-list .m{font-size:11px;color:var(--fg-dim)}
 .chain-list li.you{border-left-color:var(--you);background:color-mix(in srgb,var(--you) 12%,var(--surface-2))}
 
+/* household card — one row per address, ranked by when each is reached. The selected
+   row is marked because the answer above is about exactly one of them. */
+.hh{margin-top:16px}
+.hh[hidden]{display:none}
+.hh-list{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.hh-row{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,2fr);gap:12px;
+  align-items:baseline;padding:11px 12px;border-radius:9px;background:var(--surface-2);
+  border-left:3px solid var(--line)}
+.hh-row.you{border-left-color:var(--you);background:color-mix(in srgb,var(--you) 12%,var(--surface-2))}
+.hh-row.miss{border-left-color:var(--flood);background:color-mix(in srgb,var(--flood) 8%,var(--surface-2))}
+.hh-row[role=button]{cursor:pointer}
+.hh-row[role=button]:hover{background:color-mix(in srgb,var(--you) 18%,var(--surface-2))}
+.hh-row b{font-size:13.5px;overflow-wrap:anywhere}
+.hh-row .t{font-family:var(--f-mono);font-size:17px;font-weight:600;font-variant-numeric:tabular-nums;
+  color:var(--water);text-align:right;min-width:52px}
+.hh-row .m{font-size:11.5px;color:var(--fg-dim);line-height:1.5}
+.hh .hint{margin-top:10px;margin-bottom:0;font-size:11.5px;color:var(--fg-faint)}
+
+/* F7 — the alert. A bubble, not a dashboard: this is what a phone shows, and the meaning
+   is carried by the left rule rather than by a colour the message does not have. The
+   language toggle reuses .mode, because it is the same kind of choice as Live/Replay. */
+.al{margin-top:16px}
+.al[hidden]{display:none}
+.al-top{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap}
+.al-lead{font-size:12.5px;color:var(--fg-dim);line-height:1.55;max-width:70ch;flex:1 1 400px}
+.al-lang{margin-left:auto;flex:none}
+.al-list{list-style:none;margin:15px 0 0;padding:0;display:grid;gap:10px}
+.al-row{border-left:3px solid var(--water);border-radius:0 10px 10px 0;
+  background:var(--surface-2);padding:11px 14px}
+.al-row.past{opacity:.62;border-left-style:dashed}
+.al-meta{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;margin-bottom:7px}
+.al-meta b{font:600 10.5px/1 var(--f-body);letter-spacing:.12em;text-transform:uppercase;
+  color:var(--water)}
+.al-meta i{font:400 11px/1.4 var(--f-mono);color:var(--fg-faint);font-style:normal}
+.al-text{font-size:13.5px;line-height:1.6;max-width:74ch;overflow-wrap:anywhere}
+.al-short{font-size:11.5px;color:var(--fg-faint);line-height:1.5}
+.al-none{font-size:13px;color:var(--fg-dim);margin-top:12px}
+.al-quiet{margin-top:13px;color:var(--fg-faint);font-size:11.5px;line-height:1.55}
+
 /* columns */
 .cols{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:16px;margin-top:16px;align-items:start}
 .side{display:grid;gap:16px;min-width:0}
@@ -128,9 +186,27 @@ input[type=range]{width:100%;margin:0;accent-color:var(--water);height:26px}
 .exit .st{font:600 10.5px/1 var(--f-mono);padding:5px 8px;border-radius:5px;flex:none;text-transform:uppercase}
 .exit .st.ok{background:color-mix(in srgb,var(--dry) 16%,transparent);color:var(--dry)}
 .exit .st.bad{background:color-mix(in srgb,var(--flood) 16%,transparent);color:var(--flood)}
+/* F4 — the island, said under the routes it changes the meaning of: the routes are how you
+   get to a NAMED destination, this is how much of the corridor is still one place with you. */
+.island-note{margin:0 16px 14px;padding:10px 12px;border-radius:9px;border-left:3px solid var(--island);
+  background:color-mix(in srgb,var(--island) 10%,var(--surface-2));color:var(--fg-dim);
+  font-size:12.5px;line-height:1.55}
+.island-note[hidden]{display:none}
 
 .hg{margin-top:16px}
 .hgwrap{padding:10px 12px 6px}
+.chart-text{display:none;padding:6px 14px 14px;font-size:13px;color:var(--fg-dim);max-width:78ch}
+
+/* ?text=1 — the low-bandwidth route.
+   What goes is the base map, its raster tiles and the chart canvas: the three things
+   that cost megabytes or battery. What stays is every sentence, including the flood
+   count that the map's legend was only illustrating. */
+body.text-only #map,body.text-only .legend,body.text-only .hgwrap{display:none}
+body.text-only .chart-text{display:block}
+body.text-only .map-card .card-h{margin-bottom:0}
+/* With the map gone the wide column holds one line of text, so the two-column grid
+   would leave a tall empty gutter beside the cards that still have something to say. */
+body.text-only .cols{grid-template-columns:minmax(0,1fr)}
 #chart{width:100%;height:auto;display:block}
 
 .src{margin-top:18px;font-size:12px;color:var(--fg-dim);border-top:1px solid var(--line);padding-top:14px;line-height:1.65}
@@ -184,6 +260,10 @@ input[type=range]{width:100%;margin:0;accent-color:var(--water);height:26px}
 
 @media (max-width:900px){
   .bc-row{grid-template-columns:80px minmax(0,1fr) 118px;gap:8px}
+  /* Two columns of prose beside a number do not fit a phone, and the ranking is carried by
+     ORDER — which survives a single column. */
+  .hh-row{grid-template-columns:minmax(0,1fr) auto;row-gap:3px}
+  .hh-row .m{grid-column:1 / -1}
   .cols{grid-template-columns:1fr}
   .answer-in{grid-template-columns:1fr;gap:14px;align-items:start}
   .count{text-align:left}

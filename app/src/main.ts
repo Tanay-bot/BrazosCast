@@ -1,6 +1,26 @@
 import "./style.css";
-import maplibregl from "maplibre-gl";
-import "maplibre-gl/dist/maplibre-gl.css";
+/* MapLibre is the heaviest thing the app ships (~232 KB gzipped of the 839 KB bundle)
+ * and the `?text=1` route exists precisely so a phone on a bad connection does not
+ * download it. It is therefore imported inside buildMap() — a static import here
+ * would put it in the entry chunk for every visitor and make the text-only route a
+ * lie. This type import is erased at build time and pulls nothing in. */
+import type maplibregl from "maplibre-gl";
+
+/* The kernels the pipeline implements a second time, in Python. They live in modules of their
+ * own because "the two agree" is a claim about duplicated code and has to be checkable without
+ * a browser: each module's verification grid is recomputed row by row in
+ * app/tests/unit/grid-parity.test.ts, which pipeline/tests/test_grid_parity.py runs from the
+ * project's one check command. main.ts reads state and draws; it does not own the arithmetic. */
+import { firstForecastIndex, mulberry32, rmseFt, runEnsemble } from "./lib/ensemble";
+import type { EnsembleOut, EnsembleSpec } from "./lib/ensemble";
+import { flagCounts, tierOnsets } from "./lib/backcast";
+import { applyTransfer, applyTransferClamped } from "./lib/transfer";
+import type { Transfer } from "./lib/transfer";
+import { islandForSegment } from "./lib/islands";
+import type { IslandSpec, IslandView } from "./lib/islands";
+import { messagesFor } from "./lib/notify";
+import type { Lang, TemplateSet } from "./lib/notify";
+import type { Pt } from "./lib/series";
 
 /* ------------------------------------------------------------------ *
  * BrazosCast — address-first flood lead time for the lower Brazos.
@@ -14,7 +34,6 @@ const TZ = "America/Chicago";
 const DATA = "./data/";
 const MAPBOX_TOKEN = (import.meta.env.VITE_MAPBOX_TOKEN as string | undefined) ?? "";
 
-type Pt = { t: number; v: number; kind: "obs" | "fc" };
 type ChainRow = { name: string; median_h: number; p25_h: number; p75_h: number; n: number };
 type Road = {
   properties: {
@@ -33,6 +52,10 @@ type RoutingGraph = {
   nodes: number[]; edges: number[]; edge_seg: number[];
   segments: { osmid: number; ft: number; hw: string }[];
   facilities: Facility[];
+  /* Where the road extract was clipped. `nodes` are the graph nodes within `band_m` of that
+   * box, i.e. where a road leaves the study area — the difference between an island bounded
+   * by water and one bounded by the edge of the model (F4). */
+  clip?: { bbox: number[]; band_m: number; nodes: number[] };
   node_cut_ft: (number | null)[];
   node_cut_medical_ft: (number | null)[];
   segment_route_cut_ft: (number | null)[];
@@ -44,7 +67,6 @@ type RouteOut = { f: Facility; ok: boolean; meters: number; wet: number; deepest
 /* Gauge-failure redundancy (pipeline/derive/gauge_redundancy.py): what to report when
  * RMOT2 stops reporting. The regime boundaries and the band are MEASURED there, not
  * chosen here — the app only applies them. */
-type Transfer = { name: string; usgs: string; lag_h: number; lag_h_used: number; u_ft: number[]; r_ft: number[] };
 type Redundancy = {
   transfer: Record<string, Transfer>;
   validation: { regimes: { persistence_until_h: number; anchor_until_h: number; shift_beyond_h: number } };
@@ -63,23 +85,6 @@ type Validation = {
   diagnosis: { auc_discrimination: number; offset_vs_observed_peak_ft: number;
     threshold_error_model: { lift_ft: number; per_street_sigma_ft: number } };
   observation: { extent_area_km2: number; hwm: { n: number } };
-};
-
-/* The uncertainty the point estimate hides (pipeline/derive/ensemble.py).
- * Parameters AND the algorithm come from the pipeline, and the app must reproduce the
- * pipeline's verification grid — the same cross-language check the crest transfer and
- * the Dijkstra already get. Nothing here is invented in the browser. */
-type EnsembleOut = {
-  members: number; crossing: number; of: number;
-  median_h: number | null; p10_h: number | null; p90_h: number | null; never_h: number;
-};
-type EnsembleSpec = {
-  parameters: {
-    members: number; seed: number; lift_ft: number; per_street_sigma_ft: number;
-    forecast_rmse_knots_ft: [number, number][]; forecast_rmse_beyond_measured_ft: number;
-  };
-  verification_grid: ({ threshold_ft: number; forecast_from: number | null; mode: string }
-    & EnsembleOut)[];
 };
 
 /* The Harvey backcast (pipeline/derive/backcast.py). Replay mode only, and it is the one
@@ -113,18 +118,36 @@ type Backcast = {
     tier_onsets_h: Record<string, number | null> };
 };
 
+/* Offline address index, built by pipeline/derive/address_index.py.
+ * A house number resolves to the app's own segment POSITION, so no geocoder and
+ * no API key is involved. `keys` maps a canonical street name to the app streets
+ * it names; `ranges` is [streetIdx, lo, hi, segmentIdx]. */
+type AddressIndex = {
+  streets: { n: string; s: number[] }[];
+  keys: Record<string, number[]>;
+  ranges: [number, number, number, number][];
+  max_distance_m: number;
+};
+
 const state: {
-  roads: Road[]; chain: (ChainRow & { lid: string })[]; series: Pt[]; current: number;
+  roads: Road[]; address: AddressIndex | null;
+  chain: (ChainRow & { lid: string })[]; series: Pt[]; current: number;
   mode: "live" | "replay"; selected: Road | null; selIdx: number; source: string;
   graph: RoutingGraph | null; routes: RouteOut[]; routeSel: RouteOut | null;
   redundancy: Redundancy | null; estimated: boolean; staleHours: number; estimateNote: string;
   validation: Validation | null;
   ensembleSpec: EnsembleSpec | null; ensemble: EnsembleOut | null; ensKey: string;
   backcast: Backcast | null; bcKey: string;
-} = { roads: [], chain: [], series: [], current: 0, mode: "live", selected: null, selIdx: -1,
+  island: IslandView | null;
+  household: HouseholdRow[];
+  /* F7 — the compiled alert templates and the reader's language. The templates travel in
+   * the payload rather than in this file: what is tested is what is shown. */
+  notifications: TemplateSet | null; lang: Lang;
+} = { roads: [], address: null, chain: [], series: [], current: 0, mode: "live", selIdx: -1, selected: null,
   source: "", graph: null, routes: [], routeSel: null,
   redundancy: null, estimated: false, staleHours: 0, estimateNote: "", validation: null,
-  ensembleSpec: null, ensemble: null, ensKey: "", backcast: null, bcKey: "" };
+  ensembleSpec: null, ensemble: null, ensKey: "", backcast: null, bcKey: "", island: null,
+  household: [], notifications: null, lang: "en" };
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -148,9 +171,60 @@ function centroid(r: Road): [number, number] {
   return [s[0] / n, s[1] / n];
 }
 
+/* ---------------- the offline copy ---------------- *
+ * The first visit is the one the service worker cannot cover on its own: the page fetches
+ * its payload before the worker controls it, so none of those responses pass through the
+ * cache. Leaving that to the second visit would mean the storm has to arrive after a page
+ * load it politely waited through — so the app hands over what this load has already paid
+ * for, in two forms:
+ *
+ *   a URL,  which the worker copies out of the browser's own HTTP cache. `only-if-cached`
+ *           means no request leaves the device at all; a file the browser will not serve
+ *           from cache is skipped and picked up by the ordinary paths on the next visit.
+ *   a body, for the responses the HTTP cache cannot help with. The live gauge is 468 KB,
+ *           carries no validator, and answers a conditional request with the whole thing
+ *           again — so for that one, the bytes already in hand are the only cheap copy.
+ *
+ * Fire and forget: nothing on screen waits for the cache. */
+type OfflineEntry = { url: string; body?: string; type?: string };
+
+const offlinePosted = new Set<string>();
+
+/** Everything this page has already downloaded from this origin.
+ *
+ *  Read from the resource timeline rather than maintained as a list, because a list of
+ *  filenames cannot name the map's chunks (content-hashed, and emitted by the bundler) and
+ *  a list that silently stops matching is the failure this project keeps finding. An asset
+ *  the app starts using is in here the moment it is used. Cross-origin entries — the fonts,
+ *  the map tiles, the gauge — are skipped by the worker; the gauge is handed over as a body
+ *  instead, because it cannot be re-read cheaply. */
+function loadedHere(): OfflineEntry[] {
+  return performance
+    .getEntriesByType("resource")
+    .map((e) => e.name)
+    .filter((u) => u.startsWith(`${location.origin}/`))
+    .map((u) => ({ url: u }));
+}
+
+function keepOfflineCopy(entries: OfflineEntry[]) {
+  if (!("serviceWorker" in navigator)) return;
+  // A reading is re-fetched whenever the mode changes; posting 468 KB again each time
+  // would be a cost with no reader, since the worker keeps what it already has.
+  const fresh = entries.filter((e) => !offlinePosted.has(e.url));
+  if (!fresh.length) return;
+  for (const e of fresh) offlinePosted.add(e.url);
+  // `ready` resolves once the worker is active, which on the first visit is a moment after
+  // the page that registered it — the same page, because the worker claims it on activate.
+  void navigator.serviceWorker.ready
+    .then((reg) => {
+      (reg.active ?? navigator.serviceWorker.controller)?.postMessage({ type: "offline-copy", entries: fresh });
+    })
+    .catch(() => { /* no worker: the app answers the ordinary way, as it did before F6 */ });
+}
+
 /* ---------------- data ---------------- */
 async function loadStatic() {
-  const [gj, chain, gph, red, val, ens, bc] = await Promise.all([
+  const [gj, chain, gph, red, val, ens, bc, addr, notify] = await Promise.all([
     fetch(DATA + "road_thresholds.geojson").then((r) => r.json()),
     fetch(DATA + "travel_time_subdaily.json").then((r) => r.json()),
     fetch(DATA + "routing_graph.json").then((r) => r.json()),
@@ -158,13 +232,21 @@ async function loadStatic() {
     fetch(DATA + "harvey_validation.json").then((r) => r.json()),
     fetch(DATA + "ensemble.json").then((r) => r.json()),
     fetch(DATA + "harvey_backcast.json").then((r) => r.json()),
+    fetch(DATA + "address_index.json").then((r) => r.json()),
+    fetch(DATA + "notifications.json").then((r) => r.json()),
   ]);
+  // After the fetches above and not before: the hand-over copies what the browser's HTTP
+  // cache already has, so the payload has to have been requested first.
+  keepOfflineCopy(loadedHere());
   state.roads = gj.features as Road[];
+  state.address = addr as AddressIndex;
+  buildRoadIndex();
   state.graph = gph as RoutingGraph;
   state.redundancy = red as Redundancy;
   state.validation = val as Validation;
   state.ensembleSpec = ens as EnsembleSpec;
   state.backcast = bc as Backcast;
+  state.notifications = notify as TemplateSet;
   buildRouting();
   state.chain = Object.entries(chain.gauges as Record<string, ChainRow>)
     .map(([lid, g]) => ({ lid, ...g }))
@@ -172,9 +254,14 @@ async function loadStatic() {
 }
 
 async function fetchLive() {
-  const r = await fetch(`https://api.water.noaa.gov/nwps/v1/gauges/${GAUGE.lid}/stageflow`);
+  const url = `https://api.water.noaa.gov/nwps/v1/gauges/${GAUGE.lid}/stageflow`;
+  const r = await fetch(url);
   if (!r.ok) throw new Error(`NWPS ${r.status}`);
-  const j = await r.json();
+  // Read as text rather than .json() so the same bytes can be handed to the cache: this
+  // response has no validator, so a second fetch is the full 468 KB, not a 304.
+  const raw = await r.text();
+  const j = JSON.parse(raw);
+  keepOfflineCopy([{ url, body: raw, type: "application/json" }]);
   const pts: Pt[] = [];
   for (const p of j.observed?.data ?? []) pts.push({ t: Date.parse(p.validTime), v: p.primary, kind: "obs" });
   for (const p of j.forecast?.data ?? []) pts.push({ t: Date.parse(p.validTime), v: p.primary, kind: "fc" });
@@ -229,6 +316,9 @@ async function fetchLive() {
 
 async function loadReplay() {
   const j = await fetch(DATA + "replay-harvey.json").then((r) => r.json());
+  // Replay is the app's own fallback when the gauge cannot be read, which is exactly the
+  // moment the connection is likely to be the thing that is missing. Cache it too.
+  keepOfflineCopy([{ url: DATA + "replay-harvey.json" }]);
   state.series = j.points.map((p: { t: string; v: number }) => ({ t: Date.parse(p.t), v: p.v, kind: "obs" as const }));
   const peak = j.points.reduce((a: { v: number }, b: { v: number }) => (b.v > a.v ? b : a), j.points[0]);
   state.current = peak.v;
@@ -241,27 +331,6 @@ async function loadReplay() {
  * corrected the plan: below the derived crossover the LAST RICHMOND OBSERVATION is
  * closer to the truth than any upstream transfer, so persistence is used there and
  * the transfer only beyond it. The boundaries and the band come from the artifact. */
-
-/** The same clamped piecewise-linear interpolation the pipeline validated, with the
- *  clamp reported: the transfer is fitted on FLOOD events, so an upstream stage below
- *  the fitted range yields the floor value, and the uncertainty band measured over the
- *  fitted range does not describe that case. Quoting the band anyway would be a lie. */
-function applyTransferClamped(t: Transfer, x: number): { v: number; clamped: boolean } {
-  const u = t.u_ft, r = t.r_ft;
-  if (x <= u[0]) return { v: r[0], clamped: true };
-  if (x >= u[u.length - 1]) return { v: r[r.length - 1], clamped: true };
-  for (let i = 1; i < u.length; i++) {
-    if (x <= u[i]) {
-      const f = (x - u[i - 1]) / (u[i] - u[i - 1] || 1);
-      return { v: r[i - 1] + f * (r[i] - r[i - 1]), clamped: false };
-    }
-  }
-  return { v: r[r.length - 1], clamped: true };
-}
-
-function applyTransfer(t: Transfer, x: number): number {
-  return applyTransferClamped(t, x).v;
-}
 
 async function fetchUpstream(lid: string): Promise<{ t: number; v: number }[]> {
   const r = await fetch(`https://api.water.noaa.gov/nwps/v1/gauges/${lid}/stageflow`);
@@ -326,75 +395,12 @@ function crossingHours(threshold: number): number | null {
 }
 
 /* ---------------- uncertainty ensemble ---------------- */
-/* A line-by-line mirror of pipeline/derive/ensemble.py. The PRNG is mulberry32 in both
- * languages (Math.imul is the low 32 bits of the product, which is why the Python side
- * masks), and the drawn values are rounded to 6 dp so that libm and V8 differing in the
- * last ulp cannot move a draw across a hydrograph point and change the reported count. */
-function mulberry32(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a) >>> 0;
-    t = (t + (Math.imul(t ^ (t >>> 7), 61 | t) >>> 0)) >>> 0 ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-function gauss(rng: () => number): number {
-  const u1 = Math.max(rng(), 1e-12), u2 = rng();
-  return Math.round(Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2) * 1e6) / 1e6;
-}
-
-/* Measured forecast RMSE (ft) at a given horizon in days: linear between the knots the
- * benchmark produced, zero at zero, and held at the longest measured horizon beyond it. */
-function rmseFt(days: number, spec: EnsembleSpec): number {
-  const k = spec.parameters.forecast_rmse_knots_ft;
-  if (days <= 0) return 0;
-  if (days >= k[k.length - 1][0]) return spec.parameters.forecast_rmse_beyond_measured_ft;
-  if (days < k[0][0]) return (k[0][1] * days) / k[0][0];
-  for (let i = 0; i + 1 < k.length; i++) {
-    const [d0, v0] = k[i], [d1, v1] = k[i + 1];
-    if (days >= d0 && days <= d1) return v0 + ((v1 - v0) * (days - d0)) / (d1 - d0);
-  }
-  return spec.parameters.forecast_rmse_beyond_measured_ft;
-}
-
-function runEnsemble(threshold: number, spec: EnsembleSpec): EnsembleOut {
-  const { members, seed, lift_ft, per_street_sigma_ft } = spec.parameters;
-  const series = state.series;
-  const ref = state.mode === "replay" ? (series[0]?.t ?? Date.now()) : Date.now();
-  const fcFrom = series.findIndex((p) => p.kind === "fc");
-  const rng = mulberry32(seed);
-  const hours: number[] = [];
-  for (let m = 0; m < members; m++) {
-    const tau = Math.round((threshold + lift_ft + per_street_sigma_ft * gauss(rng)) * 1e4) / 1e4;
-    // Forecast error is a random walk whose cumulative sd at each horizon equals the
-    // measured RMSE there, so it grows the way the benchmark says it does. Observed
-    // points are never perturbed — in replay that leaves only the threshold term.
-    let z = 0, prevVar = 0, hit: number | null = null;
-    for (let i = 0; i < series.length; i++) {
-      const p = series[i];
-      let v = p.v;
-      if (fcFrom >= 0 && i >= fcFrom) {
-        const var_ = rmseFt((p.t - ref) / 86_400_000, spec) ** 2;
-        z += Math.sqrt(Math.max(0, var_ - prevVar)) * gauss(rng);
-        prevVar = var_;
-        v = v + z;
-      }
-      if (v >= tau) { hit = Math.round(Math.max(0, (p.t - ref) / 3_600_000) * 1e3) / 1e3; break; }
-    }
-    if (hit !== null) hours.push(hit);
-  }
-  hours.sort((a, b) => a - b);
-  const q = (p: number) => {
-    if (!hours.length) return null;
-    const idx = (hours.length - 1) * (p / 100);
-    const lo = Math.floor(idx), hi = Math.ceil(idx);
-    const val = hours[lo] + (hours[hi] - hours[lo]) * (idx - lo);
-    return Math.round(val * 100) / 100;
-  };
-  return { members, crossing: hours.length, of: members,
-    median_h: q(50), p10_h: q(10), p90_h: q(90), never_h: members - hours.length };
+/* The algorithm is ./lib/ensemble.ts, where the pipeline's verification grid can be recomputed
+ * against it. What is decided HERE is what belongs to the app rather than to the arithmetic: the
+ * instant the reported hours are measured from, and where the observation stops and the
+ * forecast begins. */
+function seriesRef(): number {
+  return state.mode === "replay" ? (state.series[0]?.t ?? Date.now()) : Date.now();
 }
 
 function seriesWindow(): Pt[] {
@@ -407,30 +413,487 @@ function seriesWindow(): Pt[] {
 /* ---------------- selection ---------------- */
 /* Index-based, because the routing graph addresses road segments by their position
  * in road_thresholds.geojson, and that index is what ties a click to a route. */
+
+/* Distances are measured to the segment GEOMETRY, not to its centroid.
+ * The centroid rule was measurably wrong, and the measurement is what changed it:
+ * of 899 county address ranges attached to a segment within 50 m, only 79.6%
+ * named the same street a map click returned, and EVERY disagreement sat at
+ * sub-metre to ~26 m snap distance — the address was essentially ON the street
+ * the click got wrong. The cause is that a long segment's centroid can sit far
+ * from a point that lies on the segment itself, so a click 0.5 m from Pultar
+ * Road returned Rocky Falls Road, and 0.2 m from North 2nd Street returned
+ * South 2nd Street. Vertices are flattened once so a click is a linear scan. */
+/** Every segment's flood stage, in segment order: the population flagCounts() scans (see the
+ *  Harvey backcast section). Built once with the other per-segment arrays, not per render. */
+let roadThresholds: number[] = [];
+
+let roadVertStart = new Int32Array(1);
+let roadX = new Float64Array(0);
+let roadY = new Float64Array(0);
+
+function buildRoadIndex() {
+  roadThresholds = state.roads.map((r) => r.properties.flood_stage_ft);
+  const counts: number[] = [];
+  const xs: number[] = [];
+  const ys: number[] = [];
+  for (const r of state.roads) {
+    const flat: number[][] = r.geometry.type === "LineString"
+      ? (r.geometry.coordinates as number[][])
+      : (r.geometry.coordinates as number[][][]).flat();
+    counts.push(flat.length);
+    for (const c of flat) { xs.push(c[0]); ys.push(c[1]); }
+  }
+  roadVertStart = new Int32Array(counts.length + 1);
+  for (let i = 0; i < counts.length; i++) roadVertStart[i + 1] = roadVertStart[i] + counts[i];
+  roadX = Float64Array.from(xs);
+  roadY = Float64Array.from(ys);
+}
+
+function segDistSq(px: number, py: number, ax: number, ay: number, bx: number, by: number) {
+  const dx = bx - ax, dy = by - ay;
+  const len = dx * dx + dy * dy;
+  let t = len > 0 ? ((px - ax) * dx + (py - ay) * dy) / len : 0;
+  t = t < 0 ? 0 : t > 1 ? 1 : t;
+  const qx = ax + t * dx - px, qy = ay + t * dy - py;
+  return qx * qx + qy * qy;
+}
+
 function nearestRoadIndex(lon: number, lat: number): number {
+  // Longitude degrees are shorter than latitude degrees at this latitude; scale
+  // them so the comparison is not biased along the axis the corridor runs down.
+  const k = Math.cos((lat * Math.PI) / 180);
+  const px = lon * k;
   let best = 0, bestD = Infinity;
   for (let i = 0; i < state.roads.length; i++) {
-    const c = centroid(state.roads[i]);
-    const d = (c[0] - lon) ** 2 + (c[1] - lat) ** 2;
-    if (d < bestD) { bestD = d; best = i; }
+    const s = roadVertStart[i], e = roadVertStart[i + 1];
+    let minD = Infinity;
+    for (let j = s; j + 1 < e; j++) {
+      const d = segDistSq(px, lat, roadX[j] * k, roadY[j], roadX[j + 1] * k, roadY[j + 1]);
+      if (d < minD) minD = d;
+    }
+    // A single-vertex segment has no edge to measure against.
+    if (minD === Infinity && e > s) minD = (roadX[s] * k - px) ** 2 + (roadY[s] - lat) ** 2;
+    if (minD < bestD) { bestD = minD; best = i; }
   }
   return best;
 }
 
-async function selectByRoadName(query: string) {
-  const q = query.trim().toLowerCase();
-  if (!q) return;
-  const hit = state.roads.findIndex((r) => (r.properties.name ?? "").toLowerCase().includes(q));
-  if (hit >= 0) return setSelected(hit);
-  // last resort: Mapbox geocode (needs a token)
-  if (MAPBOX_TOKEN) {
-    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json` +
-      `?access_token=${MAPBOX_TOKEN}&proximity=${GAUGE.lon},${GAUGE.lat}&limit=1`;
-    const j = await fetch(url).then((r) => r.json());
-    const c = j.features?.[0]?.center;
-    if (c) return setSelected(nearestRoadIndex(c[0], c[1]));
+/* ---------------- address resolution ----------------
+ * Tiered, and every tier that cannot answer says why instead of guessing:
+ *   1. house number + street  -> the exact segment (via the offline index)
+ *   2. street name alone      -> the segment that floods first, disclosed
+ *   3. typo (edit distance 2) -> a suggestion, and the address that works
+ *   4. Mapbox, only if a token is configured (last resort, demoted)
+ *   5. click the map
+ * A street the app does not model is REFUSED. It is not snapped to the nearest
+ * modelled street, because that answers a different household's question.
+ */
+
+/* Must match TOKEN_MAP in pipeline/derive/address_index.py, because the index's
+ * keys were produced by that side. */
+const STREET_TOKENS: Record<string, string> = {
+  RD: "ROAD", ST: "STREET", AVE: "AVENUE", AV: "AVENUE", DR: "DRIVE",
+  BLVD: "BOULEVARD", LN: "LANE", HWY: "HIGHWAY", PKWY: "PARKWAY", CT: "COURT",
+  CIR: "CIRCLE", PL: "PLACE", TRL: "TRAIL", TER: "TERRACE", FWY: "FREEWAY",
+  EXPY: "EXPRESSWAY", N: "NORTH", S: "SOUTH", E: "EAST", W: "WEST",
+  NE: "NORTHEAST", NW: "NORTHWEST", SE: "SOUTHEAST", SW: "SOUTHWEST",
+  RM: "RANCH ROAD", RR: "RANCH ROAD", FM: "FARM TO MARKET", IH: "INTERSTATE",
+  SH: "STATE HIGHWAY", US: "US",
+};
+
+function canonicalStreet(name: string): string {
+  return name
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, " ")
+    .trim()
+    .split(" ")
+    .map((t) => STREET_TOKENS[t] ?? t)
+    .join(" ");
+}
+
+function parseAddress(text: string): { num: number | null; key: string } {
+  let s = text.trim();
+  // A city/state/ZIP tail is not part of the street name. Everything after the
+  // first comma is dropped, which covers what people actually paste.
+  s = s.replace(/\s*,?\s*\b(TX|TEXAS)\b.*$/i, " ");
+  s = s.replace(/\s+\d{5}(-\d{4})?\s*$/, " ");
+  const head = s.split(",")[0];
+  const m = head.match(/^\s*(\d+)\s+(.*)$/);
+  if (m) return { num: Number(m[1]), key: canonicalStreet(m[2]) };
+  return { num: null, key: canonicalStreet(head) };
+}
+
+function editDistance(a: string, b: string): number {
+  if (a === b) return 0;
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) {
+      cur.push(Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)));
+    }
+    prev = cur;
   }
-  $("askHint").textContent = `No road matching “${query}” in the Richmond dataset. Try a road name, or click the map.`;
+  return prev[b.length];
+}
+
+/* A concrete address on a street, so a refusal can offer something that works
+ * rather than only naming a street. */
+function sampleAddress(si: number): string | null {
+  const idx = state.address;
+  if (!idx) return null;
+  const e = idx.ranges.find((r) => r[0] === si);
+  if (!e) return null;
+  return `${e[1]} ${idx.streets[si].n}`;
+}
+
+function streetSpans(si: number): string {
+  const idx = state.address;
+  if (!idx) return "";
+  const e = idx.ranges.filter((r) => r[0] === si);
+  if (!e.length) return "";
+  const lo = Math.min(...e.map((x) => x[1]));
+  const hi = Math.max(...e.map((x) => x[2]));
+  return `${lo.toLocaleString()}-${hi.toLocaleString()}`;
+}
+
+/* The threshold a segment would need to start warning, i.e. how early it goes. */
+function thresholdOf(i: number): number {
+  return state.roads[i]?.properties.flood_stage_ft ?? Infinity;
+}
+
+function say(msg: string) { $("askHint").textContent = msg; }
+
+/* A failed lookup must not leave the PREVIOUS street's answer on screen: the
+ * card would show one household's flood result while the hint says no street was
+ * found, which is the kind of mixed message this app exists to avoid. */
+function clearSelection() {
+  state.selected = null;
+  state.selIdx = -1;
+  state.routes = [];
+  state.routeSel = null;
+  render();
+}
+
+/* ---------------- shareable state ----------------
+ * An answer nobody can forward stops at one screen. The address, the stage and the
+ * mode all live in the URL, so a link restores exactly the view it was copied from —
+ * including in Harvey replay, which is the one mode that shows a flood.
+ *
+ * Unknown parameters are preserved rather than rewritten away, so a parameter this
+ * version does not know about still round-trips (the planned ?text=1 keeps working
+ * once it exists) instead of being silently stripped by a link.
+ *
+ * The URL is kept current with replaceState, never pushed. Pushing from render() —
+ * which every state change goes through — would leave two identical history entries
+ * per address change, so back would step to the same page. Deliberately no history:
+ * the link is how an answer travels, not the back button.
+ */
+/* The incoming link, captured ONCE at boot. It cannot be re-read later: boot renders
+ * before the URL has been applied, and that render would write the not-yet-restored
+ * state back over the parameters it is about to consume — which silently deleted
+ * ?addr and ?stage from every shared replay link until this was fixed. */
+type UrlState = { addr: string | null; stage: number | null; mode: "live" | "replay" | null; text: boolean; lang: Lang };
+let pendingUrl: UrlState | null = null;
+
+/* `?text=1` — the low-bandwidth route. Read at boot before anything else, because the
+ * whole point is not to fetch the map, and a decision made after the import has started
+ * is not a decision. See applyTextMode(). */
+const TEXT_PARAM = "text";
+let textOnly = false;
+
+/* The share confirmation is only true of the URL it was made for. The refusal path
+ * prints that URL as the fallback, so leaving it up after the view moves would tell
+ * the user to copy a link to the previous answer. Reset it whenever the URL changes. */
+const SHARE_NOTE_AT_REST = "the address, stage and mode travel in the link";
+
+/* What the link carries: the household, led by whichever row is on screen. Matching by
+ * canonical street rather than by the typed text is what keeps a clicked road from being added
+ * to the household a second time when it is already one of its addresses. */
+function urlAddresses(): string[] {
+  const selName = state.selected?.properties.name ?? "";
+  const selKey = selName ? canonicalStreet(selName) : "";
+  const rows = state.household;
+  const lead = selKey
+    ? rows.find((r) => r.si !== null && parseAddress(r.query).key === selKey)
+    : undefined;
+  const ordered = lead ? [lead, ...rows.filter((r) => r !== lead)] : rows;
+  const out = ordered.map((r) => r.query);
+  // Nothing in the household describes what is on screen — a road clicked on the map, or an
+  // address whose street is not modelled — so the screen still leads rather than the link
+  // opening on a different household member's street.
+  return selName && !lead ? [selName, ...out] : out;
+}
+
+function stageRange(): { min: number; max: number } {
+  const el = $("stage") as unknown as HTMLInputElement;
+  return { min: Number(el.min || 5), max: Number(el.max || 56) };
+}
+
+function readUrl(): UrlState {
+  const p = new URLSearchParams(location.search);
+  const { min, max } = stageRange();
+  const raw = Number(p.get("stage"));
+  const stage = p.get("stage") !== null && Number.isFinite(raw)
+    ? Math.min(max, Math.max(min, raw))
+    : null;
+  const mode = p.get("mode");
+  return {
+    addr: (p.get("addr") ?? "").trim() || null,
+    stage,
+    mode: mode === "replay" ? "replay" : mode === "live" ? "live" : null,
+    text: p.get(TEXT_PARAM) === "1",
+    // F7 — the alert language travels in the link, because a Spanish-speaking household
+    // is the one most likely to send this answer to someone else.
+    lang: p.get("lang") === "es" ? "es" : "en",
+  };
+}
+
+/* The other view's link, built from the SAME parameters, so switching modes keeps the
+ * street, the stage and the data mode. A plain link on purpose: it survives a refresh,
+ * it can be middle-clicked, and it needs no handler to be correct. */
+function viewHref(p: URLSearchParams, toText: boolean): string {
+  const q = new URLSearchParams(p);
+  if (toText) q.set(TEXT_PARAM, "1"); else q.delete(TEXT_PARAM);
+  const qs = q.toString();
+  return `${location.pathname}${qs ? `?${qs}` : ""}`;
+}
+
+/* What text mode removes is PIXELS, not information: the basemap and the canvas go, and
+ * the numbers they drew stay as sentences. The flood count and the hydrograph summary
+ * are rendered by render() in both modes — this only chooses which of them is visible. */
+function applyTextMode() {
+  document.body.classList.toggle("text-only", textOnly);
+  const a = $("viewToggle") as unknown as HTMLAnchorElement;
+  a.textContent = textOnly ? "Full view" : "Text-only";
+  a.setAttribute("aria-label", textOnly
+    ? "Switch to the full view, with the map and the chart"
+    : "Switch to the text-only view: no map, no chart, far less to download");
+}
+
+function syncUrl() {
+  // Until the incoming link has been applied, the app must not describe itself: it
+  // does not yet hold the state the URL is asking for.
+  if (pendingUrl) return;
+  const p = new URLSearchParams(location.search);
+  // The household first, led by the row that is on screen. The old rule — carry the typed text
+  // only when it describes the street on screen — is now the LEAD rule: the row that matches the
+  // screen goes first, the rest of the household follows, and nothing is dropped just because the
+  // user clicked a different road. With no rows at all the street itself leads, so a link copied
+  // after a map click still opens on the street the answer was about.
+  const addrs = urlAddresses();
+  if (addrs.length) p.set("addr", addrs.join("|")); else p.delete("addr");
+  p.set("stage", state.current.toFixed(1));
+  if (state.mode === "replay") p.set("mode", "replay"); else p.delete("mode");
+  // The view travels with the link: a link to the light version must not arrive heavy.
+  if (textOnly) p.set(TEXT_PARAM, "1"); else p.delete(TEXT_PARAM);
+  if (state.lang === "es") p.set("lang", "es"); else p.delete("lang");
+  ($("viewToggle") as unknown as HTMLAnchorElement).href = viewHref(p, !textOnly);
+  const qs = p.toString();
+  const before = location.href;
+  history.replaceState(history.state, "", `${location.pathname}${qs ? `?${qs}` : ""}`);
+  if (location.href !== before) $("shareNote").textContent = SHARE_NOTE_AT_REST;
+}
+
+async function applyUrl() {
+  const u = pendingUrl;
+  if (!u) return;
+  // From here the URL is the app's to write.
+  pendingUrl = null;
+  if (u.mode === "replay" && state.mode !== "replay") await setMode("replay");
+  else if (u.mode === "live" && state.mode !== "live") await setMode("live");
+  if (u.stage !== null) {
+    state.current = u.stage;
+    render();
+  }
+  if (u.addr) {
+    ($("addr") as HTMLInputElement).value = u.addr;
+    // Through the household path even for one address: a link carrying three has to restore all
+    // three, and one code path for both is one place for the ranking to be right.
+    await checkAddresses(u.addr);
+  }
+  // Guarantees the URL is written once even when the link carried nothing to
+  // restore, so the address bar always describes the view on screen.
+  render();
+}
+
+/* One lookup, two callers. The household card (F3) has to resolve several addresses and rank
+ * them, and the old shape of this function could only answer one: it wrote its answer straight
+ * to the screen and mutated the selection. So the RULES moved into `locate()`, which is pure
+ * and returns a result, and the screen-writing became `applyLocated()`. A second copy of the
+ * tiers — house number, street alone, typo, refusal — is the failure this project keeps
+ * finding, and it would have been a second copy of the refusal messages too. */
+type Located =
+  | { ok: true; si: number; note: string }
+  /* `mapbox`: only a street the index has NEVER HEARD OF is worth sending to a geocoder. A
+   * known street whose house number is outside the county's ranges is a different failure, and
+   * answering it with a geocoder's nearest road would replace a correct refusal with a
+   * confidently wrong street — which is the failure mode this whole tiering exists to avoid. */
+  | { ok: false; why: string; suggest: boolean; clear: boolean; mapbox: boolean };
+
+function located(query: string): Located {
+  const idx = state.address;
+  const { num, key } = parseAddress(query);
+  if (!key) return { ok: false, why: "Type an address or a street name, or click a road on the map.", suggest: false, clear: false, mapbox: false };
+  if (!idx) return { ok: false, why: "The address index did not load, so only road names work. Click the map.", suggest: false, clear: false, mapbox: false };
+
+  let candidates = idx.keys[key];
+  if (!candidates && num === null) {
+    // A bare street name that missed exactly may still be one token off.
+    const close = Object.keys(idx.keys).filter((k) => editDistance(k, key) <= 2);
+    if (close.length) candidates = close.flatMap((k) => idx.keys[k]);
+  }
+
+  if (!candidates) {
+    const close = Object.keys(idx.keys)
+      .map((k) => ({ k, d: editDistance(k, key) }))
+      .filter((x) => x.d <= 2)
+      .sort((a, b) => a.d - b.d)
+      .slice(0, 3);
+    if (close.length) {
+      const opts = close.map((c) => {
+        const si = idx.keys[c.k][0];
+        const real = sampleAddress(si);
+        return real ? `${idx.streets[si].n} (e.g. ${real})` : idx.streets[si].n;
+      });
+      return { ok: false, clear: true, suggest: true, mapbox: false,
+        why: `No street “${key}” in the Richmond dataset. Did you mean: ${opts.join("; ")}?` };
+    }
+    return { ok: false, clear: true, suggest: false, mapbox: true,
+      why: `No street “${key}” in the Richmond dataset — this app models the Brazos ` +
+        `corridor, not every road in Fort Bend County. Try a street from the list, ` +
+        `or click a road on the map.` };
+  }
+
+  const cand = idx.ranges.filter((r) => candidates!.includes(r[0]));
+  if (!cand.length) {
+    // The street is modelled but the county files no house numbers on it, so a
+    // number cannot be placed. Answer with the segment that floods first rather
+    // than inventing a location.
+    const si = candidates[0];
+    const segs = idx.streets[si].s;
+    const best = segs.reduce((a, b) => (thresholdOf(b) < thresholdOf(a) ? b : a), segs[0]);
+    return { ok: true, si: best,
+      note: `${idx.streets[si].n} is modelled but has no county house numbers, so this ` +
+        `is the segment that floods first. Click the map for a specific stretch.` };
+  }
+
+  if (num === null) {
+    const segs = [...new Set(cand.map((c) => c[3]))];
+    const best = segs.reduce((a, b) => (thresholdOf(b) < thresholdOf(a) ? b : a), segs[0]);
+    const si = cand.find((c) => c[3] === best)![0];
+    return { ok: true, si: best,
+      note: `${idx.streets[si].n} has ${segs.length} modelled segments; showing the one ` +
+        `that floods first. Add a house number for the segment nearest you.` };
+  }
+
+  const hits = cand.filter((c) => c[1] <= num && num <= c[2]);
+  if (hits.length) {
+    // Several ranges can contain the number when a street is split across
+    // segments; the tightest one is the most specific statement about it.
+    hits.sort((a, b) => (a[2] - a[1]) - (b[2] - b[1]) || a[3] - b[3]);
+    const [si, lo, hi, seg] = hits[0];
+    return { ok: true, si: seg,
+      note: `Read as ${num} ${idx.streets[si].n} (county address range ${lo}-${hi}).` };
+  }
+
+  // The number is outside every range the county files for this street, which
+  // usually means a typo or an address that does not exist. Name the real ones.
+  const near = [...cand]
+    .sort((a, b) => Math.min(Math.abs(num - a[1]), Math.abs(num - a[2])) -
+      Math.min(Math.abs(num - b[1]), Math.abs(num - b[2])))
+    .slice(0, 3);
+  const si = near[0][0];
+  const spans = streetSpans(si);
+  const examples = near.map((e) => `${Math.min(e[1], e[2])}`).slice(0, 3);
+  return { ok: false, clear: true, suggest: false, mapbox: false,
+    why: `${num} ${idx.streets[si].n} is outside the county's addressed range ` +
+      `(${spans}). Nearest listed: ${examples.join(", ")}. Check the number, or click the map.` };
+}
+
+/* ---------------- the household ---------------- */
+/* F3. One address answers one household's question; home, school and a parent's house is how a
+ * family actually plans, and they are not the same answer. The rows are the addresses the user
+ * asked about, the card ranks them by when each one is reached, and the row on screen is the one
+ * the answer above is about.
+ *
+ * `|` and `;` separate addresses, because a comma is part of the address people paste (the
+ * "Richmond, TX" tail is stripped by parseAddress). Newlines work too, which is what a pasted
+ * column of addresses arrives as. */
+const HH_MAX = 6;
+
+type HouseholdRow = { query: string; si: number | null; label: string; why: string };
+
+function splitAddresses(text: string): string[] {
+  const parts = text.split(/[|;\n]+/).map((s) => s.trim()).filter(Boolean);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const p of parts) {
+    const key = canonicalStreet(parseAddress(p).key) || p.toUpperCase();
+    if (seen.has(key)) continue;      // the same address twice is one row, not two
+    seen.add(key);
+    out.push(p);
+  }
+  return out;
+}
+
+/** Resolve every address in the box, rank them, and make the first one that placed the answer. */
+async function checkAddresses(text: string) {
+  const queries = splitAddresses(text).slice(0, HH_MAX);
+  if (!queries.length) {
+    state.household = [];
+    clearSelection();
+    return say("Type an address or a street name, or click a road on the map.");
+  }
+  const rows: HouseholdRow[] = queries.map((q) => {
+    const found = located(q);
+    return found.ok
+      ? { query: q, si: found.si, label: state.roads[found.si]?.properties.name ?? q, why: found.note }
+      : { query: q, si: null, label: q, why: found.why };
+  });
+  state.household = rows;
+  ($("addr") as HTMLInputElement).value = queries.join(" | ");
+
+  const first = rows.find((r) => r.si !== null);
+  if (first) {
+    setSelected(first.si as number);
+    const failed = rows.filter((r) => r.si === null).length;
+    const extra = rows.length > 1
+      ? ` ${rows.length} addresses ranked below, soonest first.` : "";
+    const miss = failed ? ` ${failed} of ${rows.length} could not be placed.` : "";
+    say(`${first.why}${extra}${miss}`);
+  } else {
+    // Nothing placed. The rows still carry their own reasons, and the first one is said aloud —
+    // after Mapbox has had its one chance, and only for a street the index never heard of.
+    const found = located(queries[0]);
+    if (!found.ok && found.mapbox && MAPBOX_TOKEN) {
+      // Mapbox is the last resort and needs a token; the offline index is the primary path
+      // and works with no key and no network.
+      const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(queries[0])}.json` +
+        `?access_token=${MAPBOX_TOKEN}&proximity=${GAUGE.lon},${GAUGE.lat}&limit=1`;
+      const j = await fetch(url).then((r) => r.json());
+      const c = j.features?.[0]?.center;
+      if (c) {
+        const si = nearestRoadIndex(c[0], c[1]);
+        rows[0] = { ...rows[0], si, label: state.roads[si]?.properties.name ?? queries[0] };
+        setSelected(si);
+        return;
+      }
+    }
+    clearSelection();
+    say(rows[0].why);
+  }
+}
+
+/** The stage the answer is about, and which of the two thresholds it is: the earlier of the
+ *  street's own flood stage and the stage at which its last dry way out is cut (isolation.py).
+ *  One implementation, because the household card ranks rows by exactly the number the headline
+ *  shows for the selected one — two copies of this rule would let a row and its own answer
+ *  disagree. */
+function limitOf(r: Road): { limit: number; cut: boolean } {
+  const at = r.properties.flood_stage_ft;
+  const iso = r.properties.isolation_ft;
+  const cut = iso !== null && iso < at - 0.05;
+  return { limit: cut ? (iso as number) : at, cut };
 }
 
 function setSelected(i: number) {
@@ -444,7 +907,20 @@ function setSelected(i: number) {
 /* ---------------- map ---------------- */
 let map: maplibregl.Map | null = null;
 
-function buildMap() {
+async function buildMap() {
+  // Lazy, and the guard is the feature: in text mode this function is never called, so
+  // MapLibre and its stylesheet are never requested.
+  if (textOnly) return;
+  const [mod] = await Promise.all([
+    import("maplibre-gl"),
+    import("maplibre-gl/dist/maplibre-gl.css"),
+  ]);
+  // The only moment the map's own chunk and stylesheet are known to be loaded, and the only
+  // place they can be discovered at all: their filenames are content hashes emitted by the
+  // bundler, so neither a list here nor the worker could name them.
+  keepOfflineCopy(loadedHere());
+  const maplibregl = mod.default;
+  if (textOnly) return;    // the toggle navigates, but a race must not build the map anyway
   map = new maplibregl.Map({
     container: "map",
     style: {
@@ -479,6 +955,18 @@ function buildMap() {
       id: "roads-levee", type: "line", source: "roads",
       filter: ["==", ["get", "levee"], true],
       paint: { "line-color": "#6b4fa0", "line-width": 1.4, "line-dasharray": [3, 2], "line-opacity": 0.9 },
+    });
+    /* F4 — the island's boundary. Not the island itself: its extent is reported as a count,
+     * because the layers below hold their data and a several-hundred-segment island would
+     * have to re-upload its geometry on every slider step, which is what T8's budget exists
+     * to prevent. What is drawn is the CUT — the flooded segments that lead off this island
+     * — which is the smaller set and the one the question is about. */
+    map!.addSource("island", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+    map!.addLayer({
+      id: "island-edge", type: "line", source: "island",
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": "#f0a12a", "line-width": ["interpolate", ["linear"], ["zoom"], 11, 2.6, 16, 5],
+               "line-dasharray": [2.4, 1.4], "line-opacity": 0.95 },
     });
     map!.addSource("route", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
     map!.addLayer({
@@ -534,6 +1022,10 @@ let edgeLenM = new Float64Array(0);
 let maxIncidentFt = new Map<number, number>();
 let segNodes: number[][] = [];
 let facilityNodes: number[] = [];
+/* The same graph, described for ./lib/islands.ts, which is a separate module because the
+ * partition it computes is a claim about duplicated code and has to be checkable without a
+ * browser: app/tests/unit/islands.test.ts recomputes the pipeline's whole ladder from it. */
+let islandSpec: IslandSpec | null = null;
 
 function haversineM(ax: number, ay: number, bx: number, by: number): number {
   const R = 6371000, r = Math.PI / 180;
@@ -620,6 +1112,13 @@ function buildRouting() {
     maxIncidentFt.set(edgeA[e], Math.max(maxIncidentFt.get(edgeA[e]) ?? 0, edgeFt[e]));
     maxIncidentFt.set(edgeB[e], Math.max(maxIncidentFt.get(edgeB[e]) ?? 0, edgeFt[e]));
   }
+  islandSpec = {
+    nodeCount: n, edgeA, edgeB, edgeFt, thresholds: roadThresholds, segNodes, facilityNodes,
+    // Absent in a graph exported before F4: the island still computes, and simply cannot say
+    // whether its edge is water or the study area's boundary. `?? []` rather than a throw,
+    // because a stale payload must not take the answer down with it.
+    clipNodes: g.clip?.nodes ?? [],
+  };
   parityCheck();
 }
 
@@ -775,6 +1274,76 @@ function parityCheck() {
   if (bad) console.error(msg); else console.info(msg);
 }
 
+/* ---------------- islands ---------------- *
+ * F4, and the answer to a question the routing panel cannot ask: not "can I reach a
+ * destination" but "which roads are still one connected place with mine". The partition is
+ * computed in ./lib/islands.ts — the pipeline's own sweep, recomputed against its published
+ * ladder in app/tests/unit/islands.test.ts — and what is decided HERE is only how to say it.
+ *
+ * The numbers are deliberately concrete rather than reassuring. Measured, the road extract is
+ * already 116 separate networks at 0 ft and only 806 of 1,614 segments are on a fragment that
+ * holds a responder, so a street with no hospital on its island has usually met the edge of the
+ * study area rather than a wall of water — which is why `touchesClip` is said out loud instead
+ * of being left out of the sentence. */
+function islandSentence(v: IslandView, stage: number): string {
+  const total = state.roads.length;
+  if (v.island < 0) return "This segment is not on the modelled road graph, so it has no island.";
+  // Three states, not two, and the third is why this is written out rather than templated: an
+  // island with no drivable segment left cannot be described by its size. Measured, in replay at
+  // 40 ft: a street whose own segment the local fire station sits on reported "0 of 1,614
+  // segments … a fire or police station is on it", which is true of the graph (the station's node
+  // is there) and false of the road (its doorstep is under water). So the empty island says what
+  // it is, and the responder clause is dropped rather than asserted over it.
+  const head = v.segments === 0
+    ? (v.dry
+        ? "every road connected to this street is under water"
+        : `water is over this street at ${stage.toFixed(2)} ft, and every road connected to it is under water`)
+    : v.dry
+      ? `${v.segments} of the corridor's ${total} segments are still reachable from this street without crossing water`
+      : `water is over this street at ${stage.toFixed(2)} ft, so nothing is drivable from it; the larger of the two islands its flooded segment joins holds ${v.segments} of the corridor's ${total} segments`;
+  let out = `Your island: ${head}.`;
+  if (v.segments > 0) {
+    out += v.responder
+      ? " A hospital, fire or police station is on it."
+      : ` No modelled responder is on it${v.crossingSegs.length
+          ? `, and every way off it crosses water: ${v.crossingSegs.length} flooded segments form its edge, the last of which closed at ${(v.lastCrossingFt as number).toFixed(1)} ft`
+          : ""}.`;
+  }
+  if (v.touchesClip) {
+    out += " It also reaches the edge of the study area, where a road continues outside what is modelled — so this island is what the extract covers, not a wall of water.";
+  }
+  return out;
+}
+
+/** One union-find pass over the 8,970 edges per stage step, so this is cheap enough to run
+ *  inside the drag; measured against the budget it was added to, see T8. */
+function computeIsland(stage: number) {
+  const note = $("islandNote");
+  if (!islandSpec || state.selIdx < 0) {
+    state.island = null;
+    note.hidden = true;
+    note.textContent = "";
+  } else {
+    state.island = islandForSegment(islandSpec, stage, state.selIdx);
+    note.hidden = false;
+    note.textContent = islandSentence(state.island, stage);
+  }
+  updateIslandLine();
+}
+
+/** Draw the island's edge. The geometries are the road features already in memory, so this
+ *  hands MapLibre references rather than rebuilt coordinates. */
+function updateIslandLine() {
+  if (!map || !map.getSource("island")) return;
+  const v = state.island;
+  const features = v
+    ? v.crossingSegs.map((s) => ({ type: "Feature", properties: {},
+        geometry: state.roads[s].geometry }))
+    : [];
+  (map.getSource("island") as maplibregl.GeoJSONSource)
+    .setData({ type: "FeatureCollection", features } as never);
+}
+
 /** Draw the chosen route. The coordinates come from the exported graph nodes, so
  *  the line lies exactly on the graph the cut stage was computed from. */
 function updateRouteLine() {
@@ -862,6 +1431,35 @@ function drawChart() {
   }
 }
 
+/* The canvas is this series drawn; this is the same series said. It is set in both
+ * modes (in the full view it labels the curve), and in text mode it is the whole chart:
+ * the window, the low, the crest with the time it happened, and where the gauge is now.
+ * Nothing here is recomputed from a different source than drawChart() reads. */
+function renderChartText() {
+  const el = $("chartText");
+  const pts = seriesWindow();
+  if (!pts.length) { el.textContent = "No stage series is loaded."; return; }
+  const lo = pts.reduce((a, b) => (b.v < a.v ? b : a));
+  const hi = pts.reduce((a, b) => (b.v > a.v ? b : a));
+  const when = (t: number) => fmtTime(t, { month: "short", day: "numeric", hour: "numeric" });
+  const kind = pts.some((p) => p.kind === "fc") ? "observed and forecast" : "observed";
+  const parts = [
+    `${pts.length} ${kind} points, ${when(pts[0].t)} to ${when(pts[pts.length - 1].t)}.`,
+    `Lowest ${lo.v.toFixed(2)} ft, ${when(lo.t)}. Highest ${hi.v.toFixed(2)} ft, ${when(hi.t)}.`,
+  ];
+  const sel = state.selected;
+  if (sel) {
+    const at = sel.properties.flood_stage_ft;
+    const hrs = crossingHours(at);
+    parts.push(hrs === null
+      ? `${sel.properties.name ?? "This segment"} is not reached by ${at.toFixed(1)} ft inside this window.`
+      : `${sel.properties.name ?? "This segment"} is reached by ${at.toFixed(1)} ft ${Math.round(hrs)} h from here.`);
+  }
+  el.textContent = parts.join(" ");
+  // The card header carries the one number worth having outside the paragraph.
+  $("chartNote").textContent = `crest ${hi.v.toFixed(2)} ft · ${when(hi.t)}`;
+}
+
 function renderEnsemble(sel: Road | null) {
   const box = $("ens");
   const e = state.ensemble, spec = state.ensembleSpec;
@@ -920,30 +1518,10 @@ function renderEnsemble(sel: Road | null) {
 }
 
 /* ---------------- Harvey backcast ---------------- */
-/* The rule, recomputed here rather than read from the artifact, so the timeline is
- * derived in the browser and then checked against the pipeline — the same
- * cross-language check the ensemble, the transfer function and the Dijkstra get.
- * A tier onset is the first hourly point at or above the tier stage; a flag count is
- * the number of segments whose threshold is at or below the stage. */
-function tierOnsets(series: Pt[], tiers: { stage_ft: number }[]): (number | null)[] {
-  const ref = series[0]?.t ?? 0;
-  return tiers.map((t) => {
-    for (const p of series) {
-      if (p.v >= t.stage_ft) return Math.round(((p.t - ref) / 3_600_000) * 10) / 10;
-    }
-    return null;
-  });
-}
-
-function flagCounts(stage: number, lift: number): { shipped: number; corrected: number } {
-  let shipped = 0, corrected = 0;
-  for (const r of state.roads) {
-    const at = r.properties.flood_stage_ft;
-    if (at <= stage) shipped++;
-    if (at + lift <= stage) corrected++;
-  }
-  return { shipped, corrected };
-}
+/* The rule itself is ./lib/backcast.ts, recomputed there rather than read off the artifact so
+ * that the pipeline's 17-row grid can be checked against it. What belongs here is the
+ * POPULATION the rule counts over — `roadThresholds`, derived with the other per-segment
+ * arrays, i.e. every threshold in the road layer the app already fetched. */
 
 /** Every number the backcast block shows, recomputed from the app's own replay series
  *  and road list and compared with the pipeline's grid. Returns the mismatches. */
@@ -959,7 +1537,7 @@ function checkBackcastGrid(): { ok: boolean; rows: number; bad: string[] } {
     if ((onsets[i] ?? null) !== want) bad.push(`onset ${t.tier}: ${onsets[i]} != ${want}`);
   });
   for (const g of bc.verification_grid.flag_counts) {
-    const c = flagCounts(g.stage_ft, bc.correction_tradeoff.lift_ft);
+    const c = flagCounts(roadThresholds, g.stage_ft, bc.correction_tradeoff.lift_ft);
     if (c.shipped !== g.shipped || c.corrected !== g.corrected) {
       bad.push(`stage ${g.stage_ft}: ${c.shipped}/${c.corrected} != ${g.shipped}/${g.corrected}`);
     }
@@ -1010,13 +1588,189 @@ function renderBackcast() {
     state.bcKey = key;
   }
 
-  const c = flagCounts(state.current, bc.correction_tradeoff.lift_ft);
+  const c = flagCounts(roadThresholds, state.current, bc.correction_tradeoff.lift_ft);
   $("bcStage").innerHTML =
     `At <b>${state.current.toFixed(2)} ft</b> the app flags <b>${c.shipped}</b> of ${state.roads.length} segments` +
     (c.shipped === c.corrected ? " (identical with the correction)"
       : `; with the measured correction, <b>${c.corrected}</b>`) + ".";
   $("bcNote").textContent = `replay \u00b7 ${bc.event.window.n_points} hourly observations \u00b7 ` +
     `crest ${bc.event.crest.stage_ft.toFixed(2)} ft`;
+}
+
+/* ---------------- F7: the alert ---------------- */
+/* The text and the schedule are ./lib/notify.ts, filled from the templates compiled into
+ * data/notifications.json. What belongs HERE is what only the page knows: which street,
+ * which series, and which language. Nothing in the card is written by hand, so the
+ * message on screen is the message pipeline/tests/test_notifications.py rendered.
+ *
+ * The send is simulated and the card says so. What is not simulated is the timing: the
+ * quiet-hours hold, the drop-rather-than-send-late rule and the crossing are computed by
+ * the same rules as the pipeline's run over the 2017 record. */
+function fmtIn(ms: number, lang: Lang, opts: Intl.DateTimeFormatOptions): string {
+  return new Intl.DateTimeFormat(lang === "es" ? "es-US" : "en-US", { timeZone: TZ, ...opts })
+    .format(new Date(ms));
+}
+
+function renderAlerts() {
+  const box = $("alertCard");
+  const nt = state.notifications;
+  if (!nt) { box.hidden = true; return; }
+  box.hidden = false;
+  const lang = state.lang;
+  const ui = nt.ui[lang];
+  $("alTitle").textContent = ui.title;
+  $("alNote").textContent = ui.note;
+  $("alLead").textContent = ui.lead;
+  $("alQuiet").textContent = ui.quiet;
+  for (const [id, l] of [["langEn", "en"], ["langEs", "es"]] as const) {
+    $(id).setAttribute("aria-pressed", lang === l ? "true" : "false");
+    $(id).setAttribute("lang", l);
+  }
+  box.setAttribute("lang", lang);
+  $("alLang").setAttribute("aria-label", ui.language);
+
+  const list = $("alList");
+  const none = $("alNone");
+  list.innerHTML = "";
+  const sel = state.selected;
+  if (!sel) {
+    none.hidden = false; none.textContent = ui.pick;
+    return;
+  }
+  const at = sel.properties.flood_stage_ft;
+  const crossH = crossingHours(at);
+  if (crossH === null) {
+    none.hidden = false; none.textContent = ui.none;
+    return;
+  }
+  none.hidden = true;
+  const ref = seriesRef();
+  const crossAt = ref + crossH * 3_600_000;
+  const rows = messagesFor(nt, lang, sel.properties.name ?? "", at,
+    (ms) => valueAt(state.series, ms, 6 * 3_600_000),
+    (s) => category(s).n, crossAt);
+
+  const short = rows.length < nt.tiers.length;
+  for (const r of rows) {
+    const tier = nt.tiers.find((t) => t.id === r.tier)!;
+    const past = r.at < ref;
+    const li = document.createElement("li");
+    li.className = "al-row" + (past ? " past" : "");
+    const meta = document.createElement("div");
+    meta.className = "al-meta";
+    const b = document.createElement("b");
+    b.textContent = tier.label[lang];
+    const i = document.createElement("i");
+    i.textContent = past
+      ? ui.past
+      :        `${fmtIn(r.at, lang, { weekday: "short", month: "short", day: "numeric",
+          hour: "numeric", minute: "2-digit" })} · ${ui.river} ${r.values.river} ${ui.ft}` +
+        (r.deferredFrom === null ? "" : ` · ${ui.held}`);
+    meta.append(b, i);
+    const p = document.createElement("p");
+    p.className = "al-text";
+    p.setAttribute("lang", lang);
+    p.textContent = r.text;
+    li.append(meta, p);
+    list.appendChild(li);
+  }
+  if (short) {
+    const li = document.createElement("li");
+    li.className = "al-short";
+    li.textContent = ui.short;
+    list.appendChild(li);
+  }
+}
+
+/* ---------------- the household card ---------------- */
+/* F3, and the ordering is the feature: three addresses are three different answers, and the
+ * useful thing about them together is WHICH ONE COMES FIRST. Rows are ranked by the same number
+ * the headline shows for the selected street (`limitOf` — the earlier of the street's own
+ * threshold and the stage its last dry way out is cut), so a row and the answer it links to can
+ * never disagree about the same street.
+ *
+ * Rebuilt on every render rather than cached. It is at most six rows and three text nodes each,
+ * and a cached ranking that went stale on a mode switch would be a wrong answer in the one place
+ * the whole feature is a comparison — while `crossingHours` over a 241-point series, six times,
+ * is not a cost the drag can notice (T8 measures it, and the budget test boots with a
+ * household).
+ */
+function renderHousehold(stage: number) {
+  const card = $("hhCard");
+  const rows = state.household;
+  if (rows.length < 2) {
+    // One address is already the answer above; a card that repeats it verbatim is noise. The
+    // list is cleared rather than left hidden, so a stale row can never be read off the DOM.
+    card.hidden = true;
+    $("hhList").innerHTML = "";
+    return;
+  }
+  card.hidden = false;
+
+  const ranked = rows.map((r) => {
+    const road = r.si === null ? null : state.roads[r.si];
+    const limit = road ? limitOf(road) : null;
+    return { r, road, limit, hours: limit ? crossingHours(limit.limit) : null };
+  }).sort((a, b) => {
+    const ha = a.hours === null ? Infinity : a.hours;
+    const hb = b.hours === null ? Infinity : b.hours;
+    if (ha !== hb) return ha - hb;                       // soonest first, never-reached last
+    const ta = a.limit ? a.limit.limit : Infinity;
+    const tb = b.limit ? b.limit.limit : Infinity;
+    if (ta !== tb) return ta - tb;                       // then by the stage each is waiting on
+    return a.r.query.localeCompare(b.r.query);           // then stably, so the list cannot shuffle
+  });
+
+  const list = $("hhList");
+  list.innerHTML = "";
+  for (const row of ranked) {
+    const li = document.createElement("li");
+    li.className = "hh-row" + (row.r.si !== null && row.r.si === state.selIdx ? " you" : "");
+
+    const name = document.createElement("b");
+    // The address as the user wrote it, as TEXT: it is their input, and the one string on this
+    // card that did not come out of an artifact.
+    name.textContent = row.r.query;
+    const hours = document.createElement("div");
+    hours.className = "t";
+    hours.textContent = row.hours === null ? "\u2014" : `${Math.round(row.hours)} h`;
+    const what = document.createElement("div");
+    what.className = "m";
+
+    if (!row.road) {
+      li.classList.add("miss");
+      what.textContent = row.r.why;
+    } else {
+      const at = row.road.properties.flood_stage_ft;
+      what.textContent = row.hours === null
+        ? `${row.r.label} \u00b7 not reached inside this window (floods at ${at.toFixed(1)} ft)`
+        : `${row.r.label} \u00b7 ` + (row.limit?.cut
+            ? `last dry way out cut at ${row.limit.limit.toFixed(1)} ft; the street floods at ${at.toFixed(1)} ft`
+            : `water reaches it at ${at.toFixed(1)} ft`);
+      if (row.r.si !== null) {
+        // Clickable, because the answer above is about ONE of them and choosing which is how a
+        // household uses this. Keyboard-reachable for the same reason every other control is.
+        li.tabIndex = 0;
+        li.setAttribute("role", "button");
+        li.setAttribute("aria-label", `Show the answer for ${row.r.query}`);
+        const si = row.r.si as number;
+        const pick = () => {
+          if (si !== state.selIdx) setSelected(si);
+          say(`Showing ${row.r.query}.`);
+        };
+        li.addEventListener("click", pick);
+        li.addEventListener("keydown", (e) => {
+          if ((e as KeyboardEvent).key === "Enter" || (e as KeyboardEvent).key === " ") pick();
+        });
+      }
+    }
+    li.append(name, hours, what);
+    list.appendChild(li);
+  }
+
+  const failed = rows.filter((r) => r.si === null).length;
+  $("hhNote").textContent = `${rows.length} addresses \u00b7 soonest first` +
+    (failed ? ` \u00b7 ${failed} could not be placed` : "") + ` \u00b7 at ${stage.toFixed(2)} ft`;
 }
 
 /* ---------------- render ---------------- */
@@ -1053,8 +1807,7 @@ function render() {
     // out is cut. Details in pipeline/derive/isolation.py.
     const iso = sel.properties.isolation_ft;
     const lost = sel.properties.isolation_status === "no_dry_refuge";
-    const leads = iso !== null && iso < at - 0.05;
-    const limit = leads ? (iso as number) : at;
+    const { limit, cut: leads } = limitOf(sel);
     const hrsLimit = crossingHours(limit);
 
     if (stage >= at) {
@@ -1106,11 +1859,14 @@ function render() {
   const selKey = `${state.selIdx}|${state.mode}|${state.series.length}` +
     `|${state.series[0]?.t ?? 0}|${state.series[state.series.length - 1]?.t ?? 0}`;
   if (state.ensembleSpec && sel && (selKey !== state.ensKey || !state.ensemble)) {
-    state.ensemble = runEnsemble(sel.properties.flood_stage_ft, state.ensembleSpec);
+    state.ensemble = runEnsemble(sel.properties.flood_stage_ft, state.ensembleSpec,
+      state.series, seriesRef(), firstForecastIndex(state.series));
     state.ensKey = selKey;
   }
   renderEnsemble(sel);
   renderBackcast();
+  renderAlerts();
+  renderHousehold(stage);
 
   const lowConf = state.roads.filter((r) => r.properties.confidence === "low").length;
   const trapped = state.roads.filter((r) => r.properties.isolation_gap_ft !== null
@@ -1195,33 +1951,60 @@ function render() {
     ex.innerHTML = parts.join("");
   }
   $("exitNote").textContent = `at ${stage.toFixed(2)} ft`;
+  computeIsland(stage);
   updateRouteLine();
 
-  // map
+  // map — the count is rendered in BOTH modes: it is a sentence, not a pixel, and it is
+  // most of what the map says. Only syncMap() (which no-ops without a map) is skipped.
   syncMap();
   const flooded = state.roads.filter((r) => stage >= r.properties.flood_stage_ft).length;
   $("mapNote").textContent = `${flooded} of ${state.roads.length} segments under water`;
 
-  drawChart();
+  renderChartText();
+  if (!textOnly) drawChart();
+
+  // Every state change lands here, so the URL and the screen cannot disagree.
+  syncUrl();
 }
 
 /* ---------------- wiring ---------------- */
+/* The datalist offers REAL addresses the index can resolve, not bare street
+ * names: the previous list invited input that could never match, because a
+ * street name with a house number was matched as a substring of a road name. */
 function samples() {
-  const seen = new Map<string, [number, number]>();
+  const dl = $("samples") as unknown as HTMLDataListElement;
+  const idx = state.address;
+  const seen = new Set<number>();
+  const options: string[] = [];
+  if (idx) {
+    for (const [si, lo] of idx.ranges.map((r) => [r[0], r[1]] as const)) {
+      if (seen.has(si)) continue;
+      seen.add(si);
+      options.push(`${lo} ${idx.streets[si].n}, Richmond, TX`);
+    }
+  }
+  // Streets with no county house numbers still work by name alone.
+  const named = new Set<number>();
   for (const r of state.roads) {
     const n = r.properties.name;
-    if (n && !seen.has(n)) seen.set(n, centroid(r));
+    if (!n) continue;
+    const si = idx?.streets.findIndex((s) => s.n === n) ?? -1;
+    if (si >= 0 && named.has(si)) continue;
+    if (si >= 0) named.add(si);
+    options.push(n);
   }
-  const dl = $("samples") as unknown as HTMLDataListElement;
-  [...seen.keys()].slice(0, 60).forEach((n) => {
-    const o = document.createElement("option"); o.value = n; dl.appendChild(o);
+  options.slice(0, 80).forEach((v) => {
+    const o = document.createElement("option"); o.value = v; dl.appendChild(o);
   });
 }
 
 function wire() {
-  $("go").addEventListener("click", () => selectByRoadName(($("addr") as HTMLInputElement).value));
+  // Through checkAddresses, not a single-address resolver: the box accepts `|`-separated
+  // addresses and the household card is the point of that. One address behaves as it always did.
+  const go = () => { void checkAddresses(($("addr") as HTMLInputElement).value); };
+  $("go").addEventListener("click", go);
   $("addr").addEventListener("keydown", (e) => {
-    if ((e as KeyboardEvent).key === "Enter") selectByRoadName(($("addr") as HTMLInputElement).value);
+    if ((e as KeyboardEvent).key === "Enter") go();
   });
   ($("stage") as unknown as HTMLInputElement).addEventListener("input", (e) => {
     state.current = Number((e.target as HTMLInputElement).value);
@@ -1229,12 +2012,62 @@ function wire() {
   });
   $("mLive").addEventListener("click", () => setMode("live"));
   $("mReplay").addEventListener("click", () => setMode("replay"));
+  // F7 — the alert language. A view choice, like text mode: it is in the link, so the
+  // answer can be sent to someone in the language they read.
+  $("langEn").addEventListener("click", () => setAlertLang("en"));
+  $("langEs").addEventListener("click", () => setAlertLang("es"));
+  $("share").addEventListener("click", () => { void shareLink(); });
+}
+
+function setAlertLang(lang: Lang) {
+  if (state.lang === lang) return;
+  state.lang = lang;
+  render();
+  syncUrl();
+}
+
+function setModeButtons() {
+  $("mLive").setAttribute("aria-pressed", state.mode === "live" ? "true" : "false");
+  $("mReplay").setAttribute("aria-pressed", state.mode === "replay" ? "true" : "false");
+}
+
+/* What the link claims, taken from what is on screen rather than restated here — a
+ * second copy of the verdict would be a second thing to drift. */
+function shareSummary(): string {
+  const street = state.selected?.properties.name ?? "no street selected";
+  const verdict = $("verdict").textContent?.trim() ?? "";
+  return `${street} — ${verdict} · BrazosCast, ${state.current.toFixed(1)} ft on the Richmond gauge`;
+}
+
+async function shareLink() {
+  syncUrl();
+  const url = location.href;
+  const note = $("shareNote");
+
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: "BrazosCast", text: shareSummary(), url });
+      note.textContent = "Shared.";
+      return;
+    } catch (e) {
+      // A cancelled share is not a failure and must not fall through to copying.
+      if ((e as DOMException)?.name === "AbortError") return;
+    }
+  }
+
+  try {
+    await navigator.clipboard.writeText(`${shareSummary()}\n${url}`);
+    note.textContent = "Link copied — it restores this street, stage and mode.";
+  } catch {
+    // The clipboard API needs a secure context and can be refused outright, so the
+    // link is shown instead of a button that appears to work and does nothing.
+    note.textContent = `Copy this link: ${url}`;
+  }
 }
 
 async function setMode(mode: "live" | "replay") {
   state.mode = mode;
-  $("mLive").setAttribute("aria-pressed", mode === "live" ? "true" : "false");
-  $("mReplay").setAttribute("aria-pressed", mode === "replay" ? "true" : "false");
+  setModeButtons();
   try {
     if (mode === "live") {
       await fetchLive();
@@ -1247,21 +2080,87 @@ async function setMode(mode: "live" | "replay") {
   render();
 }
 
+/* ---------------- offline ---------------- *
+ * The storm case: the connection is the first thing to go, and the page has to keep
+ * answering. app/public/sw.js caches the shell and whatever else the app has already
+ * asked for; these two functions only decide whether it is registered and say out loud
+ * when the browser has no network.
+ */
+function registerOffline() {
+  // Production only, and the guard is the feature: a dev server serves modules unhashed,
+  // so a service worker would hand back the previous version of a module from a URL that
+  // still looks current — the one bug that is worse than being offline.
+  if (!import.meta.env.PROD) return;
+  if (!("serviceWorker" in navigator)) return;
+  // Nothing can be installed with no connection, and a registration left half-installed
+  // is worse than none: the next online visit registers cleanly instead.
+  if (!navigator.onLine) return;
+  // Relative on purpose. base is "./", so this app may be deployed under a subpath, and
+  // an absolute "/sw.js" would land outside it.
+  void navigator.serviceWorker.register("./sw.js").catch(() => {
+    /* A registration that fails must not touch the answer on screen. */
+  });
+}
+
+/* navigator.onLine is the browser's own signal rather than a probe: it says the machine
+ * believes it has no network, which is the storm case and is deliberately not a claim
+ * that the server is reachable. The tag names what it actually tests. */
+function wireOfflineTag() {
+  const el = $("offlineTag");
+  const sync = () => { el.hidden = navigator.onLine; };
+  addEventListener("online", sync);
+  addEventListener("offline", sync);
+  sync();
+}
+
 async function boot() {
-  buildMap();
+  // The URL is read FIRST, because it decides whether the map is built at all. The old
+  // order (build the map, then read the URL) would begin downloading MapLibre before it
+  // could know a text-only visitor had asked not to have it.
+  pendingUrl = readUrl();
+  textOnly = pendingUrl.text;
+  state.lang = pendingUrl.lang;
+  applyTextMode();
+  // Before the first await, so the state of the connection is on screen from the first
+  // paint — including in text mode, which is the route most likely to be used on one.
+  wireOfflineTag();
+  // Not awaited: the map is a download, and the answer must not wait behind it. A failure
+  // here is a blank base map offline, never a broken answer, so it must not escape as an
+  // unhandled rejection either.
+  if (!textOnly) void buildMap().catch(() => {});
   await loadStatic();
   samples();
   wire();
-  try { await fetchLive(); } catch { await loadReplay(); state.mode = "replay"; }
+  // The URL decides the mode BEFORE anything is fetched, so a replay link does not
+  // make a live request only to throw it away — and on a flaky connection it does not
+  // wait for a live gauge before showing 2017.
+  if (pendingUrl.mode === "replay") {
+    await loadReplay();
+    state.mode = "replay";
+  } else {
+    try { await fetchLive(); } catch { await loadReplay(); state.mode = "replay"; }
+  }
+  setModeButtons();
   render();
+  await applyUrl();
+  // The net, once everything boot needs has loaded and the timeline can be read in one go.
+  keepOfflineCopy(loadedHere());
   // Dev-only inspection hook: the routing panel is verified against the pipeline
   // in a real browser, and screenshots are not always available. Stripped from
   // production builds by the DEV guard.
   if (import.meta.env.DEV) {
     (window as unknown as { brazoscast: unknown }).brazoscast =
       { map, state, widestTo, dijkstra, facilityNodes, applyTransfer, estimateFromUpstream,
-        fetchLive, runEnsemble, mulberry32, rmseFt, checkBackcastGrid, tierOnsets, flagCounts };
+        fetchLive, runEnsemble, mulberry32, rmseFt, checkBackcastGrid, tierOnsets, flagCounts,
+        checkAddresses, located, urlAddresses, parseAddress, canonicalStreet, editDistance,
+        nearestRoadIndex, buildRoadIndex,
+        islandForSegment, islandSpec, computeIsland,
+        readUrl, syncUrl, applyUrl, shareLink, shareSummary };
   }
 }
 
 boot();
+
+// Called, not awaited, and outside boot(): the offline copy is a background capability,
+// and nothing the user is looking at waits for it.
+registerOffline();

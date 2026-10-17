@@ -5,20 +5,55 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>BrazosCast — when water reaches your street</title>
   <meta name="description" content="Address-first flood lead-time for the lower Brazos at Richmond, Texas. Not whether the river is high — when water reaches your street, and how many hours you have." />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" />
+  <!-- The webfonts are 85 KB measured (5 woff2 files plus their CSS), and ?text=1 exists
+       for a phone on a connection where 85 KB is the difference between an answer and a
+       spinner. They are attached here, inline, because this is the only point that runs
+       BEFORE the browser would request them — a check inside the module is always too
+       late, and that is measured, not assumed: as a static <link> text mode downloaded
+       all five woff2 files. Text mode also preconnects to neither font host.
+       The token "text=1" is therefore stated twice, here and in readUrl(). The text-mode
+       test asserts the two agree; the CSS font stacks (Impact/Narrow, system sans, mono)
+       are the fallback either way, so text mode is legible with no webfont at all. -->
+  <script>
+    if (!/[?&]text=1(&|$)/.test(location.search)) {
+      [
+        ["https://fonts.googleapis.com", false],
+        ["https://fonts.gstatic.com", true],
+      ].forEach(function (h) {
+        var p = document.createElement("link");
+        p.rel = "preconnect";
+        p.href = h[0];
+        if (h[1]) p.crossOrigin = "";
+        document.head.appendChild(p);
+      });
+      var f = document.createElement("link");
+      f.rel = "stylesheet";
+      f.href = "https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap";
+      document.head.appendChild(f);
+    }
+  </script>
 </head>
 <body>
   <header class="hdr">
     <div class="hdr-in">
       <div class="brand"><b>BrazosCast</b><span>Richmond · Fort&nbsp;Bend&nbsp;County</span></div>
       <div class="hdr-sp"></div>
+      <!-- Shown only when the browser reports no connection. The service worker answers
+           from the last downloaded copy, which is why the page still works — but an old
+           reading presented as a live one would be worse than no reading, so the state
+           is stated instead of hidden. Its title says what "offline" means here. -->
+      <span class="offline-tag" id="offlineTag" hidden
+            title="Your browser reports no connection. The answer is coming from the last downloaded copy.">offline</span>
       <span class="src-tag" id="srcTag">connecting…</span>
       <div class="mode" role="group" aria-label="Data mode">
         <button id="mLive" aria-pressed="true">Live</button>
         <button id="mReplay" aria-pressed="false">Harvey replay</button>
       </div>
+      <!-- ?text=1 — the low-bandwidth view. A link, not a button: the mode is in the
+           URL, so it survives a refresh and can be sent to someone else as-is.
+           Its href is rebuilt from the current parameters by syncUrl(). -->
+      <a class="view-toggle" id="viewToggle" href="?text=1"
+         aria-label="Switch to the text-only view: no map, no chart, far less to download">Text-only</a>
     </div>
   </header>
 
@@ -26,11 +61,11 @@
     <section class="ask" aria-label="Find your street">
       <label for="addr">Your address</label>
       <div class="ask-row">
-        <input id="addr" type="text" list="samples" placeholder="e.g. 4710 Thompson Ferry Rd, Richmond, TX" autocomplete="off" />
+        <input id="addr" type="text" list="samples" placeholder="e.g. 1600 Jackson Street, Richmond, TX" autocomplete="off" aria-describedby="askHint" />
         <button id="go" class="go">Check my street</button>
       </div>
       <datalist id="samples"></datalist>
-      <p class="hint" id="askHint">Type an address, or click a road on the map.</p>
+      <p class="hint" id="askHint">Type an address or a modelled street name, or click a road on the map. Separate several addresses with | to rank them together.</p>
     </section>
 
     <section class="answer" id="answer" aria-live="polite">
@@ -42,6 +77,12 @@
           <p class="sub" id="sub">The river is a number. Your street is the answer.</p>
         </div>
         <div class="count"><b id="hours">—</b><span id="hoursLab">hours of lead time</span></div>
+      </div>
+      <!-- The answer is only useful if it can be carried to someone else. The address,
+           stage and mode all live in the URL, so this row is how the link gets out. -->
+      <div class="share-row">
+        <button id="share" class="share" type="button">Copy link to this answer</button>
+        <span class="share-note" id="shareNote">the address, stage and mode travel in the link</span>
       </div>
       <!-- Uncertainty ensemble (pipeline/derive/ensemble.py). The point estimate above is
            one run of one model; this is the same question asked across the measured error. -->
@@ -60,6 +101,40 @@
       <div class="prov" id="prov"></div>
     </section>
 
+    <!-- F3 — the household card. Hidden for one address: the answer above already IS that row.
+         Shown from two, ranked by when each is reached, with the row that is on screen marked
+         and every row clickable — the answer above is about exactly one of them. -->
+    <section class="card hh" id="hhCard" aria-label="Your household" hidden>
+      <div class="card-h"><h2>Your household</h2><span class="note" id="hhNote">—</span></div>
+      <div class="card-b">
+        <ol class="hh-list" id="hhList"></ol>
+        <p class="hint" id="hhHint">Soonest first. Click an address to make it the answer above.</p>
+      </div>
+    </section>
+
+    <!-- F7 — the answer, as it would reach someone who is not looking at the page. The
+         text and schedule are compiled at build time in English and Spanish
+         (pipeline/notify/templates.json), filled with THIS street's numbers, and the send
+         is simulated: nothing leaves the page. The language is a link parameter, because
+         the answer is meant to be passed on. Titles are filled from the same artifact, so
+         a half-translated card is not a state this can be in. -->
+    <section class="card al" id="alertCard" hidden aria-label="Simulated alert">
+      <div class="card-h"><h2 id="alTitle">The alert you would get</h2>
+        <span class="note" id="alNote">simulated send · nothing leaves this page</span></div>
+      <div class="card-b">
+        <div class="al-top">
+          <p class="al-lead" id="alLead"></p>
+          <div class="mode al-lang" id="alLang" role="group" aria-label="Alert language">
+            <button id="langEn" aria-pressed="true">EN</button>
+            <button id="langEs" aria-pressed="false">ES</button>
+          </div>
+        </div>
+        <ol class="al-list" id="alList"></ol>
+        <p class="al-none" id="alNone" hidden></p>
+        <p class="hint al-quiet" id="alQuiet"></p>
+      </div>
+    </section>
+
     <section class="chain" aria-label="Crest travelling down the gauge chain">
       <div class="card-h"><h2>Crest lead time from upstream gauges</h2>
         <span class="note" id="chainNote">derived from historical crest travel times</span></div>
@@ -76,6 +151,7 @@
           <span class="lg"><span class="sw" style="background:var(--flood)"></span>Under water at this stage</span>
           <span class="lg"><span class="sw" style="background:var(--you)"></span>Your segment</span>
           <span class="lg"><span class="sw" style="background:var(--levee)"></span>Levee-protected (HAND unreliable)</span>
+          <span class="lg"><span class="sw" style="background:var(--island)"></span>Edge of your island (crossing under water)</span>
           <span class="lg"><span class="sw" style="background:#10261d"></span>Modelled route to a destination</span>
         </div>
       </section>
@@ -98,6 +174,11 @@
         <section class="card">
           <div class="card-h"><h2>Ways out</h2><span class="note" id="exitNote">pick a street first</span></div>
           <div class="card-b" id="exits"><p class="muted">Enter an address, or click a road on the map.</p></div>
+          <!-- F4 — the largest set of roads still reachable from this street without
+               crossing water (pipeline/derive/routing.py's island sweep, recomputed in the
+               browser). Its extent is a sentence and its BOUNDARY is the amber line on the
+               map: the cut is the smaller set, and it is the one the question is about. -->
+          <p class="hint island-note" id="islandNote" hidden></p>
         </section>
       </div>
     </div>
@@ -105,6 +186,9 @@
     <section class="card hg">
       <div class="card-h"><h2>Stage history and forecast</h2><span class="note" id="chartNote">—</span></div>
       <div class="hgwrap"><canvas id="chart" height="300"></canvas></div>
+      <!-- The same series as a sentence, for the text-only route and for anyone the
+           canvas does not reach. renderChartText() fills it in both modes. -->
+      <p class="chart-text" id="chartText"></p>
     </section>
 
     <!-- Harvey backcast (pipeline/derive/backcast.py). Replay only: 2017 is the one flood
@@ -129,6 +213,7 @@
       Way out: computed in-repo from the road graph (<code>pipeline/derive/isolation.py</code>) — the stage at which every dry route off a street is cut.
       If <code>RMOT2</code> stops reporting, the stage is estimated from the upstream gauges (<code>pipeline/derive/gauge_redundancy.py</code>), labelled as estimated with a measured uncertainty band — and only once the last observation is too old for that to be the better answer.
       Routing: shortest path on that same graph to real OpenStreetMap destinations — hospitals, fire and police stations (<code>pipeline/derive/routing.py</code>), flooded segments weighted rather than removed so a fully-cut network still reports the best crossing.
+      Island: the same graph's connected pieces at the current stage — the roads still reachable from your street without crossing water — with the flooded segments at that island's edge drawn on the map. The extract is fragmented before any flooding, so an island without a responder is usually the boundary of the study area rather than a cut-off.
       Harvey backcast: the observed 2017 gauge record replayed through the same rule (<code>pipeline/derive/backcast.py</code>) — what the app <em>would</em> have sent, with the onsets and the crest observed and the per-street timing not.
       Flood zones: FEMA NFHL. Claims context: OpenFEMA.</p>
       <p class="disc">A working prototype. Road depths are modelled, never observed. Flood extents are provisional pending a unit check on the HAND raster.

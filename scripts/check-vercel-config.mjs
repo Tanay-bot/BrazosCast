@@ -105,4 +105,5 @@ if (problems.length) {
   console.error("Vercel host config:");
   for (const p of problems) console.error(`  ✗ ${p}`);
   process.exit(1);
-}  console.log(`   app/vercel.json: ${rules.length} rules, ${data.length} payload files, ${assets.length} hashed chunks`);
+}
+console.log(`   app/vercel.json: ${rules.length} rules, ${data.length} payload files, ${assets.length} hashed chunks`);

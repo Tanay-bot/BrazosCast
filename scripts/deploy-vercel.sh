@@ -18,7 +18,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST="$ROOT/app/dist"
-PROJECT="${BRAZOSCAST_VERCEL_PROJECT:-brazoscaster}"
+PROJECT="${BRAZOSCAST_VERCEL_PROJECT:-brazoscast}"
 CLI_VERSION="${BRAZOSCAST_VERCEL_CLI:-vercel@latest}"
 
 step() { printf '\n== %s\n' "$1"; }

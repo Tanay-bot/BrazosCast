@@ -2,6 +2,10 @@
 node_modules/
 dist/
 
+# Playwright: written on every run, useful only while debugging a failure
+app/test-results/
+app/playwright-report/
+
 # local tooling + editors
 .freebuff/
 .DS_Store
@@ -15,10 +19,56 @@ dist/
 *.log
 .logs/
 
-# large raw inputs (re-fetchable via pipeline/fetch)
-data/raw/*.tmp
+# ---- raw inputs (policy: docs/DATA-SOURCES.md § "Raw inputs — what is tracked, and why")
+#
+# The unit of decision is the tree or file a rule covers, because that is the unit
+# a command re-creates and the unit someone has to download.
+#
+# A raw input is COMMITTED when that unit is small AND one of:
+#   * a receipt or manifest of what was fetched;
+#   * a stable historical record a published number descends from;
+#   * a snapshot of a live product the artifacts were derived from — re-fetching
+#     a live product returns DIFFERENT data, so the artifacts would stop being
+#     derivable from the cache.
+# It is IGNORED when that unit is bulk and one committed command re-creates it.
+# So `data/raw/usgs/_summary.json` is ignored with the tree it describes although
+# it is a 4 KB receipt: it is useless in the repo while the 46 MB it accounts for
+# is excluded, and the one command below restores both. The exceptions below are
+# file-sized units carved out of a bulk tree.
+#
+# So every rule below says what re-creates it, and the exceptions that have to
+# survive a wholesale exclusion are marked. A rule with no comment above it is a
+# half-made decision; pipeline/tests/test_raw_input_policy.py refuses one.
+#
+# 66 MB / 14 files — HAND v2 for HUC 12070104. Nothing in pipeline/fetch produces
+# this: it is a manual archive download, and road_thresholds.py cannot run
+# without it. It is the ONE input a clone cannot fetch for itself — the trees
+# below it are recoverable with a command, this one is not.
 data/raw/hand/
-data/raw/usgs/
+#
+# 46 MB / 15 files — daily and annual-peak series for the seven corridor gauges,
+# ~7.4 MB per site. Re-created by: node pipeline/fetch/fetch_usgs_history.mjs 1985
+data/raw/usgs/*.json
+#
+# 50 MB / 124 files — 15-minute event caches, one file per (gauge, event), written
+# on demand by: python pipeline/analyze/travel_time_subdaily.py
+data/raw/usgs/iv/*.json
+#
+# ...except the ONE interval record the 2017 backcast replays. This one is
+# committed: it is the only input to backcast.py, ensemble.py and
+# harvey_validation.py and the source of the series the app replays, and it is a
+# closed historical event, so it can never be re-fetched to the same value. The
+# negation must follow the rule above, and needs no excluded parent directory to
+# apply — put the directory form (`data/raw/usgs/`) back and this silently stops
+# working, which is how it went undeclared in the first place.
+!data/raw/usgs/iv/08114000_20170822.json
+#
+# NOT ignored, and deliberately so — no rule below, because there is nothing to exclude:
+# data/raw/usfimr/ (4.7 MB / 2 files) holds the SECOND observed extent, the Sentinel-1
+# water edge second_event_validation.py refutes thresholds against. It is a fixed release
+# file of a closed 2016 event on a university host, so it is committed on the same
+# argument as the Harvey extent. Re-created by: node pipeline/fetch/fetch_usfimr_2016.mjs
+# ---- end raw inputs
 
 # Python
 __pycache__/

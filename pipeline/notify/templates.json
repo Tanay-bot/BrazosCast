@@ -1,0 +1,98 @@
+{
+  "_comment": [
+    "F7 — the alert text, written once and never at runtime. Everything here is shipped to",
+    "the app verbatim inside data/derived/notifications.json, so what a test renders is what a",
+    "phone would show. The pipeline (pipeline/derive/notifications.py) and the browser",
+    "(app/src/lib/notify.ts) both fill the same placeholders, and the parity test compares the",
+    "two strings character for character.",
+    "",
+    "Placeholders are exactly the set asserted by pipeline/tests/test_notifications.py:",
+    "  {street}    the modelled street name, or a fallback for the 210 unnamed segments",
+    "  {stage}     the street's own flood threshold in feet",
+    "  {river}     the gauge stage at the hour the message is sent",
+    "  {category}  the official NWS category at that hour — in the language of the message",
+    "  {hours}     whole hours from the send to the modelled crossing",
+    "  {when}      the local crossing time, language-formatted, 12-hour in both languages so",
+    "              the two messages carry the same digits",
+    "",
+    "Both languages must carry the SAME digits: a Spanish alert that says 48 where the English",
+    "says 45 is the failure mode this file exists to make untestable. Do not translate numbers,",
+    "street names, 'BrazosCast', or the 12-inch line (see the note on units below)."
+  ],
+  "_units_note": [
+    "The 12-inch line is quoted in inches in both languages, with the metric equivalent only in",
+    "the Spanish guidance that is NOT part of the SMS — a translated 30 cm would break the",
+    "digit-parity gate for a reason that has nothing to do with the alert being wrong."
+  ],
+  "tiers": [
+    {
+      "id": "early",
+      "hours_before": 72,
+      "label": { "en": "3 days out", "es": "3 días antes" },
+      "purpose": { "en": "know it is coming", "es": "sepa que viene" }
+    },
+    {
+      "id": "soon",
+      "hours_before": 24,
+      "label": { "en": "1 day out", "es": "1 día antes" },
+      "purpose": { "en": "make the plan", "es": "haga el plan" }
+    },
+    {
+      "id": "now",
+      "hours_before": 6,
+      "label": { "en": "6 hours out", "es": "6 horas antes" },
+      "purpose": { "en": "leave while it is still a choice", "es": "salga mientras sea una opción" }
+    }
+  ],
+  "placeholders": ["street", "stage", "river", "category", "hours", "when"],
+  "fallback_street": { "en": "your street", "es": "su calle" },
+  "templates": {
+    "en": {
+      "early": "BrazosCast 3 days out: the Brazos at Richmond is at {river} ft, {category}. {street} is modelled to go under at {stage} ft — about {hours} h from now, {when}. Plan a dry route and move what you can. This is a model, not an order.",
+      "soon": "BrazosCast 24 h out: {street} is modelled to flood at {stage} ft in about {hours} h ({when}). The river is at {river} ft, {category}. Fuel the car, pack medicines and documents, and tell someone your plan. Do not drive through water.",
+      "now": "BrazosCast 6 h out: water is expected on {street} at {stage} ft by {when}, about {hours} h. The river is at {river} ft, {category}. Leave now if you can, by a route you know is dry. 12 inches of moving water carries most cars away."
+    },
+    "es": {
+      "early": "BrazosCast 3 días antes: el Brazos en Richmond está en {river} pies, {category}. Se prevé que {street} quede bajo el agua a {stage} pies: unas {hours} h desde ahora, {when}. Planifique una ruta seca y mueva lo que pueda. Es un modelo, no una orden.",
+      "soon": "BrazosCast 24 h antes: se prevé que {street} se inunde a {stage} pies en unas {hours} h ({when}). El río está en {river} pies, {category}. Cargue gasolina, prepare medicamentos y documentos, y avise su plan a alguien. No conduzca por el agua.",
+      "now": "BrazosCast 6 h antes: se espera agua en {street} a {stage} pies para {when}, unas {hours} h. El río está en {river} pies, {category}. Salga ahora si puede, por una ruta que sepa seca. 12 pulgadas de agua en movimiento arrastran la mayoría de los autos."
+    }
+  },
+  "category_es": {
+    "No flooding": "sin inundación",
+    "Action stage": "etapa de acción",
+    "Minor flooding": "inundación menor",
+    "Moderate flooding": "inundación moderada",
+    "Major flooding": "inundación mayor"
+  },
+  "ui": {
+    "en": {
+      "title": "The alert you would get",
+      "note": "simulated send · nothing leaves this page",
+      "lead": "Each message is timed from this street's own modelled crossing, not from the river's category: the official flood stages arrived 7 and 4 hours apart in 2017, which would be three texts in one night and none about this street.",
+      "language": "Language",
+      "quiet": "22:00–07:00 local: the first two are held to 07:00; the 6-hour alert is never held. A held message that would land after the water is dropped, not sent late.",
+      "none": "No crossing is modelled in this forecast, so no alert would be sent.",
+      "past": "already sent, before this forecast",
+      "pick": "Pick a street to see the message it would produce.",
+      "river": "river",
+      "ft": "ft",
+      "held": "held out of quiet hours",
+      "short": "One message is not shown: it would have landed after the water, and the policy drops it rather than send it late."
+    },
+    "es": {
+      "title": "La alerta que recibiría",
+      "note": "envío simulado · nada sale de esta página",
+      "lead": "Cada mensaje se mide desde el cruce modelado de esta calle, no desde la categoría del río: las etapas oficiales de inundación llegaron con 7 y 4 horas de diferencia en 2017, es decir tres mensajes en una noche y ninguno sobre esta calle.",
+      "language": "Idioma",
+      "quiet": "22:00–07:00 hora local: los dos primeros se retienen hasta las 07:00; la alerta de 6 horas nunca se retiene. Un mensaje retenido que llegaría después del agua se descarta, no se envía tarde.",
+      "none": "No se prevé ningún cruce en este pronóstico, así que no se enviaría ninguna alerta.",
+      "past": "ya enviado, antes de este pronóstico",
+      "pick": "Elija una calle para ver el mensaje que produciría.",
+      "river": "río",
+      "ft": "pies",
+      "held": "retenido por horas tranquilas",
+      "short": "Un mensaje no se muestra: habría llegado después del agua, y la política lo descarta en lugar de enviarlo tarde."
+    }
+  }
+}

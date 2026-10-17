@@ -1,0 +1,320 @@
+{
+  "generated_at": "2026-10-17T00:07:23.646018+00:00",
+  "step": "UPGRADE-PLAN.md I1 \u2014 a second observed extent",
+  "question": "do the street thresholds reproduce a SECOND, independent flood \u2014 and does the correction fitted on Harvey generalise to it?",
+  "answer_headline": "at 49.40 ft on a rising limb, the image shows 1241 segments DRY that the shipped thresholds put under water at that stage, which is what a lower-stage observation can do and an event maximum cannot; the Harvey-fitted lift of +23.72 ft repairs 1190 of them, and this event implies a lift of -2.05 ft on its own",
+  "observation": {
+    "dataset": "USFIMR flood-inundation extent, Brazos River near Richmond, Texas",
+    "provider": "University of Alabama Surface Dynamics Modeling Lab (SDML), under a NOAA/UCAR subaward",
+    "licence": "CC BY 3.0 Unported",
+    "catalogue": "https://waterserv.ua.edu/datasets/usfimr/",
+    "cached_by": "pipeline/fetch/fetch_usfimr_2016.mjs",
+    "platform": "Sentinel-1 HV Polarization",
+    "resolution": "10m",
+    "acquired": "2016-05-30T00:26:20+00:00",
+    "area_km2": 214.9,
+    "event": "2016 Brazos flood (crested 54.74 ft on 2016-06-02; this is the rising limb)",
+    "gauges_named_in_the_layer": "08114000, 08116650",
+    "discharge_at_image_cfs": 80600.0,
+    "event_max_discharge_cfs": 102000.0,
+    "nature": "water edge from one Sentinel-1 HV image, with ground proofing from secondary sources rather than a survey; a radar water edge is not a surveyed extent and has known failure modes over vegetation and smooth open water"
+  },
+  "stage_basis": {
+    "stage_ft": 49.4,
+    "reading_at": "2016-05-30T00:30:00+00:00",
+    "minutes_from_the_image": 3.7,
+    "source": "USGS 08114000 instantaneous gage height, cached in-repo",
+    "acquisition_day_range_ft": [
+      49.31,
+      52.2
+    ],
+    "day_mean_ft": 50.87375,
+    "discharge_cross_check": {
+      "q_at_image_cfs": 80600.0,
+      "rating_stage_ft": 48.19022423043006,
+      "extrapolated": false,
+      "difference_from_gauge_ft": -1.21,
+      "why": "the layer's own Q_at_Image run through the rating Step 3 fixed is an independent read of the same instant; agreement means the image and the gauge describe the same water"
+    }
+  },
+  "method": {
+    "model": "flooded at this stage iff flood_stage_ft <= 49.40",
+    "corrected_rule": "flooded iff flood_stage_ft + 23.72 <= 49.40, the lift measured on Harvey alone, applied UNCHANGED and scored out of sample",
+    "observed": "segment geometry intersects the mapped water polygon",
+    "evaluated_set": "segments whose centroid lies inside the polygon's bounding box \u2014 the image maps the water and not the ground, so the box is the stand-in for scene coverage",
+    "evaluated_set_note": "not a mapped boundary, unlike the Harvey release: the sensitivity to this choice is reported rather than assumed away",
+    "stage_choice": "the gauge reading at the image instant, from the layer's own Flood_Date/Start_Time; the day's range is reported as a sensitivity because the surface is not at one stage across the reach (FINDINGS section 1)"
+  },
+  "confusion_matrix": {
+    "tp": 71,
+    "fp": 1241,
+    "fn": 2,
+    "tn": 300,
+    "n": 1614,
+    "accuracy": 0.2298636926889715,
+    "false_positive_rate": 0.8053212199870214,
+    "recall": 0.9726027397260274,
+    "precision": 0.054115853658536585,
+    "prevalence_observed": 0.045229244114002476,
+    "prevalence_modelled": 0.8128872366790583
+  },
+  "with_the_harvey_lift_applied": {
+    "tp": 4,
+    "fp": 51,
+    "fn": 69,
+    "tn": 1490,
+    "n": 1614,
+    "accuracy": 0.9256505576208178,
+    "false_positive_rate": 0.03309539260220636,
+    "recall": 0.0547945205479452,
+    "precision": 0.07272727272727272,
+    "prevalence_observed": 0.045229244114002476,
+    "prevalence_modelled": 0.03407682775712516
+  },
+  "refutations": {
+    "stage_ft": 49.4,
+    "segments_evaluated": 1614,
+    "observed_wet": 73,
+    "shipped_thresholds_below_the_stage": 1312,
+    "refuted_by_this_image": 1241,
+    "refuted_and_fixed_by_the_harvey_lift": 1190,
+    "why_this_is_the_point": "a segment shown dry at this stage has a true threshold ABOVE it; the shipped threshold below it is refuted. The Harvey maximum could not do this: a segment wet at 55.1 ft is consistent with flooding at 17 ft or at 55.1 ft, and every below-action segment there was wet."
+  },
+  "under_mapping_sensitivity": {
+    "observed_wet_segments": 73,
+    "refuted_segments": 1241,
+    "water_would_have_to_be_under_mapped_by_a_factor_of": 17.0,
+    "reading": "each of the refuted segments is a road the model puts under water at this stage and the image shows dry, so erasing every refutation by under-mapping would need the image to be missing this many times more water than it contains \u2014 the number, not an assurance"
+  },
+  "implied_lift_from_this_event_ft": -2.05,
+  "harvey_lift_ft": 23.72,
+  "lift_difference_ft": -25.77,
+  "best_cut_this_event": {
+    "by_accuracy": {
+      "stage_ft": 4.0,
+      "accuracy": 0.9547707558859975,
+      "recall": 0.0,
+      "specificity": 1.0,
+      "balanced_accuracy": 0.5,
+      "degenerate": true
+    },
+    "by_balanced_accuracy": {
+      "stage_ft": 47.349999999999845,
+      "accuracy": 0.26022304832713755,
+      "recall": 0.958904109589041,
+      "specificity": 0.227125243348475,
+      "balanced_accuracy": 0.593014676468758
+    },
+    "why_two": "on an observation whose wet class is a few per cent of the population, accuracy is maximised by predicting nothing wet \u2014 the first run of this file returned the search grid's floor for exactly that reason",
+    "read": "by_balanced_accuracy"
+  },
+  "sensitivity_to_evaluated_set": {
+    "whole_corridor": {
+      "tp": 71,
+      "fp": 1241,
+      "fn": 2,
+      "tn": 300,
+      "n": 1614,
+      "accuracy": 0.2298636926889715,
+      "false_positive_rate": 0.8053212199870214,
+      "recall": 0.9726027397260274,
+      "precision": 0.054115853658536585,
+      "prevalence_observed": 0.045229244114002476,
+      "prevalence_modelled": 0.8128872366790583
+    },
+    "near_water_1000m": {
+      "tp": 71,
+      "fp": 383,
+      "fn": 2,
+      "tn": 103,
+      "n": 559,
+      "accuracy": 0.3112701252236136,
+      "false_positive_rate": 0.7880658436213992,
+      "recall": 0.9726027397260274,
+      "precision": 0.15638766519823788,
+      "prevalence_observed": 0.13059033989266547,
+      "prevalence_modelled": 0.8121645796064401
+    },
+    "bbox_is_not_a_restriction": {
+      "segments_inside_polygon_bbox": 1614,
+      "of": 1614,
+      "note": "reported because the first version of this file used the box as the evaluated set: it excludes nothing, so it was measuring the whole corridor under another name"
+    }
+  },
+  "sensitivity_to_stage": {
+    "image_instant": {
+      "stage_ft": 49.4,
+      "shipped": {
+        "tp": 71,
+        "fp": 1241,
+        "fn": 2,
+        "tn": 300,
+        "n": 1614,
+        "accuracy": 0.2298636926889715,
+        "false_positive_rate": 0.8053212199870214,
+        "recall": 0.9726027397260274,
+        "precision": 0.054115853658536585,
+        "prevalence_observed": 0.045229244114002476,
+        "prevalence_modelled": 0.8128872366790583
+      },
+      "corrected": {
+        "tp": 4,
+        "fp": 51,
+        "fn": 69,
+        "tn": 1490,
+        "n": 1614,
+        "accuracy": 0.9256505576208178,
+        "false_positive_rate": 0.03309539260220636,
+        "recall": 0.0547945205479452,
+        "precision": 0.07272727272727272,
+        "prevalence_observed": 0.045229244114002476,
+        "prevalence_modelled": 0.03407682775712516
+      },
+      "refuted": 1241
+    },
+    "day_min": {
+      "stage_ft": 49.31,
+      "shipped": {
+        "tp": 71,
+        "fp": 1239,
+        "fn": 2,
+        "tn": 302,
+        "n": 1614,
+        "accuracy": 0.23110285006195788,
+        "false_positive_rate": 0.8040233614536015,
+        "recall": 0.9726027397260274,
+        "precision": 0.05419847328244275,
+        "prevalence_observed": 0.045229244114002476,
+        "prevalence_modelled": 0.8116480793060719
+      },
+      "corrected": {
+        "tp": 4,
+        "fp": 48,
+        "fn": 69,
+        "tn": 1493,
+        "n": 1614,
+        "accuracy": 0.9275092936802974,
+        "false_positive_rate": 0.031148604802076575,
+        "recall": 0.0547945205479452,
+        "precision": 0.07692307692307693,
+        "prevalence_observed": 0.045229244114002476,
+        "prevalence_modelled": 0.0322180916976456
+      },
+      "refuted": 1239
+    },
+    "day_max": {
+      "stage_ft": 52.2,
+      "shipped": {
+        "tp": 72,
+        "fp": 1302,
+        "fn": 1,
+        "tn": 239,
+        "n": 1614,
+        "accuracy": 0.1926889714993804,
+        "false_positive_rate": 0.844905905256327,
+        "recall": 0.9863013698630136,
+        "precision": 0.05240174672489083,
+        "prevalence_observed": 0.045229244114002476,
+        "prevalence_modelled": 0.8513011152416357
+      },
+      "corrected": {
+        "tp": 8,
+        "fp": 101,
+        "fn": 65,
+        "tn": 1440,
+        "n": 1614,
+        "accuracy": 0.8971499380421314,
+        "false_positive_rate": 0.06554185593770279,
+        "recall": 0.1095890410958904,
+        "precision": 0.07339449541284404,
+        "prevalence_observed": 0.045229244114002476,
+        "prevalence_modelled": 0.06753407682775713
+      },
+      "refuted": 1302
+    },
+    "day_mean": {
+      "stage_ft": 50.87375,
+      "shipped": {
+        "tp": 72,
+        "fp": 1280,
+        "fn": 1,
+        "tn": 261,
+        "n": 1614,
+        "accuracy": 0.20631970260223048,
+        "false_positive_rate": 0.8306294613887086,
+        "recall": 0.9863013698630136,
+        "precision": 0.05325443786982249,
+        "prevalence_observed": 0.045229244114002476,
+        "prevalence_modelled": 0.8376703841387856
+      },
+      "corrected": {
+        "tp": 5,
+        "fp": 72,
+        "fn": 68,
+        "tn": 1469,
+        "n": 1614,
+        "accuracy": 0.9132589838909542,
+        "false_positive_rate": 0.04672290720311486,
+        "recall": 0.0684931506849315,
+        "precision": 0.06493506493506493,
+        "prevalence_observed": 0.045229244114002476,
+        "prevalence_modelled": 0.04770755885997522
+      },
+      "refuted": 1280
+    },
+    "layer_Q_through_rating": {
+      "stage_ft": 48.19022423043006,
+      "shipped": {
+        "tp": 70,
+        "fp": 1214,
+        "fn": 3,
+        "tn": 327,
+        "n": 1614,
+        "accuracy": 0.2459727385377943,
+        "false_positive_rate": 0.7878001297858533,
+        "recall": 0.958904109589041,
+        "precision": 0.05451713395638629,
+        "prevalence_observed": 0.045229244114002476,
+        "prevalence_modelled": 0.7955390334572491
+      },
+      "corrected": {
+        "tp": 3,
+        "fp": 45,
+        "fn": 70,
+        "tn": 1496,
+        "n": 1614,
+        "accuracy": 0.9287484510532837,
+        "false_positive_rate": 0.029201817001946788,
+        "recall": 0.0410958904109589,
+        "precision": 0.0625,
+        "prevalence_observed": 0.045229244114002476,
+        "prevalence_modelled": 0.02973977695167286
+      },
+      "refuted": 1214
+    }
+  },
+  "below_action_segments": {
+    "n": 22,
+    "observed_wet": 1,
+    "shipped_says_wet_at_this_stage": 22,
+    "observed_dry_share": 0.9545454545454546,
+    "what_it_means": "these segments claim to submerge at or below the 20 ft action stage. At 49.40 ft the model says every one of them is under water; the image shows how many were dry, and each of those refutes its threshold. This is the first observation in the repo that can say anything at all about them, because it is BELOW the stage at which they claim to flood."
+  },
+  "discrimination_at_this_stage": {
+    "auc": 0.5461939854035363,
+    "auc_on_harveys_evaluated_set": 0.5664849310919279,
+    "n_corridor": 1614,
+    "n_harveys_evaluated_set": 1187,
+    "harvey_auc": 0.809,
+    "why_two_populations": "an AUC depends on the population it is computed over, and Harvey's 0.809 was measured on its own mapped-boundary set; both are reported so the two events are not compared across two different evaluated sets",
+    "why_it_matters": "a constant lift is rank-preserving, so it CANNOT change the within-event AUC. Harvey's 0.809 says the thresholds order water above dry there; this event's 0.546 says they barely do at a lower stage. That is why the two events imply different corrections, and it is a stronger statement than either event's confusion matrix: no offset fixes a ranking."
+  },
+  "what_this_changes": "Step 3 closed every correction route for want of a second event to test one on, and Step 6 could not touch the below-action thresholds because a maximum extent cannot refute a low threshold. Both of those now have a second, independent observation behind them; whether the correction SHIPS is still a separate decision, and the numbers above are what that decision rests on.",
+  "limits": [
+    "one instant on the rising limb of a second event \u2014 not a series, so a segment the image shows DRY bounds its threshold from below and a segment it shows WET says nothing about where between 0 and 49.40 ft it flooded",
+    "a radar water edge, with vegetation, smooth water and wind-roughening failure modes, ground-proofed from secondary sources rather than surveyed",
+    "the polygon bounds the WATER, not the scene, so 'dry' is only as good as the assumption that the scene covered the corridor's ground; the near-water evaluated set is the conservative variant and is reported alongside",
+    "one gauge, on a rising limb, for a reach whose crest travels downstream",
+    "the thresholds under test still inherit the HAND-as-stage defect this test measures; nothing here fixes them"
+  ]
+}

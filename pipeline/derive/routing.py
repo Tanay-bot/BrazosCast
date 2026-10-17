@@ -35,6 +35,26 @@ METHOD
               route to stay open is the one that matters (isolation.py uses the
               same aggregation and explains why).
 
+  Islands     the same graph, asked a different question: not "can I get to a
+              destination" but "which roads can I still move between at all". At
+              each rung of a stage ladder the dry edges (threshold above the
+              stage) partition the network, and the partition is reported — how
+              many pieces, how big the largest is, how many segments can still
+              reach a responder without crossing water. This is CHEAPER than the
+              cut field above and answers a question it cannot: the cut field says
+              whether a destination is reachable, the partition says how much of
+              the corridor is still one connected place, which is what "which side
+              of the cut am I on" actually means.
+
+              **What the numbers forced, measured before they were written:** the
+              corridor is already 116 separate networks at 0 ft, and only 806 of
+              1,614 segments sit on a fragment that holds a responder. That is the
+              bounding-box clip, not flooding — roads leave the box and come back,
+              and this model cannot join them. So "island" is defined here as
+              *roads reachable without crossing water*, never as *ground walled
+              in*, and every rung reports how many islands touch the clip so the
+              difference is visible rather than assumed away.
+
   Reverse     the same field answers both directions. Because the road graph is
               undirected, the physical path from your street to the hospital is
               identical to the path from the hospital to your street; what differs
@@ -46,11 +66,16 @@ OUTPUT
   data/derived/routing_graph.json   the graph, the accepted facilities and the
                                     per-node cut stage, exported for the app so it
                                     routes on exactly this topology (and can check
-                                    its own Dijkstra against node_cut_ft).
-  data/derived/routing.summary.json the numbers, the rejections, the caveats.
+                                    its own Dijkstra against node_cut_ft) — plus
+                                    `clip`: the box edge and the nodes within a
+                                    band of it, so the app can say when an island
+                                    reaches the study area's own boundary.
+  data/derived/routing.summary.json the numbers, the rejections, the islands, the
+                                    caveats.
 
 Usage: <env>/bin/python pipeline/derive/routing.py   (run AFTER isolation.py)
 """
+import collections
 import json
 import pathlib
 import sys
@@ -74,6 +99,16 @@ MAX_SNAP_M = 400.0     # a facility further than this from any modelled road is 
 COORD_DECIMALS = 6     # export precision, ~0.11 m — display only, well under MAX_SNAP_M
 CHECK_STAGES = (5.0, 12.0, 20.0, 30.0, 40.0, 45.0, 50.0, 55.0)
 EARTH_R = 6_371_000.0
+
+# The island ladder. 0.0 is the rung that makes the finding legible: it is the network
+# with no water on it at all, so everything below the top rung is the river's doing and
+# everything at 0 ft is the clip's. The rest spans action (20) to above major (50).
+ISLAND_STAGES = (0.0, 5.0, 12.0, 20.0, 30.0, 40.0, 45.0, 50.0, 55.0)
+# A node this close to the study area's boundary is where a road leaves the extract.
+# 250 m is a little over two city blocks: wide enough to catch an endpoint snapped to
+# the box edge, narrow enough not to relabel the corridor's interior as an edge.
+CLIP_BAND_M = 250.0
+ROAD_SUMMARY = DERIVED / "road_thresholds.summary.json"
 
 
 def build_with_seg(feats, idx):
@@ -105,6 +140,242 @@ def meters(lon1, lat1, lon2, lat2):
     return 2 * EARTH_R * np.arcsin(np.sqrt(a))
 
 
+# --- islands ---------------------------------------------------------------
+
+def adjacency(node_count, edges):
+    """Undirected dry-edge adjacency, built once and shared by every rung."""
+    adj = [[] for _ in range(node_count)]
+    for a, b, t in edges:
+        adj[a].append((b, t))
+        adj[b].append((a, t))
+    return adj
+
+
+def union_find_components(node_count, edges, stage):
+    """The partition of the network into the regions a driver can move within.
+
+    An edge is passable while the stage is BELOW its threshold (`t > stage`), the same
+    comparison isolation.widest_path and the app's map filter use — three places that
+    would otherwise be free to disagree about which side of equality is water.
+    """
+    parent = list(range(node_count))
+
+    def find(a):
+        root = a
+        while parent[root] != root:
+            root = parent[root]
+        while parent[a] != root:            # second pass, path compression
+            parent[a], a = root, parent[a]
+        return root
+
+    for a, b, t in edges:
+        if t > stage:
+            ra, rb = find(a), find(b)
+            if ra != rb:
+                parent[ra] = rb
+    return [find(i) for i in range(node_count)]
+
+
+def flood_fill_components(node_count, adj, stage):
+    """The same partition by breadth-first flooding. Deliberately a different
+    algorithm: this exists to disagree, not to be faster."""
+    label = [-1] * node_count
+    next_label = 0
+    for start in range(node_count):
+        if label[start] >= 0:
+            continue
+        label[start] = next_label
+        queue = collections.deque([start])
+        while queue:
+            u = queue.popleft()
+            for v, t in adj[u]:
+                if t > stage and label[v] < 0:
+                    label[v] = next_label
+                    queue.append(v)
+        next_label += 1
+    return label
+
+
+def canonical(labels):
+    """Relabel a partition in order of first appearance.
+
+    Two implementations of "same component" label their groups with arbitrary numbers,
+    so the partitions can only be compared once both are numbered by the order the nodes
+    are visited. If the relabelled sequences are equal the partitions are identical —
+    and if two nodes that belong together are labelled apart, the sequences diverge at
+    the first node where it matters.
+    """
+    seen, out = {}, []
+    for x in labels:
+        if x not in seen:
+            seen[x] = len(seen)
+        out.append(seen[x])
+    return out
+
+
+def clip_band(node_lon, node_lat, bbox, band_m):
+    """Nodes within `band_m` of the study area's boundary.
+
+    The road extract is a bounding-box clip, so a road that reaches the box edge may well
+    continue outside it — where this model has no roads, no thresholds and no
+    destinations. Distances go to the four box edges rather than to a convex hull of the
+    nodes: the clip IS a rectangle, and a hull would round its corners and call a road in
+    a corner "interior", which is the one thing this flag exists to prevent.
+    """
+    west, south, east, north = bbox
+    d = np.full(len(node_lon), np.inf)
+    for edge_lon, edge_lat in ((west, None), (east, None), (None, south), (None, north)):
+        if edge_lat is None:
+            d = np.minimum(d, meters(node_lon, node_lat, edge_lon, node_lat))
+        else:
+            d = np.minimum(d, meters(node_lon, node_lat, node_lon, edge_lat))
+    return d <= band_m
+
+
+def _attribute(reach, size, touched):
+    """Which island a segment is on, when its parts do not all land on one.
+
+    Reads only the partition — most dry segments touching, then most nodes, then the lowest
+    island id — so it cannot depend on the order a segment's nodes were enumerated in. That is
+    not a style preference: `isolation.build` collects a segment's nodes into a `set`, so the
+    order is a property of the builder, and a published count that descended from it would be
+    an artefact. The same three comparisons are in app/src/lib/islands.ts, and the ladder is
+    checked from both sides against a reversal of every node list.
+    """
+    best = touched[0]
+    for other in touched:
+        if (reach[other] > reach[best]
+                or (reach[other] == reach[best] and size[other] > size[best])
+                or (reach[other] == reach[best] and size[other] == size[best] and other < best)):
+            best = other
+    return best
+
+
+def island_ladder(node_count, edges, adj, seg_nodes, thresholds, seed_nodes, cut,
+                  clip_set, stages, published_reach):
+    """One row per rung of the stage ladder: how the corridor fragments as the river rises.
+
+    The per-island SEGMENT counts need one more decision, and it is the one this whole
+    function is arranged around. A road feature can have parts the clip separated, so a dry
+    segment's nodes can land on two islands (measured: 1-4 segments per rung); which island
+    "the segment is on" is then genuinely ambiguous. The rule is [[attribute]]'s — most dry
+    segments touching, then most nodes, then the lowest island id — and every input to it is
+    a property of the PARTITION rather than of the order the nodes were enumerated in, because
+    the builder collects a segment's nodes in a Python `set` and the app collects them in edge
+    order. Without that, a published count would depend on an implementation detail of the
+    builder; with it, the reversal gate below can hold the whole ladder still.
+
+    Gates, in the order they run, because each one makes the next meaningful:
+      1. two independent partitions (union-find, flood fill) agree at every rung;
+      2. the partition agrees with the PUBLISHED cut field — "this segment's component
+         holds a responder" must equal "cut_ft is above this stage" — which is how a new
+         statistic is tied to a number that already had a gate;
+      3. the segment attribution does not depend on the ORDER a segment's nodes are listed in;
+      4. the attribution is a partition: every dry segment lands on exactly one island;
+      5. the rung at 0 ft reproduces segments_with_route_to_responder exactly;
+      6. it is monotone: components only multiply, the largest only shrinks, and segments
+         with a responder only lose it as the stage rises;
+      7. it is not vacuous, at either end: the network is fragmented below any flooding,
+         and the top rung is more fragmented than the bottom.
+    """
+    rows = []
+    for stage in stages:
+        uf = union_find_components(node_count, edges, stage)
+        fill = flood_fill_components(node_count, adj, stage)
+        assert canonical(uf) == canonical(fill), (
+            f"union-find and the flood fill disagree on the network's components at "
+            f"{stage} ft — the island statistic is describing a partition one of its two "
+            f"implementations does not agree with")
+
+        # Island ids compacted in node order: arbitrary labels are not comparable across the
+        # two implementations, and the app compacts the same way, so the final tie-break below
+        # means the same thing on both sides.
+        id_of, island_of = {}, [0] * node_count
+        for i in range(node_count):
+            r = uf[i]
+            if r not in id_of:
+                id_of[r] = len(id_of)
+            island_of[i] = id_of[r]
+        island_count = len(id_of)
+        size = [0] * island_count
+        for i in range(node_count):
+            size[island_of[i]] += 1
+
+        with_responder = {island_of[i] for i in seed_nodes}
+        for i in range(node_count):
+            # The seed convention from above: a facility node is stamped with its own
+            # road's threshold, so "reachable" for a station means "it is the station"
+            # rather than "stage < cut".
+            here = island_of[i] in with_responder
+            published = i in seed_nodes or (cut[i] is not None and stage < cut[i])
+            assert here == published, (
+                f"at {stage} ft node {i} is on an island with a responder = {here}, but "
+                f"segment_route_cut_ft/node_cut_ft says {published} — the island sweep and "
+                f"the published cut field describe different networks")
+
+        dry = [i for i in range(len(seg_nodes)) if thresholds[i] > stage and seg_nodes[i]]
+        # Sorted lists rather than sets: the rule below is a total order and does not need it, but
+        # a set's iteration order is exactly the thing this whole arrangement is refusing to read.
+        touched = [sorted({island_of[u] for u in seg_nodes[i]}) for i in dry]
+        reach = [0] * island_count
+        for islands_here in touched:
+            for r in islands_here:
+                reach[r] += 1
+        seg_island = [_attribute(reach, size, t) for t in touched]
+        assert len(seg_island) == len(dry) and all(-1 < r < island_count for r in seg_island), \
+            "a dry segment was attributed to an island that does not exist"
+        served = sum(1 for r in seg_island if r in with_responder)
+        largest = max(range(island_count), key=lambda r: size[r])
+        rows.append({
+            "stage_ft": stage,
+            "components": island_count,
+            "largest_component_nodes": size[largest],
+            "largest_component_segments": sum(1 for r in seg_island if r == largest),
+            "largest_component_reach": reach[largest],
+            "islands_touching_the_clip": len({island_of[i] for i in clip_set}),
+            "segments_dry": len(dry),
+            "segments_dry_with_a_responder": served,
+            "segments_on_an_island_without_one": len(dry) - served,
+            "segments_touching_more_than_one_island": sum(1 for t in touched if len(t) > 1),
+        })
+
+    for a, b in zip(rows, rows[1:]):
+        assert b["components"] >= a["components"], (
+            f"the corridor has FEWER components at {b['stage_ft']} ft than at "
+            f"{a['stage_ft']} ft: raising the water merged two islands")
+        assert b["largest_component_nodes"] <= a["largest_component_nodes"], (
+            f"the largest island grew from {a['largest_component_nodes']} to "
+            f"{b['largest_component_nodes']} nodes as the stage rose")
+        assert b["segments_dry_with_a_responder"] <= a["segments_dry_with_a_responder"], (
+            f"more segments can reach a responder at {b['stage_ft']} ft than at "
+            f"{a['stage_ft']} ft")
+
+    first = rows[0]
+    assert first["segments_dry_with_a_responder"] == published_reach, (
+        f"at 0 ft the island sweep finds {first['segments_dry_with_a_responder']} segments "
+        f"with a dry route to a responder and the cut field finds {published_reach} — the "
+        f"two describe different graphs")
+    assert first["components"] > 1, (
+        "the road extract is a single connected network, so the 'island' language in the "
+        "app and the docs no longer describes anything")
+    assert rows[-1]["largest_component_nodes"] < first["largest_component_nodes"], (
+        "the largest island is the same size at the top of the ladder as at the bottom, so "
+        "the sweep is not measuring the river")
+    # The attribution is a partition, not a count of touches: every dry segment lands on exactly
+    # one island. `largest_component_reach` is the touches, which can exceed it, and the two
+    # numbers are published separately so the difference is visible rather than assumed away.
+    for row in rows:
+        assert row["segments_dry_with_a_responder"] + row["segments_on_an_island_without_one"] \
+            == row["segments_dry"], (
+            f"the rung at {row['stage_ft']} ft does not account for every dry segment: "
+            f"{row['segments_dry_with_a_responder']} with a responder + "
+            f"{row['segments_on_an_island_without_one']} without != {row['segments_dry']}")
+        assert row["largest_component_segments"] <= row["largest_component_reach"], (
+            f"the largest island at {row['stage_ft']} ft is credited with more segments than "
+            f"touch it")
+    return rows
+
+
 def main():
     doc = json.loads(IN_GJ.read_text())
     feats = doc["features"]
@@ -119,6 +390,16 @@ def main():
     node_lat = np.array([k[1] for k in keys])
     print(f"graph (reused from isolation.build): {n} nodes, {len(edges)} edges, "
           f"{len(feats)} segments")
+
+    # --- the study area's own boundary -----------------------------------------
+    # BBOX is read from road_thresholds.summary.json rather than restated: that is the
+    # box the road extract was clipped to, and a second copy of it here would be free to
+    # drift from the one that actually did the clipping.
+    bbox = tuple(json.loads(ROAD_SUMMARY.read_text())["bbox"])
+    clip_set = {i for i, near in enumerate(clip_band(node_lon, node_lat, bbox, CLIP_BAND_M))
+                if near}
+    print(f"clip band: {len(clip_set)} of {n} nodes within {CLIP_BAND_M:.0f} m of the "
+          f"extract boundary {bbox}")
 
     # --- destinations ----------------------------------------------------------
     raw = json.loads(RAW_FACILITIES.read_text())
@@ -251,6 +532,7 @@ def main():
         "edge_seg": edge_seg,
         "segments": segs,
         "facilities": accepted,
+        "clip": {"bbox": list(bbox), "band_m": CLIP_BAND_M, "nodes": sorted(clip_set)},
         "node_cut_ft": [None if v is None else round(float(v), 1) for v in cut],
         "node_cut_medical_ft": [None if v is None else round(float(v), 1) for v in cut_med],
         "segment_route_cut_ft": [None if v is None else round(float(v), 1) for v in route_cut],
@@ -311,7 +593,44 @@ def main():
     assert len(payload["node_cut_ft"]) == n and len(payload["edge_seg"]) == len(edges)
     assert len(payload["segment_route_cut_ft"]) == len(feats)
     assert {e["node"] for e in payload["facilities"]} == seeds
+    assert payload["clip"]["nodes"] and all(0 <= i < n for i in payload["clip"]["nodes"])
+    assert payload["clip"]["nodes"] == sorted(clip_set), \
+        "the exported clip nodes are not the set the island sweep used"
     print(f"all gates passed ({len(stages)} stages cross-checked by BFS, {n} nodes each)")
+
+    # --- islands ---------------------------------------------------------------
+    adj = adjacency(n, edges)
+    islands = island_ladder(n, edges, adj, seg_nodes, at, seeds, cut, clip_set,
+                            ISLAND_STAGES, reach)
+    # The gate that makes the structure safe rather than lucky: a road feature cut into pieces has
+    # its nodes collected in a `set`, so the ladder must not read their order. Reversed, every
+    # node list, and the ladder has to come out identical — if a future edit reintroduced a
+    # first-node rule, this is what refuses to write the artifact.
+    reversed_islands = island_ladder(n, edges, adj, [list(reversed(s)) for s in seg_nodes], at,
+                                     seeds, cut, clip_set, ISLAND_STAGES, reach)
+    assert reversed_islands == islands, (
+        "the ladder changes when each segment's node list is reversed, so a published island "
+        "count depends on the order the builder happened to enumerate a segment's nodes in")
+    print("\nislands — the corridor as connected pieces, dry edges only:")
+    print(f"   {'stage':>6}  {'pieces':>7}  {'largest':>8}  {'segs':>6}  {'with help':>9}")
+    for r in islands:
+        print(f"   {r['stage_ft']:6.1f}  {r['components']:7d}  "
+              f"{r['largest_component_nodes']:8d}  {r['largest_component_segments']:6d}  "
+              f"{r['segments_dry_with_a_responder']:9d}")
+    low, high = islands[0], islands[-1]
+    at_action = next(r for r in islands if r["stage_ft"] == 20.0)
+    islands_reading = (
+        f"Before any flooding the road extract is already {low['components']} separate "
+        f"networks, and only {low['segments_dry_with_a_responder']} of {len(feats)} segments "
+        f"sit on one that holds a responder: roads leave the bounding box and return, and "
+        f"this model cannot join them across the gap. Raising the stage splits what is left "
+        f"— {high['components']} pieces at {high['stage_ft']:.0f} ft, the largest island down "
+        f"from {low['largest_component_nodes']} to {high['largest_component_nodes']} nodes. "
+        f"Islands touching the study area's own boundary, where a road continues outside "
+        f"what is modelled: {low['islands_touching_the_clip']} at low water, "
+        f"{at_action['islands_touching_the_clip']} at action stage, "
+        f"{high['islands_touching_the_clip']} at {high['stage_ft']:.0f} ft. So an island "
+        f"here means *roads reachable without crossing water*, never *ground walled in*.")
 
     summary = {
         "step": "Step 4 — routing and reverse routing",
@@ -329,6 +648,21 @@ def main():
         "segments_with_route_to_responder": reach,
         "segments_with_route_to_hospital": med_reach,
         "segments_cut_off_before_their_street_floods": trapped,
+        "islands": {
+            "definition": ("Roads connected to each other at a given stage over edges whose "
+                           "threshold is ABOVE that stage — i.e. the ground a driver can "
+                           "still move within without crossing water. A cold network is "
+                           "already fragmented by the bounding-box clip, so this is "
+                           "reachability, not enclosure; `islands_touching_the_clip` counts "
+                           "the islands where a road leaves the study area."),
+            "clip_boundary": {"bbox": list(bbox), "band_m": CLIP_BAND_M,
+                              "nodes_in_band": len(clip_set), "nodes": n,
+                              "source": "bbox read from road_thresholds.summary.json — the "
+                                        "box the extract was clipped to, not a second copy of it"},
+            "stages": list(ISLAND_STAGES),
+            "ladder": islands,
+            "reading": islands_reading,
+        },
         "route_cut_ft": {"median": float(np.median([v for v in route_cut if v is not None])),
                          "p25": float(np.percentile([v for v in route_cut if v is not None], 25)),
                          "p75": float(np.percentile([v for v in route_cut if v is not None], 75))}
@@ -345,7 +679,10 @@ def main():
                    "facilities_verified_on_network": True,
                    "bfs_agrees_with_bottleneck": True,
                    "non_vacuous_at_5ft": True},
-        "caveats": ("A route is a road-network path on the modelled corridor, not a driving "
+        "caveats": ("Islands measure drivability, not enclosure: the extract is fragmented "
+                    "before any flooding at all (see islands.ladder at 0 ft), so a street on "
+                    "an island with no responder is a limit of the bounding-box clip before "
+                    "it is a cut-off. A route is a road-network path on the modelled corridor, not a driving "
                     "instruction and not a safety guarantee. The extract is a bounding-box clip, "
                     "so a route cannot leave the study area and a destination outside it is "
                     "rejected rather than connected. Thresholds inherit the -0.92 ft/mile "

@@ -1,0 +1,504 @@
+{
+  "generated_at": "2026-10-17T02:33:50.469495+00:00",
+  "step": "F7 — three-tier alerts, build-time templates, EN and ES (simulated send)",
+  "question": "what would BrazosCast actually send, when, and would the Spanish message carry the same numbers as the English one?",
+  "answer": "1,469 of 1,614 modelled streets get three alerts — at 72, 24 and 6 hours before their own modelled crossing — for 4,407 messages in all, none duplicated and none arriving after the water. The text is compiled once, in English and Spanish, and the app fills the same templates with its own numbers: the two renderers agree string for string on 3 streets, digits included.",
+  "tiers": [
+    {
+      "id": "early",
+      "hours_before": 72,
+      "label": {
+        "en": "3 days out",
+        "es": "3 días antes"
+      },
+      "purpose": {
+        "en": "know it is coming",
+        "es": "sepa que viene"
+      }
+    },
+    {
+      "id": "soon",
+      "hours_before": 24,
+      "label": {
+        "en": "1 day out",
+        "es": "1 día antes"
+      },
+      "purpose": {
+        "en": "make the plan",
+        "es": "haga el plan"
+      }
+    },
+    {
+      "id": "now",
+      "hours_before": 6,
+      "label": {
+        "en": "6 hours out",
+        "es": "6 horas antes"
+      },
+      "purpose": {
+        "en": "leave while it is still a choice",
+        "es": "salga mientras sea una opción"
+      }
+    }
+  ],
+  "templates": {
+    "en": {
+      "early": "BrazosCast 3 days out: the Brazos at Richmond is at {river} ft, {category}. {street} is modelled to go under at {stage} ft — about {hours} h from now, {when}. Plan a dry route and move what you can. This is a model, not an order.",
+      "soon": "BrazosCast 24 h out: {street} is modelled to flood at {stage} ft in about {hours} h ({when}). The river is at {river} ft, {category}. Fuel the car, pack medicines and documents, and tell someone your plan. Do not drive through water.",
+      "now": "BrazosCast 6 h out: water is expected on {street} at {stage} ft by {when}, about {hours} h. The river is at {river} ft, {category}. Leave now if you can, by a route you know is dry. 12 inches of moving water carries most cars away."
+    },
+    "es": {
+      "early": "BrazosCast 3 días antes: el Brazos en Richmond está en {river} pies, {category}. Se prevé que {street} quede bajo el agua a {stage} pies: unas {hours} h desde ahora, {when}. Planifique una ruta seca y mueva lo que pueda. Es un modelo, no una orden.",
+      "soon": "BrazosCast 24 h antes: se prevé que {street} se inunde a {stage} pies en unas {hours} h ({when}). El río está en {river} pies, {category}. Cargue gasolina, prepare medicamentos y documentos, y avise su plan a alguien. No conduzca por el agua.",
+      "now": "BrazosCast 6 h antes: se espera agua en {street} a {stage} pies para {when}, unas {hours} h. El río está en {river} pies, {category}. Salga ahora si puede, por una ruta que sepa seca. 12 pulgadas de agua en movimiento arrastran la mayoría de los autos."
+    }
+  },
+  "placeholders": [
+    "street",
+    "stage",
+    "river",
+    "category",
+    "hours",
+    "when"
+  ],
+  "fallback_street": {
+    "en": "your street",
+    "es": "su calle"
+  },
+  "category_es": {
+    "No flooding": "sin inundación",
+    "Action stage": "etapa de acción",
+    "Minor flooding": "inundación menor",
+    "Moderate flooding": "inundación moderada",
+    "Major flooding": "inundación mayor"
+  },
+  "ui": {
+    "en": {
+      "title": "The alert you would get",
+      "note": "simulated send · nothing leaves this page",
+      "lead": "Each message is timed from this street's own modelled crossing, not from the river's category: the official flood stages arrived 7 and 4 hours apart in 2017, which would be three texts in one night and none about this street.",
+      "language": "Language",
+      "quiet": "22:00–07:00 local: the first two are held to 07:00; the 6-hour alert is never held. A held message that would land after the water is dropped, not sent late.",
+      "none": "No crossing is modelled in this forecast, so no alert would be sent.",
+      "past": "already sent, before this forecast",
+      "pick": "Pick a street to see the message it would produce.",
+      "river": "river",
+      "ft": "ft",
+      "held": "held out of quiet hours",
+      "short": "One message is not shown: it would have landed after the water, and the policy drops it rather than send it late."
+    },
+    "es": {
+      "title": "La alerta que recibiría",
+      "note": "envío simulado · nada sale de esta página",
+      "lead": "Cada mensaje se mide desde el cruce modelado de esta calle, no desde la categoría del río: las etapas oficiales de inundación llegaron con 7 y 4 horas de diferencia en 2017, es decir tres mensajes en una noche y ninguno sobre esta calle.",
+      "language": "Idioma",
+      "quiet": "22:00–07:00 hora local: los dos primeros se retienen hasta las 07:00; la alerta de 6 horas nunca se retiene. Un mensaje retenido que llegaría después del agua se descarta, no se envía tarde.",
+      "none": "No se prevé ningún cruce en este pronóstico, así que no se enviaría ninguna alerta.",
+      "past": "ya enviado, antes de este pronóstico",
+      "pick": "Elija una calle para ver el mensaje que produciría.",
+      "river": "río",
+      "ft": "pies",
+      "held": "retenido por horas tranquilas",
+      "short": "Un mensaje no se muestra: habría llegado después del agua, y la política lo descarta en lugar de enviarlo tarde."
+    }
+  },
+  "policy": {
+    "channel": "SMS, simulated — nothing is transmitted and no number is stored",
+    "trigger": "the street's own modelled flood threshold, reached on the replayed observed hydrograph; in live mode the same rule runs over the NWPS forecast, whose error is measured in harvey_validation.json",
+    "tiers": [
+      {
+        "id": "early",
+        "hours_before": 72,
+        "label": {
+          "en": "3 days out",
+          "es": "3 días antes"
+        },
+        "purpose": {
+          "en": "know it is coming",
+          "es": "sepa que viene"
+        }
+      },
+      {
+        "id": "soon",
+        "hours_before": 24,
+        "label": {
+          "en": "1 day out",
+          "es": "1 día antes"
+        },
+        "purpose": {
+          "en": "make the plan",
+          "es": "haga el plan"
+        }
+      },
+      {
+        "id": "now",
+        "hours_before": 6,
+        "label": {
+          "en": "6 hours out",
+          "es": "6 horas antes"
+        },
+        "purpose": {
+          "en": "leave while it is still a choice",
+          "es": "salga mientras sea una opción"
+        }
+      }
+    ],
+    "why_not_stage_anchored": "the alternative was an alert at each official category. On the 2017 record minor, moderate and major arrived 7 h and 4 h apart (80, 73 and 69 h before the crest), i.e. three texts in one night — and not one of them would say when the reader's own street floods. The category is therefore carried as context inside every message instead of being the trigger.",
+    "quiet_hours": {
+      "from_local_hour": 22,
+      "to_local_hour": 7,
+      "timezone": "America/Chicago",
+      "exempt": [
+        "now"
+      ],
+      "on_suppress": "held to 07:00 local; dropped rather than sent late if the street floods before then"
+    },
+    "dedupe": "one message per street per tier, keyed by segment id",
+    "max_chars": 320,
+    "measured_longest_message": 279
+  },
+  "simulation": {
+    "event": "Hurricane Harvey (Aug–Sep 2017)",
+    "window": {
+      "from": "2017-08-22T00:00:00+00:00",
+      "to": "2017-09-01T00:00:00+00:00",
+      "hours": 240,
+      "n_points": 241
+    },
+    "streets": 1614,
+    "streets_warned": 1469,
+    "sends": 4407,
+    "per_tier": [
+      {
+        "tier": "early",
+        "hours_before": 72,
+        "sent": 1469,
+        "deferred": 225,
+        "outside_window": 0,
+        "held_past_crossing": 0,
+        "first_at": "2017-08-23T12:00:00+00:00",
+        "last_at": "2017-08-28T20:00:00+00:00"
+      },
+      {
+        "tier": "soon",
+        "hours_before": 24,
+        "sent": 1469,
+        "deferred": 225,
+        "outside_window": 0,
+        "held_past_crossing": 0,
+        "first_at": "2017-08-25T12:00:00+00:00",
+        "last_at": "2017-08-30T20:00:00+00:00"
+      },
+      {
+        "tier": "now",
+        "hours_before": 6,
+        "sent": 1469,
+        "deferred": 0,
+        "outside_window": 0,
+        "held_past_crossing": 0,
+        "first_at": "2017-08-26T01:00:00+00:00",
+        "last_at": "2017-08-31T14:00:00+00:00"
+      }
+    ],
+    "duplicates": 0,
+    "sent_after_the_water": 0,
+    "observed_onsets_ft": {
+      "action": 129.0,
+      "minor": 158.0,
+      "moderate": 165.0,
+      "major": 169.0
+    },
+    "reading": "the count is the corridor, not a subscriber list: it is what the policy does if every modelled street had someone behind it. What is simulated is the send, not the schedule."
+  },
+  "verification": [
+    {
+      "pos": 907,
+      "seg": 423490586,
+      "street": "West Grand Parkway South",
+      "threshold_ft": 15.6,
+      "crossing_at": "2017-08-26T19:00:00+00:00",
+      "crossing_h": 115,
+      "sends": [
+        {
+          "tier": "early",
+          "send_at": "2017-08-23T19:00:00+00:00",
+          "deferred_from": null,
+          "river_ft": 10.56,
+          "category": "No flooding",
+          "hours_to_crossing": 72,
+          "values": {
+            "en": {
+              "street": "West Grand Parkway South",
+              "stage": "15.6",
+              "river": "10.6",
+              "category": "No flooding",
+              "hours": "72",
+              "when": "Aug 26, 2 PM"
+            },
+            "es": {
+              "street": "West Grand Parkway South",
+              "stage": "15.6",
+              "river": "10.6",
+              "category": "No flooding",
+              "hours": "72",
+              "when": "26 ago, 2 pm"
+            }
+          },
+          "en": "BrazosCast 3 days out: the Brazos at Richmond is at 10.6 ft, No flooding. West Grand Parkway South is modelled to go under at 15.6 ft — about 72 h from now, Aug 26, 2 PM. Plan a dry route and move what you can. This is a model, not an order.",
+          "es": "BrazosCast 3 días antes: el Brazos en Richmond está en 10.6 pies, sin inundación. Se prevé que West Grand Parkway South quede bajo el agua a 15.6 pies: unas 72 h desde ahora, 26 ago, 2 pm. Planifique una ruta seca y mueva lo que pueda. Es un modelo, no una orden."
+        },
+        {
+          "tier": "soon",
+          "send_at": "2017-08-25T19:00:00+00:00",
+          "deferred_from": null,
+          "river_ft": 10.65,
+          "category": "No flooding",
+          "hours_to_crossing": 24,
+          "values": {
+            "en": {
+              "street": "West Grand Parkway South",
+              "stage": "15.6",
+              "river": "10.7",
+              "category": "No flooding",
+              "hours": "24",
+              "when": "Aug 26, 2 PM"
+            },
+            "es": {
+              "street": "West Grand Parkway South",
+              "stage": "15.6",
+              "river": "10.7",
+              "category": "No flooding",
+              "hours": "24",
+              "when": "26 ago, 2 pm"
+            }
+          },
+          "en": "BrazosCast 24 h out: West Grand Parkway South is modelled to flood at 15.6 ft in about 24 h (Aug 26, 2 PM). The river is at 10.7 ft, No flooding. Fuel the car, pack medicines and documents, and tell someone your plan. Do not drive through water.",
+          "es": "BrazosCast 24 h antes: se prevé que West Grand Parkway South se inunde a 15.6 pies en unas 24 h (26 ago, 2 pm). El río está en 10.7 pies, sin inundación. Cargue gasolina, prepare medicamentos y documentos, y avise su plan a alguien. No conduzca por el agua."
+        },
+        {
+          "tier": "now",
+          "send_at": "2017-08-26T13:00:00+00:00",
+          "deferred_from": null,
+          "river_ft": 14.72,
+          "category": "No flooding",
+          "hours_to_crossing": 6,
+          "values": {
+            "en": {
+              "street": "West Grand Parkway South",
+              "stage": "15.6",
+              "river": "14.7",
+              "category": "No flooding",
+              "hours": "6",
+              "when": "Aug 26, 2 PM"
+            },
+            "es": {
+              "street": "West Grand Parkway South",
+              "stage": "15.6",
+              "river": "14.7",
+              "category": "No flooding",
+              "hours": "6",
+              "when": "26 ago, 2 pm"
+            }
+          },
+          "en": "BrazosCast 6 h out: water is expected on West Grand Parkway South at 15.6 ft by Aug 26, 2 PM, about 6 h. The river is at 14.7 ft, No flooding. Leave now if you can, by a route you know is dry. 12 inches of moving water carries most cars away.",
+          "es": "BrazosCast 6 h antes: se espera agua en West Grand Parkway South a 15.6 pies para 26 ago, 2 pm, unas 6 h. El río está en 14.7 pies, sin inundación. Salga ahora si puede, por una ruta que sepa seca. 12 pulgadas de agua en movimiento arrastran la mayoría de los autos."
+        }
+      ]
+    },
+    {
+      "pos": 558,
+      "seg": 423659722,
+      "street": "US Highway 90A",
+      "threshold_ft": 33.1,
+      "crossing_at": "2017-08-27T23:00:00+00:00",
+      "crossing_h": 143,
+      "sends": [
+        {
+          "tier": "early",
+          "send_at": "2017-08-24T23:00:00+00:00",
+          "deferred_from": null,
+          "river_ft": 10.6,
+          "category": "No flooding",
+          "hours_to_crossing": 72,
+          "values": {
+            "en": {
+              "street": "US Highway 90A",
+              "stage": "33.1",
+              "river": "10.6",
+              "category": "No flooding",
+              "hours": "72",
+              "when": "Aug 27, 6 PM"
+            },
+            "es": {
+              "street": "US Highway 90A",
+              "stage": "33.1",
+              "river": "10.6",
+              "category": "No flooding",
+              "hours": "72",
+              "when": "27 ago, 6 pm"
+            }
+          },
+          "en": "BrazosCast 3 days out: the Brazos at Richmond is at 10.6 ft, No flooding. US Highway 90A is modelled to go under at 33.1 ft — about 72 h from now, Aug 27, 6 PM. Plan a dry route and move what you can. This is a model, not an order.",
+          "es": "BrazosCast 3 días antes: el Brazos en Richmond está en 10.6 pies, sin inundación. Se prevé que US Highway 90A quede bajo el agua a 33.1 pies: unas 72 h desde ahora, 27 ago, 6 pm. Planifique una ruta seca y mueva lo que pueda. Es un modelo, no una orden."
+        },
+        {
+          "tier": "soon",
+          "send_at": "2017-08-26T23:00:00+00:00",
+          "deferred_from": null,
+          "river_ft": 16.39,
+          "category": "No flooding",
+          "hours_to_crossing": 24,
+          "values": {
+            "en": {
+              "street": "US Highway 90A",
+              "stage": "33.1",
+              "river": "16.4",
+              "category": "No flooding",
+              "hours": "24",
+              "when": "Aug 27, 6 PM"
+            },
+            "es": {
+              "street": "US Highway 90A",
+              "stage": "33.1",
+              "river": "16.4",
+              "category": "No flooding",
+              "hours": "24",
+              "when": "27 ago, 6 pm"
+            }
+          },
+          "en": "BrazosCast 24 h out: US Highway 90A is modelled to flood at 33.1 ft in about 24 h (Aug 27, 6 PM). The river is at 16.4 ft, No flooding. Fuel the car, pack medicines and documents, and tell someone your plan. Do not drive through water.",
+          "es": "BrazosCast 24 h antes: se prevé que US Highway 90A se inunde a 33.1 pies en unas 24 h (27 ago, 6 pm). El río está en 16.4 pies, sin inundación. Cargue gasolina, prepare medicamentos y documentos, y avise su plan a alguien. No conduzca por el agua."
+        },
+        {
+          "tier": "now",
+          "send_at": "2017-08-27T17:00:00+00:00",
+          "deferred_from": null,
+          "river_ft": 29.94,
+          "category": "Action stage",
+          "hours_to_crossing": 6,
+          "values": {
+            "en": {
+              "street": "US Highway 90A",
+              "stage": "33.1",
+              "river": "29.9",
+              "category": "Action stage",
+              "hours": "6",
+              "when": "Aug 27, 6 PM"
+            },
+            "es": {
+              "street": "US Highway 90A",
+              "stage": "33.1",
+              "river": "29.9",
+              "category": "Action stage",
+              "hours": "6",
+              "when": "27 ago, 6 pm"
+            }
+          },
+          "en": "BrazosCast 6 h out: water is expected on US Highway 90A at 33.1 ft by Aug 27, 6 PM, about 6 h. The river is at 29.9 ft, Action stage. Leave now if you can, by a route you know is dry. 12 inches of moving water carries most cars away.",
+          "es": "BrazosCast 6 h antes: se espera agua en US Highway 90A a 33.1 pies para 27 ago, 6 pm, unas 6 h. El río está en 29.9 pies, etapa de acción. Salga ahora si puede, por una ruta que sepa seca. 12 pulgadas de agua en movimiento arrastran la mayoría de los autos."
+        }
+      ]
+    },
+    {
+      "pos": 1164,
+      "seg": 1051694418,
+      "street": "Avenue I",
+      "threshold_ft": 55.1,
+      "crossing_at": "2017-08-31T20:00:00+00:00",
+      "crossing_h": 236,
+      "sends": [
+        {
+          "tier": "early",
+          "send_at": "2017-08-28T20:00:00+00:00",
+          "deferred_from": null,
+          "river_ft": 47.98,
+          "category": "Minor flooding",
+          "hours_to_crossing": 72,
+          "values": {
+            "en": {
+              "street": "Avenue I",
+              "stage": "55.1",
+              "river": "48.0",
+              "category": "Minor flooding",
+              "hours": "72",
+              "when": "Aug 31, 3 PM"
+            },
+            "es": {
+              "street": "Avenue I",
+              "stage": "55.1",
+              "river": "48.0",
+              "category": "Minor flooding",
+              "hours": "72",
+              "when": "31 ago, 3 pm"
+            }
+          },
+          "en": "BrazosCast 3 days out: the Brazos at Richmond is at 48.0 ft, Minor flooding. Avenue I is modelled to go under at 55.1 ft — about 72 h from now, Aug 31, 3 PM. Plan a dry route and move what you can. This is a model, not an order.",
+          "es": "BrazosCast 3 días antes: el Brazos en Richmond está en 48.0 pies, inundación menor. Se prevé que Avenue I quede bajo el agua a 55.1 pies: unas 72 h desde ahora, 31 ago, 3 pm. Planifique una ruta seca y mueva lo que pueda. Es un modelo, no una orden."
+        },
+        {
+          "tier": "soon",
+          "send_at": "2017-08-30T20:00:00+00:00",
+          "deferred_from": null,
+          "river_ft": 54.02,
+          "category": "Major flooding",
+          "hours_to_crossing": 24,
+          "values": {
+            "en": {
+              "street": "Avenue I",
+              "stage": "55.1",
+              "river": "54.0",
+              "category": "Major flooding",
+              "hours": "24",
+              "when": "Aug 31, 3 PM"
+            },
+            "es": {
+              "street": "Avenue I",
+              "stage": "55.1",
+              "river": "54.0",
+              "category": "Major flooding",
+              "hours": "24",
+              "when": "31 ago, 3 pm"
+            }
+          },
+          "en": "BrazosCast 24 h out: Avenue I is modelled to flood at 55.1 ft in about 24 h (Aug 31, 3 PM). The river is at 54.0 ft, Major flooding. Fuel the car, pack medicines and documents, and tell someone your plan. Do not drive through water.",
+          "es": "BrazosCast 24 h antes: se prevé que Avenue I se inunde a 55.1 pies en unas 24 h (31 ago, 3 pm). El río está en 54.0 pies, inundación mayor. Cargue gasolina, prepare medicamentos y documentos, y avise su plan a alguien. No conduzca por el agua."
+        },
+        {
+          "tier": "now",
+          "send_at": "2017-08-31T14:00:00+00:00",
+          "deferred_from": null,
+          "river_ft": 54.97,
+          "category": "Major flooding",
+          "hours_to_crossing": 6,
+          "values": {
+            "en": {
+              "street": "Avenue I",
+              "stage": "55.1",
+              "river": "55.0",
+              "category": "Major flooding",
+              "hours": "6",
+              "when": "Aug 31, 3 PM"
+            },
+            "es": {
+              "street": "Avenue I",
+              "stage": "55.1",
+              "river": "55.0",
+              "category": "Major flooding",
+              "hours": "6",
+              "when": "31 ago, 3 pm"
+            }
+          },
+          "en": "BrazosCast 6 h out: water is expected on Avenue I at 55.1 ft by Aug 31, 3 PM, about 6 h. The river is at 55.0 ft, Major flooding. Leave now if you can, by a route you know is dry. 12 inches of moving water carries most cars away.",
+          "es": "BrazosCast 6 h antes: se espera agua en Avenue I a 55.1 pies para 31 ago, 3 pm, unas 6 h. El río está en 55.0 pies, inundación mayor. Salga ahora si puede, por una ruta que sepa seca. 12 pulgadas de agua en movimiento arrastran la mayoría de los autos."
+        }
+      ]
+    }
+  ],
+  "limits": [
+    "the schedule is run over the OBSERVED Harvey hydrograph, so every send is in hindsight; in live mode the same rule reads the NWPS forecast, which has its own measured error and is not re-scored here",
+    "the street's crossing is the model's, and the second event shows the model's ordering is weak at a lower stage (AUC 0.566): the alert inherits that, and the message says 'modelled' rather than 'will flood'",
+    "the alert uses the street's own threshold, not the earlier cut-off of its last dry route out (isolation_ft); for a street whose way out closes first, the actionable warning is the isolation number, and that is on screen, not in the SMS",
+    "quiet hours are a policy choice, not a measurement: 22:00–07:00 local, with the 6-hour tier exempt. The record happens to put most crossings in the evening, so the hold is exercised but not stressed",
+    "no delivery, no carrier, no opt-in, no phone number: this is the text and the schedule, which is the part that can be checked in a repository"
+  ]
+}

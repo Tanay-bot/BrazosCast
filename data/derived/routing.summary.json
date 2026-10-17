@@ -554,6 +554,143 @@
   "segments_with_route_to_responder": 806,
   "segments_with_route_to_hospital": 197,
   "segments_cut_off_before_their_street_floods": 609,
+  "islands": {
+    "definition": "Roads connected to each other at a given stage over edges whose threshold is ABOVE that stage \u2014 i.e. the ground a driver can still move within without crossing water. A cold network is already fragmented by the bounding-box clip, so this is reachability, not enclosure; `islands_touching_the_clip` counts the islands where a road leaves the study area.",
+    "clip_boundary": {
+      "bbox": [
+        -96.1,
+        29.44,
+        -95.55,
+        29.76
+      ],
+      "band_m": 250.0,
+      "nodes_in_band": 191,
+      "nodes": 8987,
+      "source": "bbox read from road_thresholds.summary.json \u2014 the box the extract was clipped to, not a second copy of it"
+    },
+    "stages": [
+      0.0,
+      5.0,
+      12.0,
+      20.0,
+      30.0,
+      40.0,
+      45.0,
+      50.0,
+      55.0
+    ],
+    "ladder": [
+      {
+        "stage_ft": 0.0,
+        "components": 116,
+        "largest_component_nodes": 2148,
+        "largest_component_segments": 337,
+        "largest_component_reach": 337,
+        "islands_touching_the_clip": 19,
+        "segments_dry": 1614,
+        "segments_dry_with_a_responder": 806,
+        "segments_on_an_island_without_one": 808,
+        "segments_touching_more_than_one_island": 3
+      },
+      {
+        "stage_ft": 5.0,
+        "components": 116,
+        "largest_component_nodes": 2148,
+        "largest_component_segments": 337,
+        "largest_component_reach": 337,
+        "islands_touching_the_clip": 19,
+        "segments_dry": 1614,
+        "segments_dry_with_a_responder": 806,
+        "segments_on_an_island_without_one": 808,
+        "segments_touching_more_than_one_island": 3
+      },
+      {
+        "stage_ft": 12.0,
+        "components": 128,
+        "largest_component_nodes": 2148,
+        "largest_component_segments": 337,
+        "largest_component_reach": 337,
+        "islands_touching_the_clip": 19,
+        "segments_dry": 1612,
+        "segments_dry_with_a_responder": 806,
+        "segments_on_an_island_without_one": 806,
+        "segments_touching_more_than_one_island": 3
+      },
+      {
+        "stage_ft": 20.0,
+        "components": 212,
+        "largest_component_nodes": 2083,
+        "largest_component_segments": 326,
+        "largest_component_reach": 326,
+        "islands_touching_the_clip": 19,
+        "segments_dry": 1592,
+        "segments_dry_with_a_responder": 795,
+        "segments_on_an_island_without_one": 797,
+        "segments_touching_more_than_one_island": 3
+      },
+      {
+        "stage_ft": 30.0,
+        "components": 1860,
+        "largest_component_nodes": 1836,
+        "largest_component_segments": 301,
+        "largest_component_reach": 301,
+        "islands_touching_the_clip": 78,
+        "segments_dry": 1349,
+        "segments_dry_with_a_responder": 391,
+        "segments_on_an_island_without_one": 958,
+        "segments_touching_more_than_one_island": 4
+      },
+      {
+        "stage_ft": 40.0,
+        "components": 5673,
+        "largest_component_nodes": 1470,
+        "largest_component_segments": 251,
+        "largest_component_reach": 251,
+        "islands_touching_the_clip": 139,
+        "segments_dry": 480,
+        "segments_dry_with_a_responder": 276,
+        "segments_on_an_island_without_one": 204,
+        "segments_touching_more_than_one_island": 1
+      },
+      {
+        "stage_ft": 45.0,
+        "components": 6552,
+        "largest_component_nodes": 698,
+        "largest_component_segments": 107,
+        "largest_component_reach": 107,
+        "islands_touching_the_clip": 155,
+        "segments_dry": 382,
+        "segments_dry_with_a_responder": 128,
+        "segments_on_an_island_without_one": 254,
+        "segments_touching_more_than_one_island": 1
+      },
+      {
+        "stage_ft": 50.0,
+        "components": 7310,
+        "largest_component_nodes": 596,
+        "largest_component_segments": 97,
+        "largest_component_reach": 97,
+        "islands_touching_the_clip": 163,
+        "segments_dry": 277,
+        "segments_dry_with_a_responder": 118,
+        "segments_on_an_island_without_one": 159,
+        "segments_touching_more_than_one_island": 1
+      },
+      {
+        "stage_ft": 55.0,
+        "components": 7978,
+        "largest_component_nodes": 338,
+        "largest_component_segments": 44,
+        "largest_component_reach": 44,
+        "islands_touching_the_clip": 163,
+        "segments_dry": 146,
+        "segments_dry_with_a_responder": 65,
+        "segments_on_an_island_without_one": 81,
+        "segments_touching_more_than_one_island": 1
+      }
+    ],
+    "reading": "Before any flooding the road extract is already 116 separate networks, and only 806 of 1614 segments sit on one that holds a responder: roads leave the bounding box and return, and this model cannot join them across the gap. Raising the stage splits what is left \u2014 7978 pieces at 55 ft, the largest island down from 2148 to 338 nodes. Islands touching the study area's own boundary, where a road continues outside what is modelled: 19 at low water, 19 at action stage, 163 at 55 ft. So an island here means *roads reachable without crossing water*, never *ground walled in*."
+  },
   "route_cut_ft": {
     "median": 30.0,
     "p25": 29.4,
@@ -630,5 +767,5 @@
     "bfs_agrees_with_bottleneck": true,
     "non_vacuous_at_5ft": true
   },
-  "caveats": "A route is a road-network path on the modelled corridor, not a driving instruction and not a safety guarantee. The extract is a bounding-box clip, so a route cannot leave the study area and a destination outside it is rejected rather than connected. Thresholds inherit the -0.92 ft/mile HAND-as-stage error documented in road_thresholds.py, so cut stages move when that primitive is fixed. OSM facility positions are volunteer-mapped and a station may be closed or relocated; nothing here is checked against an operational dispatch feed."
+  "caveats": "Islands measure drivability, not enclosure: the extract is fragmented before any flooding at all (see islands.ladder at 0 ft), so a street on an island with no responder is a limit of the bounding-box clip before it is a cut-off. A route is a road-network path on the modelled corridor, not a driving instruction and not a safety guarantee. The extract is a bounding-box clip, so a route cannot leave the study area and a destination outside it is rejected rather than connected. Thresholds inherit the -0.92 ft/mile HAND-as-stage error documented in road_thresholds.py, so cut stages move when that primitive is fixed. OSM facility positions are volunteer-mapped and a station may be closed or relocated; nothing here is checked against an operational dispatch feed."
 }

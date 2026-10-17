@@ -56,12 +56,18 @@ def check_isolation(dst: pathlib.Path) -> None:
 
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
-    for name in ["road_thresholds.geojson", "road_thresholds.json",
-                 "travel_time_subdaily.json", "stage_area_curve.json",
-                 "routing_graph.json", "gauge_redundancy.json",
-                 "harvey_validation.json",
-                 "harvey_backcast.json",
-                 "ensemble.json"]:
+    # Only what the app actually fetches. road_thresholds.json (287 KB) and
+    # stage_area_curve.json were being exported and read by nothing in the app;
+    # a regression test now fails if an unused file reappears here.
+    payload = ["road_thresholds.geojson",
+               "travel_time_subdaily.json",
+               "routing_graph.json", "gauge_redundancy.json",
+               "harvey_validation.json",
+               "harvey_backcast.json",
+               "ensemble.json",
+               "address_index.json",
+               "notifications.json"]
+    for name in payload:
         src = DERIVED / name
         if src.exists():
             (OUT / name).write_text(src.read_text())
@@ -73,9 +79,39 @@ def main():
     (OUT / "replay-harvey.json").write_text(json.dumps(rep))
     print(f"replay-harvey.json: {len(rep['points'])} hourly points, peak {rep['peak_ft']} ft at {rep['peak_at']}")
 
+    # Prune anything this step no longer exports. Without this a removed artifact
+    # stays in the shipped bundle forever, because app_data.py only ever added
+    # files — which is how road_thresholds.json kept being deployed after it
+    # stopped being read.
+    expected = set(payload) | {"replay-harvey.json"}
+    for stale in sorted(OUT.glob("*.json")):
+        if stale.name in expected:
+            continue
+        kb = stale.stat().st_size // 1024
+        stale.unlink()
+        print(f"pruned stale {stale.name} ({kb} KB) — no longer part of the app payload")
+
     # The app asserts a threshold per street, so the measurement of how wrong those
     # thresholds are has to travel with them; a missing validation is a build error
     # rather than a silently undisclosed one.
+    # The app's address box is only as good as this index: without it the box
+    # falls back to matching street names, which is the bug it exists to fix.
+    ai = DERIVED / "address_index.json"
+    if not ai.exists():
+        raise SystemExit("data/derived/address_index.json missing — run "
+                         "pipeline/derive/address_index.py before exporting app data.")
+    a = json.loads(ai.read_text())
+    ref = a["reference"]
+    # The index stores segment POSITIONS, so an index built against a different
+    # road_thresholds.geojson would resolve every address to the wrong street.
+    gj = json.loads((OUT / "road_thresholds.geojson").read_text())
+    if len(gj["features"]) != ref["segments"]:
+        raise SystemExit(
+            f"address_index.json was built against {ref['segments']} segments but "
+            f"road_thresholds.geojson now has {len(gj['features'])} — rebuild the index.")
+    print(f"address_index.json: {len(a['ranges'])} address ranges on "
+          f"{a['scope']['app_streets']} streets, {len(a['keys'])} lookup keys")
+
     hv = DERIVED / "harvey_validation.json"
     if not hv.exists():
         raise SystemExit("data/derived/harvey_validation.json missing — run "
@@ -97,6 +133,23 @@ def main():
           f"before the crest, median street {b['street_lead_time']['median_h']:.0f} h, "
           f"flags at crest {b['correction_tradeoff']['flags_at_crest']['shipped']} shipped / "
           f"{b['correction_tradeoff']['flags_at_crest']['corrected']} corrected")
+
+    # F7 — the alert text is compiled, not written at runtime: a missing template would
+    # render an empty SMS on the one screen that tells someone to leave.
+    nt = DERIVED / "notifications.json"
+    if not nt.exists():
+        raise SystemExit("data/derived/notifications.json missing — run "
+                         "pipeline/derive/notifications.py before exporting app data.")
+    n = json.loads(nt.read_text())
+    keys = set(n["templates"]["en"])
+    missing = {lang: sorted(keys ^ set(n["templates"][lang]))
+               for lang in ("en", "es")}
+    if any(missing.values()):
+        raise SystemExit(f"notifications.json has an incomplete language: {missing}")
+    print(f"notifications.json: {n['simulation']['streets_warned']:,} streets, "
+          f"{n['simulation']['sends']:,} messages, longest "
+          f"{n['policy']['measured_longest_message']} chars, "
+          f"{len(n['verification'])} verification streets")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,33 @@
+{
+  "fetchedAt": "2026-10-17T00:09:54.586Z",
+  "dataset": "USFIMR flood-inundation extent — Brazos River near Richmond, Texas",
+  "provider": "University of Alabama, Surface Dynamics Modeling Lab (SDML)",
+  "developed_under": "NOAA/UCAR subaward, Cooperative Agreement Z16-23487",
+  "licence": "CC BY 3.0 Unported (SDML datasets portal)",
+  "catalogue": "https://waterserv.ua.edu/datasets/usfimr/",
+  "platform": "Sentinel-1 SAR, 10 m",
+  "acquired": "2016-05-30",
+  "mapped_area_km2": 214.9,
+  "event": {
+    "name": "2016 Brazos River flood (late May – early June 2016)",
+    "observed_peak_ft": 54.74,
+    "observed_peak_at": "2016-06-02",
+    "peak_source": "USGS annual peaks, site 08114000 (data/raw/usgs/08114000_peaks.json)",
+    "note": "the image is three days BEFORE this peak, so it is a mid-rise observation"
+  },
+  "stage_at_acquisition_ft": {
+    "min_ft": 49.31,
+    "max_ft": 52.2,
+    "n": 96
+  },
+  "stage_at_acquisition_note": "the catalog does not publish the acquisition time; the LAYER does, in its own attributes (Flood_Date + Start_Time = 2016-05-30T00:26:20Z), and the validation pins the comparison to the gauge reading at that instant. This band is the fetch-time fallback, and the validation reports the sensitivity to the choice",
+  "nature": "water edge read from one radar image — not a surveyed maximum, not an event peak, and subject to the usual SAR failure modes (vegetation and smooth open water both backscatter oddly; a wind-roughened surface can read as land)",
+  "use": "pipeline/derive/second_event_validation.py",
+  "files": [
+    {
+      "name": "05302016_Brazos_River_at_Richmond_TX.zip",
+      "bytes": 4765054,
+      "source": "https://waterserv.ua.edu/wp-content/uploads/content/datasets/usfimr/US-TX/05302016_Brazos_River_at_Richmond_TX.zip"
+    }
+  ]
+}

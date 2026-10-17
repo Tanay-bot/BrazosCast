@@ -554,7 +554,8 @@ the reading in the offline spec is put into the cache by the test, and why the a
 of it is asserted in `check-offline.mjs` instead — where the message can be inspected directly.
 
 ### T8 · Performance budget — `app/tests/e2e/perf.spec.ts` · **S** — ✅ **DONE**
-The docs claim **6.2 ms median over 24 slider steps** and that the ensemble "is not
+The docs claim **6.2 ms median over 24 slider steps** (idle machine; the same code measures **8.8 ms** on
+a busy one, and the bet cards add **+2.3 ms live / +2.5 ms replay** by A/B — `FINDINGS` §17) and that the ensemble "is not
 recomputed while the stage moves". Both are now asserted, in the `app` project so they run
 against the BUILT bundle with the gauge stubbed.
 
@@ -616,13 +617,18 @@ One command that runs: pipeline tests → `tsc --noEmit` → `vite build` → th
 
 Ordered by value per hour. F1 and F2 are the two that a judge will actually touch.
 
-### F1 · Offline address index · **M** *(this is D1's implementation)* — ✅ **DONE**
+### F1 · Offline address index · **M** *(this is D1's implementation)* — ✅ **DONE** *(both halves)*
 Key-free, CORS-free, network-free — and it works during the outage that motivates the product.
 Shipped as `data/derived/address_index.json` (34 KB, 819 ranges on 96 of 154 streets) via
 `pipeline/derive/address_index.py`. **Not done:** 58 streets have no county house numbers at all,
 so those answer by street name only.
-**Not done:** the "what would have to happen" line (the gauge would need 33.4 ft; it last reached
-that in 2017) is still outstanding and is the cheap half of this item.
+
+**The "what would have to happen" half is DONE** — `pipeline/derive/gauge_history.py` emits the USGS
+annual peak record for `08114000` (111 peaks, 1884–2025, highest 61.20 ft in 1913) and the app answers
+*"this street floods at 33.4 ft; the gauge last reached that in 2025 (34.76 ft); the record's highest is
+61.20 ft in 1913"*. Annual maxima, so "last reached" is exact for the question asked; gage-height
+parameter only, because the same USGS file carries discharge peaks in other units. Gates: chronological,
+feet, ≥50 peaks, and the 2017 peak must agree with `harvey_validation.json`'s published peak.
 Also add: **what would have to happen** — when the river is quiet, replace "stays dry" with
 *"the gauge would need 33.4 ft; it last reached that in 2017"*, computed from the cached
 `data/raw/usgs/08114000_peaks.json`. Honest, and cheap.
@@ -630,13 +636,13 @@ Also add: **what would have to happen** — when the river is quiet, replace "st
 ### F2 · Shareable state · **S** *(this is D2)* — ✅ **DONE**
 URL encoding + copy link + `navigator.share`.
 
-### F3 · Household card — multiple addresses at once · **M**
+### F3 · Household card — multiple addresses at once · **M** — ✅ **DONE**
 Home, school, a parent's house: the same answer three times, which is how families actually
 plan. Renders as one card with N rows, sorted by soonest onset. Reuses
 `nearestRoadIndex()` and the existing selection/render path.
 **Done when** three addresses produce three rows and the earliest onset is first.
 
-### F4 · Islands by connected component · **M**
+### F4 · Islands by connected component · **M** — ✅ **DONE**
 `routing.py` already builds the graph; components are the cheap next layer and answer
 *"which side of the cut am I on?"* — a different and more actionable question than
 "my street is wet". Extend `data/derived/routing.summary.json`; render as a boundary on the
@@ -875,32 +881,59 @@ it always was.
 **Cost:** the corpus it needs is one fetch and one derivation (4.7 MB, committed); the answer
 arrived without a DEM re-run.
 
-### I2 · Second-gauge live cross-validation · **M**
+### I2 · Second-gauge live cross-validation · **M** — ✅ **DONE** *(and it corrected itself by measurement)*
 `gauge_redundancy.py` already estimates stage from upstream gauges if RMOT2 stops. Run the
 opposite direction too: when *two* gauges are reporting, show both and flag disagreement.
 It converts the redundancy work from a contingency into a live confidence signal.
 **Done when** the app displays both estimates and the divergence when they differ.
+**Shipped** as `app/src/lib/crosscheck.ts` + the *Two gauges, one answer* card. The disagreement is
+judged against the band `gauge_redundancy.py` measured on held-out events (−1.56 to +1.01 ft). **The
+first version was wrong and the browser said so:** at 8.60 ft both gauges sit below the range the
+transfer was fitted on, so both clamp to a floor and both read ~2 ft above the live stage — a permanent
+false alarm on a quiet river. A clamped row is now labelled *out of range* and can raise neither
+agreement nor disagreement; only gauges inside the fitted range count. [FINDINGS](FINDINGS.md) §17.
 
-### I3 · Per-street backcast · **M**
+### I3 · Per-street backcast · **M** — ✅ **DONE** *(and it found a rounding tie)*
 The 2017 backcast currently reports the corridor and the median street. Per-street backcast
 answers *"what would my own alert have said in 2017?"* — the one flourish that makes the
 historical claim personal. `backcast.py` already computes 1,469 of 1,614 segments reaching
 threshold inside the window; surface those per segment.
+**Shipped** as `street_lead_time.per_segment_h` (1,614 entries, positional), a named segment row in the
+browser's verification grid, and the selected street's own line in the backcast card. **It found a real
+defect:** the artifact was computed on unrounded values while the app is served 2 dp, so segment 962
+crossed a 52.3 ft threshold in one and not the other; fixing it exposed `np.round` vs `round` at a tie
+(55.135 → 55.14 against 55.13), which moved the crest and therefore every lead time. Now computed on the
+series the app receives, with **0 mismatches across all 1,614 segments**. [FINDINGS](FINDINGS.md) §17.
 
-### I4 · Bring-your-own-forecast · **M**
+### I4 · Bring-your-own-forecast · **M** — ✅ **DONE**
 Accept a pasted/uploaded forecast series and run the app's own rule over it. Makes the engine
 provably model-agnostic and answers the obvious judge question — *"why should I trust your
-forecast instead of NWS?"* with *"you do not have to; here is yours."*
+forecast instead of NWS?"* with *"you do not have to; here is yours."
+**Shipped** as `app/src/lib/userforecast.ts` + a `<details>` on the chart card. Observations are kept and
+only the forecast half is replaced; every unreadable line is reported by number and reason rather than
+dropped, because a dropped point moves a crossing time silently. Nothing pasted is stored, put in the
+URL, or counted in any published number.
 
-### I5 · Responder view · **M**
+### I5 · Responder view · **M** — ✅ **DONE**
 The inverse question: *given a stage, which segments are cut off* — sorted by
 "trapped before their own street floods". That set is already computed (230 segments in
 `isolation.summary.json`) and is the operationally interesting one.
+**Shipped** as `app/src/lib/responders.ts` + the *Dry road, no way out* card, on the stricter rule (route
+to help cut **and** own street still dry), worst first. **The set is not monotone in stage** — 6 segments
+at 20 ft, 5 at 25, **294 at 30**, 23 at 34, 116 at 45, 12 at 55 — because it is the gap between two
+curves, and a card that assumed monotonicity would have described the wrong population. [FINDINGS](FINDINGS.md) §17.
 
-### I6 · Robustness / uncertainty dashboard · **M**
+### I6 · Robustness / uncertainty dashboard · **M** — ✅ **DONE**
 One view showing how each published number behaves under perturbation: does the 309 h
 lead-time claim survive ±1 σ on the thresholds, the gauge error, and the forecast horizon?
 This is the honest counterpart to I1 when a second event is unavailable.
+**Shipped** as `app/src/lib/robustness.ts` + the *Does the answer survive?* card: threshold ±1σ, the
+corridor lift, forecast ±1σ at the horizon the answer lands on (skipped, with the reason, when there is
+no forecast or when the answer is already "not reached"), and a 72 h horizon. It reports whether the
+**qualitative** claim survives, because 31 h → 22 h does not change a decision and 31 h → "never in the
+window" does. The four cards cost **+2.3 ms** per drag step, measured by A/B against the previous commit
+(`git worktree`), not against a remembered number; an optimisation that cached the cut index was
+measured and reverted. [FINDINGS](FINDINGS.md) §17.
 
 ### I7 · Second model head-to-head · **L, and cut-able**
 `UPGRADE-PLAN.md` already cuts the NWS/NWM retrospective because archived AHPS is not openly
@@ -923,7 +956,7 @@ the decision is recorded as a decision.
 | 8 | **T7** ✅, **T8** ✅ | M | F1, Playwright | repeatable browser + perf verification — 28 tests in two projects (boot/staleness/answer, the links, the canvas, the outage, the router's own parity line), and the render budget with a draw-count probe for the ensemble cache |
 | 9 | **I1** second observed extent ✅ | L | — | the only path that closes D3 — and it did, by refuting the correction (AUC 0.566 vs 0.809, implied lift −2.05 ft) instead of confirming it |
 | 10 | **F7** i18n + notifications | M | D3 | ✅ **done** — three tiers counted from the street's own crossing, EN/ES from build-time templates, parity-gated by digit multiset |
-| 11 | **I2**, **I3**, **I4**, **I5**, **I6** | M each | — | post-submission bets; pick two |
+| 11 | **I2**, **I3**, **I4**, **I5**, **I6** + F1's second half ✅ | M each | — | all six delivered — and measuring them found two defects (a 2-dp rounding tie at one segment in 1,614; a permanent false alarm in the cross-check on a quiet river) plus a set that is not monotone in stage. [FINDINGS](FINDINGS.md) §17 |
 | — | **I7** second model head-to-head | L | — | **deliberately cut** — recorded so the decision is a decision, not an omission |
 
 **If you only do three things:** D1+F1 (the address box works), T1+T2 (the numbers stay

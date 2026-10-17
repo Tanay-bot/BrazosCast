@@ -443,7 +443,7 @@ water edges, and one maximum extent rather than a time series. Limits in FINDING
 observation's own limits — one instant, a radar edge, a bounding box for scene coverage — in
 FINDINGS §15.
 
-### Step 7 — Uncertainty, demo, human layer. **IN PROGRESS — uncertainty and backcast shipped.**
+### Step 7 — Uncertainty, demo, human layer. **DONE — all eight items, plus the five ACTION-PLAN bets.**
 
 The step lists eight things. The uncertainty ensemble and the Harvey backcast are done;
 the rest are not, and are listed at the end of this section as outstanding.
@@ -479,7 +479,7 @@ three quantiles, including the rows that exercise the forecast-error path (mulbe
 between libm and V8 cannot change a reported count). Gates assert the forecast-error
 curve passes through its measured knots and is monotone, that a higher threshold never
 crosses more often, and that the grid is not uniformly certain. Render latency is
-unchanged at **6.2 ms median over 24 slider steps** because the ensemble is cached on
+unchanged by the ensemble at **6.2 ms median over 24 slider steps** (idle machine) because it is cached on
 the selection, never recomputed while the stage moves. (Both halves are asserted now, in a
 browser: the budget in `app/tests/e2e/perf.spec.ts`, and the cache by counting the draws a run
 requires — 24 steps produce none, a forced mode switch produces 2,500.)
@@ -536,6 +536,16 @@ guard (`held_past_crossing` = 0), not a thing that happens. The browser fills th
 (`app/src/lib/notify.ts`) and the tests require the digit multisets to match, which is why the
 crossing time is 12-hour in both languages. Details and limits: FINDINGS §16. The islands, the
 household card, `?text=1` and the PWA cache are done and are recorded in the README's checklist.
+
+**The five post-submission bets in `ACTION-PLAN.md` §4 are done too** — the live two-gauge
+cross-check, the per-street backcast, bring-your-own-forecast, the inverse (dry road, no way out) view
+and the robustness card — along with F1's other half, the "what the river would have to do" answer from
+the USGS annual peak record (`pipeline/derive/gauge_history.py`). Measuring them found two defects and
+one false assumption, all three now fixed and written up in [FINDINGS](FINDINGS.md) §17: a 2 dp rounding
+tie that made one segment of 1,614 disagree between the pipeline and the browser (and, underneath it,
+`np.round` vs `round` at 55.135 moving the crest by an hour), a cross-check that flagged both gauges on
+a quiet river because the transfer is fitted on flood events, and an inverse set that is not monotone in
+stage because it is the gap between two curves.
 
 ### Cut
 

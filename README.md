@@ -25,12 +25,18 @@ An address-first flood **lead-time** engine for the lower Brazos River at Richmo
 - [x] **Harvey backcast** — the lead time the app would actually have given in 2017, counted from the observed record: the action stage 109 h before the crest, the median street 96 h, and what applying the correction would cost
 - [x] **The alert, in English and Spanish** — three tiers counted back from **your street's** own crossing (T−72 h / T−24 h / T−6 h), compiled at build time, filled by two independent implementations the tests require to carry the same digits, and simulated over the 2017 record: **4,407 messages** to **1,469 streets**, none duplicated, none arriving after the water, longest 279 characters
 - [x] **Offline address index** — a typed house number resolves to the right street segment with no geocoder and no API key, from county address ranges: 819 ranges across 96 of the 154 modelled street names, and **96.8%** of them name the same segment a map click returns
-- [x] **Test suite** — **103 pipeline tests**, **76 kernel tests** (`app/tests/unit`, vitest) and **41 browser tests** (`scripts/check.sh`), including a golden-artifact regression that re-runs the whole pipeline and diffs every artifact, a payload-contract test, source-integrity checks, raw-input-policy checks (which raw inputs are committed, and why — the rule that caught the 2017 interval record being excluded from the repo it is the source of), doc-drift checks against the README, **cross-language grid parity** — the ensemble's 16 rows and the backcast's 17, plus the transfer's knots, recomputed through the app's own TypeScript and required to match the pipeline exactly — **invariants over generated inputs** (reachability, the isolation bound, the forecast-error curve, three orders of magnitude more inputs than the shipped corridor), a state-contract suite holding the app to "the address is never stored on the device, the URL is replaced and not pushed, and a parameter this version does not know survives a link", and a Playwright suite that boots the built app with a stubbed gauge and reloads it with the origin genuinely taken away
+- [x] **Test suite** — **112 pipeline tests**, **115 kernel tests** (`app/tests/unit`, vitest) and **41 browser tests** (`scripts/check.sh`), including a golden-artifact regression that re-runs the whole pipeline and diffs every artifact, a payload-contract test, source-integrity checks, raw-input-policy checks (which raw inputs are committed, and why — the rule that caught the 2017 interval record being excluded from the repo it is the source of), doc-drift checks against the README, **cross-language grid parity** — the ensemble's 16 rows and the backcast's 17, plus the transfer's knots, recomputed through the app's own TypeScript and required to match the pipeline exactly — **invariants over generated inputs** (reachability, the isolation bound, the forecast-error curve, three orders of magnitude more inputs than the shipped corridor), a state-contract suite holding the app to "the address is never stored on the device, the URL is replaced and not pushed, and a parameter this version does not know survives a link", and a Playwright suite that boots the built app with a stubbed gauge and reloads it with the origin genuinely taken away
 - [x] **Shareable state** — the street, the stage and the mode travel in the URL, so a copied link restores that answer on a fresh load in a browser that has never seen the app; parameters this version does not know are carried through rather than stripped
-- [x] **`?text=1` low-bandwidth route** — no map, no chart, no MapLibre, no webfonts: measured from the build by `scripts/check-text-mode.mjs` (gzip -9 of exactly what ships), **299.4 KB against 525.7 KB** for the full route — **226.3 KB saved, 43.1%**, with the 84.6 KB of webfonts and the map tiles requested by neither. The entry chunk itself is **22.7 KB gzipped** for every visitor
-- [x] **Offline cache** — a service worker keeps what the page has already been asked for, so a reload with no connection still answers. **One visit is enough**: measured on a fresh origin, a first load leaves the 9-file payload and the current gauge reading cached, and a reload with every connection refused restored the same answer from the cache. The eager set is the shell only, because precaching 1.6 MB would hand back what `?text=1` saved
+- [x] **`?text=1` low-bandwidth route** — no map, no chart, no MapLibre, no webfonts: measured from the build by `scripts/check-text-mode.mjs` (gzip -9 of exactly what ships), **307.9 KB against 534.3 KB** for the full route — **226.3 KB saved, 42.4%**, with the 84.6 KB of webfonts and the map tiles requested by neither. The entry chunk itself is **27.6 KB gzipped** for every visitor
+- [x] **Offline cache** — a service worker keeps what the page has already been asked for, so a reload with no connection still answers. **One visit is enough**: measured on a fresh origin, a first load leaves the 11-file payload (~1.7 MB) and the current gauge reading cached, and a reload with every connection refused restored the same answer from the cache. The eager set is the shell only, because precaching 1.6 MB would hand back what `?text=1` saved
+- [x] **What the river would have to do** — on a dry day the answer is not "stays dry" but *"this street floods at 33.4 ft; the gauge last reached that in 2025 (34.76 ft)"*, from the USGS annual peak record (`pipeline/derive/gauge_history.py`, 111 annual peaks back to 1884, highest 61.20 ft in 1913)
+- [x] **Two gauges, one answer (I2)** — the upstream gauges transferred down the reach at the lag each was fitted at, compared with the live reading against the measured band, and honest when the river is too low for the transfer to mean anything
+- [x] **Does the answer survive (I6)** — the lead time re-run with the per-street threshold error, the corridor lift and the benchmark's forecast RMSE applied: *"the qualitative answer holds under all 4 perturbations"* or a named row that flips it
+- [x] **Dry road, no way out (I5)** — the inverse view: segments whose route to help is already cut while their own street is still dry (294 at 30 ft, 116 at 45 ft, 12 at 55 ft — the set is a lens on two curves, not a growing list), worst first
+- [x] **Per-street 2017 backcast (I3)** — the alert the selected street itself would have got in 2017, recomputed in the browser and checked against the pipeline's 1,614-entry per-segment array
+- [x] **Bring your own forecast (I4)** — paste a series and the app's own rule runs over it, with the observations kept and every unreadable line reported by number; nothing pasted is stored or put in the URL
 - [x] Static app: address → street threshold → hours of lead time (live + Harvey replay)
-- [ ] Forecast vs archived NWS / NWM retrospective
+- [ ] Forecast vs archived NWS / NWM retrospective *(deliberately cut — archived AHPS is not openly published)*
 
 ## Layout
 
@@ -63,6 +69,23 @@ only if you want Mapbox as a last-resort fallback; you can also click a road on 
 A street the app does not model is **refused rather than snapped to the nearest modelled street**,
 because that would answer a different household's question. Every refusal says which streets are
 close, and a typo is offered the real address that works.
+
+## Deploy
+
+The app is a static bundle; any host that serves `app/dist` works. `app/vercel.json` carries the
+three response headers the app depends on — `sw.js` uncached, or a browser can be pinned to an old
+service worker; `/data/*` revalidated, or a stale thresholds file answers about a river the app no
+longer models; hashed `/assets/*` immutable — and deliberately **no SPA rewrite**, so a missing
+payload is a 404 rather than an HTML page a JSON parse would choke on.
+
+**Vercel, from a Git import.** Import the repo and set **Root Directory to `app`**; the Vite preset
+fills in `npm run build` and `dist`. No environment variable is needed, and the build fetches no
+data: the payload in `app/public/data/` is committed.
+
+**Vercel, from the CLI.** `scripts/deploy-vercel.sh` rebuilds, copies the header config into the
+bundle, uploads `app/dist`, then curls the new origin for those headers, the content types and the
+404 case — it fails rather than print a URL it could not verify. It reads `VERCEL_TOKEN`, or
+`.vercel-token` (gitignored), or an existing `npx vercel login`.
 
 ## Refresh the data
 
@@ -686,11 +709,20 @@ the dishonest option.
 The algorithm is **implemented twice, in Python and in TypeScript, and the app reproduces the
 pipeline's 16-row verification grid exactly** (counts and all three quantiles, including the rows
 that exercise the forecast-error path). Same drawn-value rounding on both sides, because libm and V8
-differing in the last ulp must not be able to change a reported count. The drag cost is unchanged —
-median **6.2 ms** per render over 24 slider steps (asserted in the browser suite, where it measures
-6.0–6.4 ms) because the ensemble is cached on the selection and never recomputed while the stage
-changes — and "never recomputed" is counted rather than timed: 24 steps produce **0** of the draws
-a single ensemble run needs 2,450 of, while a forced mode switch produces 2,500.
+differing in the last ulp must not be able to change a reported count. The ensemble itself does not
+move the drag: it is cached on the selection and never recomputed while the stage changes — and
+"never recomputed" is counted rather than timed, 24 steps produce **0** of the draws a single
+ensemble run needs 2,450 of while a forced mode switch produces 2,500.
+
+**The render cost, re-measured after the bet cards (I2–I6) landed, by A/B against the previous
+commit rather than against a memory of a number.** `git worktree add … HEAD`, the same spec on the
+same machine, back to back: **8.8 → 11.1 ms** median in live mode and **11.2 → 13.9 ms** in replay,
+maxima 11.5 → 13.6 and 13.6 → 22.0. Both are inside the budget the suite asserts (40 ms, ~3× the
+worst observation), and both are under a 60 Hz frame — but the *published* 6.2 ms figure was measured
+on an idle machine, and this machine now reproduces **8.8 ms on unchanged code**, so the honest
+number is the delta (**+2.3 ms**) and not the absolute one. What the +2.3 ms buys is ~20 more DOM rows
+per step across the four new cards; the kernels themselves are cheap (the whole cut-set join over
+1,614 segments measures 0.3 ms). Method: [docs/FINDINGS.md](docs/FINDINGS.md) §12 and §17.
 
 **What it is not:** a probability of flooding, or a confidence interval on a measured quantity. σ is
 unexplained variance from a single event, so it absorbs real per-reach differences (culverts, levees,
@@ -779,6 +811,75 @@ a Spanish category left in English, the stage ladder moved, the 12-hour clock lo
 hold removed, and each renderer broken on its own — every one fails the named test that owns it, and
 all three files are restored byte-identical. Method and limits:
 [docs/FINDINGS.md](docs/FINDINGS.md) §16.
+
+## What the river would have to do
+
+On most days the honest answer to "when does water reach my street" is "it does not", which is true
+and useless. The app now finishes the sentence with the record: *this street floods at 33.4 ft; the
+gauge last reached that in 2025 (34.76 ft, 1 year ago); the record's highest is 61.20 ft in 1913.
+Annual peaks only, at RMOT2.* The record is the cached USGS annual peak series for `08114000` — 111
+peaks from 1884 to 2025, filtered to the gage-height parameter (the same USGS file also carries
+discharge peaks, in different units, and mixing them would still look like a plausible series) — and
+`pipeline/derive/gauge_history.py` refuses to write it unless it is chronological, in feet, long enough
+for "never in the record" to mean something, and agrees with the 2017 peak the rest of the repo
+publishes. "Last reached" is exact for the question asked: a year's peak bounds every reading in it,
+so the last year whose peak passed a stage is the last year that stage was reached. 6 KB, no request
+at runtime, and it works during the outage that motivates the product.
+
+## Two gauges, one answer
+
+The app is keyed to one gauge, and until now a second one was only used when the first went quiet. Run
+the same transfer whenever the upstream gauges are reporting — at the lag each was fitted at, compared
+against the **band measured on held-out events** (−1.56 to +1.01 ft) — and the page gains the one
+number that can notice the reading everything else depends on is wrong.
+
+**Measuring it in the browser is what changed the design.** On a quiet river (8.60 ft) both gauges are
+below the range the transfer was fitted on — it was fitted on flood events — so both return *clamped
+floor* values 2.57 and 1.99 ft above the live reading. Read literally, that is two gauges disagreeing
+with the instrument, forever, on the day the page is most likely to be visited. A check that cannot be
+made is not a failure: clamped rows are labelled **out of range**, the verdict says the transfer is not
+defined at this stage, and only a gauge *inside* the fitted range can raise a disagreement.
+`pipeline/tests/test_bets.py` holds the shipped band and knots to exactly that.
+
+## Does the answer survive?
+
+Every published number descends from two estimated quantities: a street's flood stage (measured to run
+~22 ft low, with ~11 ft of per-street spread) and the forecast (RMSE measured at several horizons). The
+headline quotes a point lead time and says nothing about either. This card re-runs the app's own rule
+under each measured error — threshold ±1σ, the corridor lift applied, the forecast ±1σ at the horizon
+the answer actually lands on, and the answer quoted only 72 h out — and reports whether the
+**qualitative** claim survives. On the quiet-river example above: *"the point estimate is that water
+does NOT reach this street in the window… the qualitative answer holds under all 4 perturbations"*, with
+the two forecast rows marked skipped and saying why (*already 'not reached'*). Where a perturbation
+flips the answer the row is marked, because "31 h" becoming "22 h" does not change a decision while
+"31 h" becoming "never in the window" does.
+
+## Dry road, no way out
+
+Every other panel answers for the street in front of you. This one answers the inverse question, which
+is the operationally interesting one: **whose route to help is already cut while their own road is still
+dry** — no water to see and no way out. It reads the same graph the ways-out panel does, in the same
+segment order, and excludes (rather than reports) the streets the extract cannot route a responder to at
+any stage.
+
+The set is **not monotone in stage**, and that is a property of the question rather than a bug: a
+segment is in it when its route is cut *and* its street is still dry, so the count is the gap between
+two curves. Measured at the shipped thresholds: **6** segments at 20 ft, **5** at 25, **294** at 30
+(the median street floods at 33.4 ft, so most routes are cut before most streets are wet), **23** at 34,
+**116** at 45, **12** at 55 — with the worst trapped window 16.3 ft and, at 30 ft, **142** of the 294
+having no modelled hospital route at that stage either. Rows are worst first and the ranking does not
+move as the stage does.
+
+## Your own forecast
+
+The obvious question about a product that reads a forecast is *"why should I trust yours instead of the
+NWS's?"*, and the honest answer is that you do not have to: the rule is a comparison between a stage
+series and one number per street, so any series works. Paste one point per line — `+6, 34.2`, or
+`2026-10-18T06:00 41.5` (UTC unless you write an offset) — and the app's own rule runs over it, with the
+observed record kept and only the forecast half replaced. Every line it cannot read is reported **by
+number and reason**, never skipped silently, because a dropped point moves a crossing time and nothing on
+screen would say so. Nothing pasted is stored, put in the URL, or counted in any published figure, and
+clear restores the gauge's own series.
 
 ## Known defect in the street thresholds
 

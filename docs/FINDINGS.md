@@ -687,8 +687,10 @@ threshold error applied"*, and says in the panel why the two disagree — at the
 floors at 0 h while the ensemble says most runs never arrive, and the block reconciles them by naming
 the shipped threshold, the corrected one, and the fact that the correction is measured from one event
 and deliberately not applied. The block is reported **beside** the point estimate, never in place of
-it. Render cost is unchanged — median **6.2 ms** over 24 slider steps, max 13 ms — because the
-ensemble is cached on the selection and never recomputed while the stage moves.
+it. The ensemble does not move the drag — it is cached on the selection and never recomputed while the
+stage moves — and that is counted rather than timed (24 steps produce 0 of the draws a run needs).
+The published render figure was **6.2 ms** median over 24 slider steps, max 13 ms, measured on an idle
+machine; for the re-measurement after the bet cards landed, see §17.
 
 **Limits.** This is not a probability of flooding and not a confidence interval on a measured
 quantity: `sigma` is unexplained variance from a single event. The forecast-error curve is measured
@@ -941,3 +943,85 @@ no DOM), the card in `app/src/main.ts` and `app/index.html`, and tests on both s
 `pipeline/tests/test_notifications.py` (18), `app/tests/unit/notifications.test.ts` (13) and
 `app/tests/e2e/alert.spec.ts` (3), plus eight mutants of the templates and both renderers in
 `scripts/mutants/notifications.mjs` — each fails the named test that owns it.
+
+## 17. The bets — I2–I6, and the two defects measuring them found
+
+`docs/ACTION-PLAN.md` §4 listed five post-submission bets and the quiet-river half of F1. All six are
+built: each is a kernel in `app/src/lib/` (so it is testable without a browser), a card, and tests on
+both sides — `app/tests/unit/bets.test.ts` (23) drives the kernels, `pipeline/tests/test_bets.py` (8)
+holds the artifacts they read.
+
+**What each one is, in one line.** *What the river would have to do* (F1's other half): the stage a
+street needs and the last year the gauge reached it, from the USGS annual peak record
+(`pipeline/derive/gauge_history.py`, 111 peaks 1884–2025, highest 61.20 ft in 1913) — annual maxima, so
+"last reached" is exact for the question asked, and filtered to the gage-height parameter because the
+same file carries discharge peaks in different units. *Two gauges, one answer* (I2): the upstream
+transfer run whenever the gauges are reporting, against the band measured on held-out events. *Does the
+answer survive* (I6): the lead time re-run under the per-street sigma, the corridor lift, the forecast
+RMSE at the horizon the answer lands on, and a 72 h horizon. *Dry road, no way out* (I5): the inverse
+set — route to help already cut, own street still dry. *Per-street backcast* (I3): the selected street's
+own 2017 lead time, recomputed in the browser against the pipeline's 1,614-entry array. *Your own
+forecast* (I4): any pasted series run through the app's own rule, observations kept.
+
+### The first defect: one segment in 1,614, and it was a rounding tie
+
+I3 publishes `street_lead_time.per_segment_h` — the per-street half of the backcast — and the browser
+recomputes the selected street's own lead time and compares. The full-corridor comparison caught a
+disagreement at **one segment of 1,614** (index 962, threshold 52.3 ft: 49 h against 48). The cause was
+not the rule. The app is served the replay hydrograph rounded to 2 dp
+(`pipeline/export/app_data.py`), and the artifact was being computed on unrounded values, so an hour
+reading 52.298 ft crossed a 52.3 ft threshold in the browser and 52.298 < 52.3 did not in the pipeline.
+The fix was to compute the artifact on the series the app actually receives — and doing that exposed the
+second half of the bug: **numpy's `round` is not Python's `round` at a tie.** `55.135` became `55.14`
+under `np.round` and `55.13` in the payload, which moved the crest by one hour,which moved *every* lead time at once (the rounding then showed up as a different single row). Both numbers were
+self-consistent; only one could be shown. The artifact now rounds with the same call the payload does,
+the corridor comparison is **0 mismatches over all 1,614 segments**, and the artifact's crest, the
+payload's peak and `harvey_validation.json`'s observed peak all read 55.13–55.19 ft on the same flood.
+
+### The second defect: a false alarm that only a browser could show
+
+I2's first version reported *disagreement* whenever a divergence fell outside the band. Measured live at
+8.60 ft: Hempstead 9.56 ft → an estimate of 11.17 ft, San Felipe 93.13 ft → 10.59 ft, divergences +2.57
+and +1.99 ft — **both flagged, permanently, on a quiet river.** The transfer is fitted on flood events,
+so at a low stage every knot clamps to a floor value; the "estimates" were the ends of the fitted curve,
+not predictions of the river. Two changes: a clamped row can never count as agreement *or* as
+disagreement (it is labelled *out of range*), and the verdict only counts gauges inside the fitted range.
+A check that cannot be made is not a failure — and putting a permanent ⚠ beside the one number the page
+is about would be worse than not checking at all.
+
+### The inverse set is a lens, not a list
+
+I5's membership rule is an inequality with two sides — route cut *and* street still dry — so the count is
+the gap between two curves and is **not monotone in stage**. Measured on the shipped thresholds:
+**6** segments at 20 ft, **5** at 25, **294** at 30, **23** at 34, **10** at 40, **116** at 45, **52** at
+50, **12** at 55. The peak at 30 ft is where most routes are already cut (the median street floods at
+33.4 ft) and most streets are not yet wet; by 35 ft the flood curve has overtaken it. The worst trapped
+window is 16.3 ft, and at 30 ft **142** of the 294 have no modelled hospital route at that stage either.
+A card that assumed monotonicity would have looked fine and described the wrong population.
+
+### What the four cards cost the drag
+
+Measured **by A/B against the previous commit** — `git worktree add /tmp/bc-base HEAD`, the same
+`perf.spec.ts`, the same machine, back to back — rather than against a remembered number:
+
+| | before (HEAD) | after |
+|---|---|---|
+| live, median over 24 steps | **8.8 ms** (max 11.5) | **11.1 ms** (max 13.6) |
+| replay, median | **11.2–11.6 ms** (max 13.6) | **13.9 ms** (max 22.0) |
+
+The published figure is 6.2 ms and this machine no longer reproduces it on *unchanged* code (8.8 ms), so
+the meaningful number is the delta: **+2.3 ms live, +2.5 ms replay**, from ~20 more DOM rows per step.
+The kernels are not the cost: the cut-set join over 1,614 segments measures **0.3 ms**, and an
+optimisation that cached its sorted index across stages was written, measured, and **reverted** — it
+bought nothing and would have left two implementations of the membership rule (the app's filter and the
+kernel's), which is the failure mode this repo keeps finding. The suite's budget stays at 40 ms, which
+is ~3× the worst observation and ~2× the new median.
+
+**Limits.** I4's series is the user's own and is not validated by anything here — it moves the lead
+time, not the confidence. I5's set is modelled on the study-area extract, so a street the extract cannot
+route a responder to is excluded rather than reported; a real dispatch feed would change that set. I2
+cannot check the reading when the river is below the transfer's fitted range, which on the day this was
+written it was. I6 perturbs with measured errors but does not combine them: the rows are one-at-a-time,
+so a threshold error *and* a forecast error at once is not among them. The quiet-river answer inherits
+the 22 ft threshold bias like every other stage number in the product — it is the *stage* that is
+biased, also in the direction of saying a street is reached later than it is.

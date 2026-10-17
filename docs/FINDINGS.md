@@ -776,3 +776,168 @@ than the gauge it is keyed to. The recession is outside the window. The flag cou
 threshold defect this stage measures rather than fixes, and the corrected counts apply a constant
 fitted to one event — which is exactly why they are reported and not shipped. One event: this backcast
 cannot be repeated on another flood from data in this repo.
+
+---
+
+## 14. Islands — which side of the cut (`pipeline/derive/routing.py`, `app/src/lib/islands.ts`)
+
+Routing answers "can I reach a named destination". This asks the graph a different question, and it is the one a household actually asks in the first hour: **"which roads can
+I still move between at all?"** At a given stage, the edges whose segment threshold is still above
+that stage partition the network by union-find over the dry edges; the piece your street lands in is
+the ground still drivable from it without crossing water, and the wet segments on that piece's border
+are the ways off it. The border is drawn on the map, because the cut is the smaller set and the one
+the question is about.
+
+**Two readings of one implementation, so the rule cannot be right in one place and wrong in the
+other.** `app/src/lib/islands.ts` computes the partition once (`sweep`) and reports two views from it:
+the pipeline's own row shape (`ladderRow`), recomputed row by row in `app/tests/unit/islands.test.ts`
+against `routing.summary.json` — 22 tests — and the single island a household is asking about
+(`islandForSegment`). The stage comparison is `ft > stage`, the same one the map filter and
+`isolation.widest_path` use.
+
+**What the measurement forced, and it is not a flood result at all.** At 0 ft — no flooding anywhere
+in the model — the extract is **already 116 separate networks**, and only **806 of 1,614** segments
+sit on a fragment that contains a modelled responder. That is the bounding-box clip, not water. So
+this is **reachability, never enclosure**, `islands_touching_the_clip` exists so the app can say when
+an island ends at the edge of the study area instead of at a river, and a street marked "no modeled
+route to a responder" is not a street that is trapped.
+
+| stage | components | largest island (nodes) | largest island (segments) | dry segments | dry with a responder | islands at the clip | segments on >1 island |
+|---|---|---|---|---|---|---|---|
+| 0 ft | 116 | 2,148 | 337 | 1,614 | 806 | 19 | 3 |
+| 5 ft | 116 | 2,148 | 337 | 1,614 | 806 | 19 | 3 |
+| 12 ft | 128 | 2,148 | 337 | 1,612 | 806 | 19 | 3 |
+| 20 ft | 212 | 2,083 | 326 | 1,592 | 795 | 19 | 3 |
+| 30 ft | 1,860 | 1,836 | 301 | 1,349 | 391 | 78 | 4 |
+| 40 ft | 5,673 | 1,470 | 251 | 480 | 276 | 139 | 1 |
+| 45 ft | 6,552 | 698 | 107 | 382 | 128 | 155 | 1 |
+| 50 ft | 7,310 | 596 | 97 | 277 | 118 | 163 | 1 |
+| 55 ft | 7,978 | 338 | 44 | 146 | 65 | 163 | 1 |
+
+The numbers above 30 ft move fast — 1,860 networks at 30 ft becomes 7,978 at 55 — which is the
+corridor coming apart into single streets as the low crossings go under.
+
+**The straddling rule.** **286 of the 1,205 distinct ways** in the road layer carry more than one
+segment (one carries seven), and the clip cuts features into further pieces, so a single segment's
+nodes can land on two islands. Counting it twice would inflate the reachable ground; dropping it
+would understate it. So `reach` counts **touching** (published as a column above), `segs` attributes a
+straddling segment to **one** island by a stated rule (most nodes, then lowest island id), and
+`segments_touching_more_than_one_island` publishes the size of the over-count — 3 at low stage, 1 at
+high. A segment cannot silently move between islands, because the number that would move is on screen.
+
+**The refuge bar is a choice and is labelled as one.** "Dry ground at 50 ft" is a hand-set bar, not a
+measurement, so the artifact carries its sensitivity: with the bar at 35/40/45/50/55 ft, **393 / 705 /
+863 / 883 / 910** segments have no dry refuge reachable at all. The app says *refuge*, never *shelter*.
+
+**Limits.** Reachability on a clipped extract, not enclosure by water; routes are network paths, not
+driving instructions and not a safety guarantee; the thresholds the cut stages inherit the
+HAND-as-stage error measured in §11 (−0.92 ft/mile), so the stages move when that primitive is fixed;
+and the destinations are volunteer-mapped OSM points, not a dispatch feed.
+
+## 15. A second observed flood — refutations from below, and a constant that does not transfer (`pipeline/derive/second_event_validation.py`)
+
+§11 ends with the one thing the project could not answer: the thresholds are wrong by **+22.3 ft**
+(best-cut) / **+23.72 ft** (probit), both fitted to a single event, and `UPGRADE-PLAN.md` calls a
+second observed extent the highest-value outstanding item. This is that extent — and it does not
+confirm the correction; it **replaces** what the defect is.
+
+**Choosing the event was measurement, not preference.** The 2015 and 2016 floods were ranked off the
+cached Richmond record first (54.74 and 50.01 ft against Harvey's 55.19), then the USFIMR catalogue
+was searched for a machine-readable product over this reach. It holds exactly one: **2016-05-30**, a
+Sentinel-1 HV water edge at 10 m, **214.9 km²** mapped, three days *before* that event crested. Two
+properties make it worth more than a second maximum:
+
+* **its stage is pinned, not assumed.** The layer's own attributes carry the acquisition time
+  (00:26:20 UTC), and the validation reads the cached USGS 08114000 instantaneous series at that
+  instant: **49.40 ft**, with 15.7 ft of clearance below Harvey's peak. The cross-check is independent
+  of the gauge reading: the layer's own `Q_at_Image` (**80,600 cfs**) run through the rating curve
+  Step 3 fixed lands at **48.19 ft**, within **1.21 ft**.
+* **being lower, it can refute.** At 49.40 ft a segment the image shows **dry** has a true threshold
+  above 49.40; that is a bound from below, which a maximum extent can never supply. **1,241**
+  segments are shown dry that the shipped rule submerges at that stage, out of 1,614 evaluated.
+
+**What it found.** Harvey's lift applied out of sample repairs **1,190** of those 1,241 refutations,
+at a recall of **0.055** against the shipped rule's **0.973** — i.e. it buys silence. The within-event
+**AUC collapses from 0.809 (Harvey's maximum extent) to 0.566** on Harvey's own 1,187-segment
+population. A constant offset is rank-preserving, so that is the decisive number: **no shift of any
+size can fix an ordering.** The event's own best cut is degenerate (at 4 ft: recall 0.0), its
+balanced-accuracy optimum implies a lift of **−2.05 ft**, and the under-mapping sensitivity says the
+refutations would need the radar to have missed water by a factor of **17×** to be explained away.
+
+**So the defect is reclassified, not fixed.** It is not only a level error (that is what §11 measured)
+but an **ordering** error at a lower stage, and the correction stays unapplied for a stronger reason
+than "one event only". The README's 22 ft figure still stands, labelled as the single-event
+measurement it always was, and the app's disclosure is unchanged.
+
+**Limits.** One instant on a rising limb — not a series, so a segment shown wet says nothing about
+where between 0 and 49.40 ft it flooded; a radar water edge with vegetation, smooth-water and
+wind-roughening failure modes, ground-proofed from secondary sources rather than surveyed; the
+polygon bounds the **water**, not the scene, so every "dry" reading rests on the scene having covered
+that ground (the conservative near-water variant is reported beside the corridor-wide one); one gauge
+on a reach whose crest travels; and the thresholds under test still inherit the §11 defect this
+section measures and does not fix.
+
+**In the pipeline and the docs.** `pipeline/fetch/fetch_usfimr_2016.mjs` caches the layer with a
+receipt (zip magic, shapefile members, the catalogued mapped area as a gate);
+`pipeline/derive/second_event_validation.py` writes `data/derived/second_event_validation.json` and
+gates on the area, the join, the refutation count, the implied lift and the under-mapping factor;
+`pipeline/tests/test_second_event.py` holds the contract. The app shows none of it directly — it is
+evidence about the thresholds, and the README quotes it.
+
+## 16. The alert — three tiers, two languages, and a schedule that can be checked (`pipeline/derive/notifications.py`)
+
+Everything above is something *read*. This is the part that is supposed to **reach** someone: the
+message. The send is simulated — no carrier, no opt-in, no phone number in this repository — because
+what a repository can verify is the text and the timing, and those are what go wrong in a way nobody
+notices until the night it matters.
+
+**The ladder was chosen against the obvious design, by measurement.** The plan said to tie the alerts
+to the official categories in `TH = {action: 20, minor: 45, moderate: 48, major: 50}`. The 2017 record
+says what that would do: the three flood categories arrived at hours 158, 165 and 169 — **7 and 4
+hours apart**, i.e. three texts in one night — and none of them would say anything about the reader's
+own street, because the reader's street floods at its own number. So the tiers are a countdown from
+**that street's own modelled crossing**: T−72 h ("3 days out"), T−24 h ("1 day out"), T−6 h ("6 hours
+out"). The official category still appears inside every message as context at the hour it is sent,
+which is what "ties to the tiers in TH" is worth once it is measured.
+
+**What the simulation did.** Over the same replayed hydrograph the backcast uses, all **1,614**
+modelled streets went through the policy and **1,469** of them cross their own threshold inside the
+window — the same population, by the same rule, that §13 reports. They produce **4,407 messages**,
+three each: none duplicated (keyed on segment *position*; keying on osmid produced 1,086 phantom
+duplicates on the first run, because one way can contribute several segments), none arriving after
+the water it is about, longest rendered message **279 characters** — two SMS segments, in Spanish as
+well as English.
+
+**Quiet hours, and an arithmetic that makes one rule unreachable.** 22:00–07:00 local holds the first
+two tiers to 07:00 and never the 6-hour one; **225** sends per held tier were moved. The rule for a
+hold that would land *after* the crossing is to drop the message rather than send it late — and at
+these offsets it is unreachable, which is a property rather than luck: the longest hold (22:00 →
+07:00) is **9 h** and the shortest held tier is **24 h** out, so a held message always still precedes
+the water. It is kept as a guard, counted separately (`held_past_crossing`, 0).
+
+**The translation is the feature, so the numbers have to survive it.** A Spanish message that says 48
+where the English says 45 is worse than no message, and nothing on screen would look wrong. The
+templates are compiled once at build time (`pipeline/notify/templates.json`) and filled by **two**
+implementations — the pipeline in Python, the browser in `app/src/lib/notify.ts` — and the tests
+require the digit **multisets** to match, not merely the sentences. That is why the crossing time is
+12-hour in both languages (`Aug 26, 2 PM` / `26 ago, 2 pm`): a 24-hour Spanish time would be better
+Spanish and would put *different numerals* in the two messages, so the parity gate would be comparing
+two clocks instead of two translations. The card's own chrome (title, note, quiet-hours line) is
+translated from the same artifact, with a test that no Spanish UI string is still the English one — a
+half-translated surface is the failure mode that makes bilingual UI worse than monolingual.
+
+**What is observed and what is not.** The hydrograph is observed, so every send time is hindsight: the
+schedule is what the policy *would have* done. In live mode the same rule reads the NWPS forecast,
+whose error is measured in §11 and is not re-scored here. The street crossing itself is the model's,
+and §15 shows its ordering is weak at a lower stage (AUC 0.566), which the alert inherits — which is
+why the message says *modelled* and not *will flood*. The alert also uses the street's **threshold**,
+not the earlier stage at which its last dry route is cut (§6); for a street whose way out closes
+first, the actionable number is the isolation one, and that is on screen rather than in the message.
+
+**In the pipeline and the app.** `pipeline/notify/templates.json` (the text, both languages),
+`pipeline/derive/notifications.py` (the policy, the simulation, the artifact),
+`data/derived/notifications.json` (shipped unchanged), `app/src/lib/notify.ts` (filling and schedule,
+no DOM), the card in `app/src/main.ts` and `app/index.html`, and tests on both sides:
+`pipeline/tests/test_notifications.py` (18), `app/tests/unit/notifications.test.ts` (13) and
+`app/tests/e2e/alert.spec.ts` (3), plus eight mutants of the templates and both renderers in
+`scripts/mutants/notifications.mjs` — each fails the named test that owns it.

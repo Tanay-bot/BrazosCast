@@ -72,7 +72,7 @@ Cut lines at every phase; the fallback ladder for inundation is
 1. **Stack:** spec prefers **vanilla TS + Vite** (small bundle) but allows React. Recommendation: vanilla TS.
 2. **First milestone:** ship the static app on real data first, or build the ML/geo pipeline first? Recommendation: static first (it's the spec's own gate).
 3. **Hosting:** Freebuff **Sites** (managed here) vs **Cloudflare Pages** vs **Netlify**. Needs the app to be a prebuilt static bundle eventually.
-4. **Geocoder (unspecified in docs):** US **Census Geocoder** (free, no key, good for US addresses) vs Nominatim vs Mapbox. Recommendation: Census first, Mapbox only if it fails.
+4. **Geocoder (unspecified in docs):** ~~US **Census Geocoder** (free, no key, good for US addresses)~~ **— RESOLVED AGAINST, by measurement (2026-10-15).** The Census Geocoder sends **no `Access-Control-Allow-Origin` header at all** on two tested origins, so a browser cannot call it; and it returns **zero matches for this corridor** under all four valid benchmarks (`Public_AR_Current`, `ACS2026`, `Census2020`, `LUCA`) while matching DC/Austin/Houston addresses. Nominatim is rate-limited and keyless-only by policy; Mapbox works but needs a token. **Decision: no geocoder.** Fort Bend County's own road centerlines carry TIGER-style address ranges (`LF/LT/RF/RT_ADDR`) per segment, so the county file is the index and the app ships it statically — no key, no quota, no network, and it works during the outage that motivates the product. See [DATA-SOURCES.md](./DATA-SOURCES.md) and `pipeline/derive/address_index.py`.
 5. **Geo/ML environment:** install a modern Python (conda or `uv`) + GDAL + `aws` CLI now, or defer the heavy rungs and start from the NFHL floor? Recommendation: defer; start with what's installable today.
 
 ## 6. Updated risk register
@@ -83,7 +83,7 @@ Cut lines at every phase; the fallback ladder for inundation is
 | FBC county GIS outage | **Active** | FEMA NFHL fallback verified working. |
 | GDAL / fimserve install | **Active (likely sink)** | One 3-hour timebox, then pysheds; NFHL floor. |
 | No `aws` CLI / old Python | **Active** | Install a purpose-built env before Phase 2. |
-| Geocoder unspecified | **Open** | Decide at §5; Census Geocoder is the zero-key default. |
+| Geocoder unspecified | **Resolved (no geocoder)** | Census measured unusable (no CORS, no corridor coverage); county address ranges shipped offline instead. |
 | "Beat NWM" is a hypothesis | **Open** | Present as a measurement; pivot claim to lead-time if it loses. |
 | Dry-river live demo | **Resolved by design** | Replay mode, built first. |
 | Scope sprawl | Watch | Single purpose; no heat/air/grid. |

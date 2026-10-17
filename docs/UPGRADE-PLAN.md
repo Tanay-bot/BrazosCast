@@ -259,6 +259,19 @@ number and R1's magnitude is **8–9 ft short** of what the observation needs. T
 data problem still needs the DEM or the bed elevations to make the correction
 *shippable*, but its size is no longer a mystery.
 
+> **I1 update: a SECOND observation was obtained, and it argues the other way.**
+The same third route, a second time: a Sentinel-1 water edge for the 2016 flood at
+49.40 ft (`second_event_validation.py`). At that lower stage the shipped thresholds
+put **1,312** segments under water and the image shows **1,241 of them dry** —
+evidence a maximum extent structurally cannot produce. Harvey's +23.72 ft lift repairs
+1,190 of those, but at a recall of **0.055**, and the within-event **AUC falls from
+0.809 to 0.566** on Harvey's own 1,187-segment set. A constant offset is
+rank-preserving, so no shift could have moved that number: **the defect is in the
+ordering the thresholds impose, not only in their level**, and the 2016 event implies
+a lift of **−2.05 ft** on its own. Step 3's five closed routes stay closed, and the
+route this section recommends is now **weaker**, not stronger — the DEM/bed-elevation
+route survives this finding, the offset route does not.
+
 ### Step 4 — Routing and reverse routing. **DONE**
 
 `pipeline/derive/routing.py` builds the stage; the app runs the search.
@@ -408,8 +421,27 @@ validate a low threshold — a segment wet at the record peak is equally consist
 17 ft and at 55 ft — so the 20 below-action segments (17 of which Harvey reached) are reported and
 explicitly **not** treated as vindicated. That needs a series of extents at successive stages.
 
+> **I1 supplied one such extent, and it answers this paragraph — in the negative.**
+`pipeline/fetch/fetch_usfimr_2016.mjs` fetches a Sentinel-1 water edge for the 2016 flood from
+USFIMR, and `pipeline/derive/second_event_validation.py` scores the same thresholds against it at
+**49.40 ft**, on the rising limb, five days before that event crested. Because it is *below* the
+stages the thresholds claim to flood at, it refutes rather than merely agrees: **1,241** segments
+the shipped rule puts under water at that stage are shown dry (including **21 of the 22**
+below-action segments — the first evidence in the repo that speaks to any of them at all). Harvey's
+**+23.72 ft** lift repairs 1,190 of those, and Step 6's own framing says that reads as decisive
+until the recall column does: **0.055**, against 0.973 shipped. The within-event **AUC is 0.566**
+here against **0.809** at Harvey's peak, measured on Harvey's own 1,187-segment set, so the two are
+like-for-like — and an AUC is a ranking, which no constant offset can change. So the second event
+refutes the correction rather than confirming it: the events disagree on the constant (+23.72 vs
+**−2.05 ft** implied), and the failure is in the *ordering*, which is why the fix is a DEM or a
+re-run of HAND and not a lift. The radar edge can be wrong about 4.5% water coverage, so the
+artifact carries the sensitivity: erasing every refutation would need the image to have missed
+**17×** more water than it contains.
+
 The observation is a water surface interpolated between 44 surveyed high-water marks, not satellite
-water edges, and one maximum extent rather than a time series. Limits in FINDINGS §11.
+water edges, and one maximum extent rather than a time series. Limits in FINDINGS §11; the second
+observation's own limits — one instant, a radar edge, a bounding box for scene coverage — in
+FINDINGS §15.
 
 ### Step 7 — Uncertainty, demo, human layer. **IN PROGRESS — uncertainty and backcast shipped.**
 
@@ -448,7 +480,9 @@ between libm and V8 cannot change a reported count). Gates assert the forecast-e
 curve passes through its measured knots and is monotone, that a higher threshold never
 crosses more often, and that the grid is not uniformly certain. Render latency is
 unchanged at **6.2 ms median over 24 slider steps** because the ensemble is cached on
-the selection, never recomputed while the stage moves.
+the selection, never recomputed while the stage moves. (Both halves are asserted now, in a
+browser: the budget in `app/tests/e2e/perf.spec.ts`, and the cache by counting the draws a run
+requires — 24 steps produce none, a forced mode switch produces 2,500.)
 
 **The Harvey backcast alert timeline is also done, and it is the item that makes the
 lead-time claim checkable rather than plausible.** Every number in this repo was a
@@ -486,9 +520,22 @@ never higher under the correction, quantiles ordered, correcting a threshold nev
 alert *earlier*, and the correction to silence some but not all warned streets — a
 trade-off that is not being measured fails the run.
 
-**Still to do in this step:** islands by connected component, three-tier notifications,
-household card, low-bandwidth `?text=1`, PWA offline cache, multilingual build-time
-templates.
+**The three-tier alert in English and Spanish is done, and the tier list was chosen against the
+plan's own suggestion by measurement.** `pipeline/notify/templates.json` holds the text once, in
+both languages, and `pipeline/derive/notifications.py` compiles it, applies the policy and runs it
+over the replayed 2017 record: **1,469 of 1,614** streets cross their own threshold inside the
+window (the backcast's own population, by the same rule) for **4,407 messages** — three each, none
+duplicated, none after the water, longest 279 characters. The tiers are a countdown from **that
+street's own crossing** at T−72 h / T−24 h / T−6 h, not from the river's category: the official
+flood stages (45, 48, 50 ft) arrived 7 h and 4 h apart in 2017, so a stage-anchored ladder is three
+texts in one night and none of them about the reader's street. The category still rides inside each
+message as context. Quiet hours 22:00–07:00 hold the first two tiers to 07:00 (225 sends moved per
+held tier) and never the 6-hour one — and because the longest hold is 9 h against a 24 h tier, a
+held message always still precedes the water; the drop-rather-than-send-late rule is a counted
+guard (`held_past_crossing` = 0), not a thing that happens. The browser fills the same templates
+(`app/src/lib/notify.ts`) and the tests require the digit multisets to match, which is why the
+crossing time is 12-hour in both languages. Details and limits: FINDINGS §16. The islands, the
+household card, `?text=1` and the PWA cache are done and are recorded in the README's checklist.
 
 ### Cut
 
@@ -510,13 +557,18 @@ templates.
 | 6 | Harvey validation (observed extent; error measured at +22.3 ft, a constant) | **done** |
 | 7 | uncertainty ensemble (lead time as a distribution) | **done** |
 | 7 | Harvey backcast alert timeline | **done** |
-| 7 | islands by connected component, notifications, household card, `?text=1`, PWA, i18n | — |
+| 7 | islands by connected component, household card, `?text=1`, PWA | **done** |
+| I1 | second observed extent (2016 Sentinel-1 water edge; the +22 ft constant does NOT transfer) | **done** |
+| 7 | notifications (three tiers, EN/ES build-time templates) | **done** |
 
 Steps 1–2 are correctness and must land before any number goes to a judge. Steps
 4–5 are what distinguish this from a dashboard. Step 6 is what proves 1–3 were
 right — and what it proved is more specific than expected: the thresholds are not
 noise and their error is not the shape the summary described, but a **uniform
 ~22 ft offset** that already existed in the repo as a datum gap nobody could
-justify. The correction itself stays unapplied until a second event can test it,
-which makes a **second observed extent** (the 2016 flood, or a NOAA/other Harvey
-product) the highest-value outstanding item in this plan.
+justify. The correction itself stays unapplied, and the second event that was going to
+test it has now run: a Sentinel-1 water edge for the 2016 flood puts the same
+thresholds at an AUC of **0.566** against Harvey's 0.809 on the same 1,187 segments,
+so the offset is **not** the fix — the defect is in the ordering, not the level (Step 3,
+I1 update). What remains outstanding is the DEM / bed-elevation route, which this
+finding argues *for*.

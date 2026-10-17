@@ -14,7 +14,9 @@ to refresh `data/raw/` and rewrite `data/raw/manifest.json`.
 | OpenFEMA v2 (deprecated) | `.../api/open/v2/FimaNfipClaims` | none | ⚠️ 200 | Removed **2026-10-15**; data frozen since 2026-06-01. Do not build on it. |
 | Fort Bend County GIS | `gisweb.fortbendcountytx.gov/arcgis/rest/services` | none | ❌ **522** | Origin down on every retry. Blocks the county FEMA-zone FeatureServer. |
 | **FEMA NFHL (national)** | `hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer` | none | ✅ 200 | Point query at Richmond → `FLD_ZONE AE, ZONE_SUBTY FLOODWAY`. Layer **28 = Flood Hazard Zones**. |
-| FBCAD open data hub | `fbcad-open-data-hub-fortbend.hub.arcgis.com` | none | ✅ 200 | Parcels via ArcGIS Hub (`?f=geojson`). |
+| FBCAD open data hub | `fbcad-open-data-hub-fortbend.hub.arcgis.com` | none | ✅ 200 | Parcels via ArcGIS Hub (`?f=geojson`). Its DCAT catalog lists **26 datasets and no address-point layer**; the parcels are ZIP-only (no queryable service). |
+| **FBCAD road centerlines (the address index)** | `services2.arcgis.com/D4saGHECICkCeoJm/arcgis/rest/services/Roads_view/FeatureServer/0` | none | ✅ **200, CORS `*`** | **The address source.** Every segment carries TIGER-style address ranges — `LF_ADDR`/`LT_ADDR` (left), `RF_ADDR`/`RT_ADDR` (right) — plus `RD_PRE`/`RD_NAME`/`RD_TYPE`/`FULL_NAME`/`ALIAS` and the polyline. `access-control-allow-origin: *` verified, so it is browser-callable, but it is **cached and shipped offline** so the app answers with no network. Probed 2026-10-15: **37,866** segments intersect the padded corridor bbox, **24,005** carry a usable range, **9,962** distinct street names; `maxRecordCount` 2000, pagination supported (order by `FID` — paging without a stable order duplicates and drops rows). Cached by `pipeline/fetch/fetch_fbcad_roads.mjs` → `data/raw/fbcad_roads.json` (2.5 MB, geometry reduced to segment endpoints). **Powering the app's address box via `pipeline/derive/address_index.py`.** |
+| **US Census Geocoder** | `geocoding.geo.census.gov/geocoder/**` | none | ❌ **unusable** | **Rejected by measurement, not preference.** No `Access-Control-Allow-Origin` on two tested origins, so a browser cannot call it at all; and `Public_AR_Current` / `ACS2026` / `Census2020` / `LUCA` all return **0 matches** for Richmond, TX addresses while matching Washington DC, Austin and Houston. This is the source `docs/PLAN.md` §5 originally recommended; that recommendation is now corrected. **Scope of the coverage result:** it is bounded by the queries run and cannot separate "no county coverage" from "that house number is not in the file" — the CORS finding is the unambiguous part. |
 | **USGS Harvey inundation (Brazos, upper reach)** | `sciencebase.gov/catalog/file/get/5aa02374e4b0b1c392e68400` | none | ✅ 200 | **Validation layer.** Item of data release doi:**10.5066/F7VH5N3N** (SIR 2018-5070). `pipeline/fetch/fetch_harvey_inundation.mjs` caches the 2 MB `Brazos_upper.zip` + readme to `data/raw/harvey/` with a receipt. Three layers, **EPSG:6579**: mapped inundation extent (`brazos_upper_final`, 576 km², **not OGC-valid as shipped**), mapped area boundary (948 km², the evaluated-set definition), 44 surveyed high-water marks with NAVD88 water-surface elevations (35 on the Brazos main stem). USGS public domain (CC0). **Nature, and it bounds every conclusion drawn from it:** the extent is a water surface *interpolated between the surveyed high-water marks* and clipped to the boundary — a survey-anchored estimate, **not satellite-observed water edges**, and one maximum extent rather than a time series. The 377 MB `Depth_Brazos_upper.zip` is deliberately **not** fetched (no raster is needed to intersect polygons, and it would dwarf `data/raw/`). Used by `pipeline/derive/harvey_validation.py`; see [FINDINGS.md](./FINDINGS.md) §11. The same cached gauge record is replayed hourly by `pipeline/derive/backcast.py` to produce the lead time the app would have given in 2017 (§13). |
 | **OpenStreetMap (Overpass)** | `overpass-api.de/api/interpreter` | none | ⚠️ **only light queries** | Routing destinations: 59 hospitals / fire / police stations cached to `data/raw/osm_facilities.json` by `pipeline/fetch/fetch_facilities.mjs`. **Node-only queries over this box return in ~2 s; the same query with `way` added returns 502/504 on every endpoint tried.** Mirrors `overpass.kumi.systems`, `maps.mail.ru/osm/tools/overpass` refused or timed out. A missing User-Agent is refused. Data © OpenStreetMap contributors, **ODbL** — attribution is in the app footer and each cached record keeps its raw tags. |
 
@@ -29,6 +31,99 @@ to refresh `data/raw/` and rewrite `data/raw/manifest.json`.
 3. **Fort Bend County GIS is down.** Use **FEMA NFHL** (already the spec's fallback floor) for flood
    zones. Note the county FeatureServer, when it returns, is richer (local parcels) — keep it as an
    optional upgrade, not a dependency.
+
+## Raw inputs — what is tracked, and why
+
+The rule, as `.gitignore` states it:
+
+> The unit of decision is the tree or file a rule covers, because that is the unit a command
+> re-creates and the unit someone has to download. A raw input is **committed** when that unit is
+> small **and** one of: a receipt or manifest of what was fetched; a stable historical record a
+> published number descends from; or a snapshot of a live product the artifacts were derived from —
+> re-fetching a live product returns *different* data, so the artifacts would stop being derivable
+> from the cache. It is **ignored** when that unit is bulk and one committed command re-creates it.
+> Exceptions are file-sized units carved out of a bulk tree.
+
+Naming the unit is what makes the rule and its application agree rather than nearly agree: the USGS
+receipt (`usgs/_summary.json`, 4 KB) is ignored **with the tree it describes**, because it is worth
+nothing in the repo while the 46 MB it accounts for is excluded and the one command restores both;
+and `usgs/iv/08114000_20170822.json` is committed although it sits inside that same tree, because
+it is a single closed event record and not a cache bulk.
+
+That rule is not a tidying preference; it is what decides whether the shipped numbers can be
+checked by anyone who clones the repo. So every rule in the raw-inputs section of `.gitignore`
+carries the command that re-creates what it ignores, and a rule with nothing above it is a
+half-made decision that `pipeline/tests/test_raw_input_policy.py` refuses.
+
+**Committed — 13.7 MB across 20 files.** Everything the app fetches, plus the inputs a shipped
+artifact descends from:
+
+| path | size | why it is committed |
+|---|---|---|
+| `manifest.json`, `harvey/_receipt.json` | 12 KB | the receipts. They record what was fetched and with which counts, and `test_source_integrity.py` holds the caches to them. |
+| `harvey/Brazos_upper.zip` | 2.0 MB | the observed Harvey extent, and the only copy of it (see I1). A re-fetch is a different request to a different host, not a re-computation. |
+| `usfimr/05302016_Brazos_River_at_Richmond_TX.zip`, `usfimr/_receipt.json` | 4.7 MB | **the second observed extent** — the Sentinel-1 water edge `second_event_validation.py` refutes thresholds against, and the only copy of it, on the same argument as the Harvey extent above. It is a fixed release file of a closed 2016 event on a university host, so it is neither re-computable nor guaranteed re-fetchable. |
+| `usgs/iv/08114000_20170822.json` | 493 KB | **the 2017 interval record.** The only input to `backcast.py`, `ensemble.py` and `harvey_validation.py`, and the series the app replays. A closed historical event, so it can never be re-fetched to the same value. |
+| `fbcad_roads.json` | 2.8 MB | **the FBCAD road centerlines with TIGER address ranges.** The sole input to `address_index.py`, whose output ships inside the app — so it is the provenance of the address box, not an optional cache. |
+| `nwps/*.json`, `nws/riv_gauges_brazos.json` | 0.6 MB | snapshots of live products. A re-fetch returns the *current* forecast, which is not what any shipped figure was computed from. |
+| `openfema/nfip_claims_48157_v3.json` | 2.8 MB | the premise measurement (4,895 of 7,389 claims rated in an X zone). Same argument as the NWPS files — and the v2 entity it would otherwise be re-fetched from was withdrawn 2026-10-15. |
+| `osm_facilities.json` | 24 KB | routing destinations; Overpass answers `502` often enough that a re-fetch is a gamble, not a fallback. |
+
+**Ignored — 162 MB, each re-created by one committed command:**
+
+| path | size | re-created by |
+|---|---|---|
+| `hand/` | 66 MB / 14 files | nothing. HAND v2 for HUC 12070104 is a manual archive download, and `road_thresholds.py` cannot run without it. |
+| `usgs/*.json` | 46 MB / 15 files | `node pipeline/fetch/fetch_usgs_history.mjs 1985` |
+| `usgs/iv/*.json` | 50 MB / 124 files | `python pipeline/analyze/travel_time_subdaily.py` |
+
+**What a fresh clone can actually run — measured, not assumed.** The clone content was
+materialised — every tracked file that exists on disk plus every file that is to be committed,
+**136 files / 19 MB** (re-measured when I1 added `data/raw/usfimr/`) — and each suite run against
+it:
+
+| the clone has | what happens |
+|---|---|
+| nothing further | the golden regression fails on **three** stages: `road_thresholds.py`, for the missing `data/raw/hand/12070104/osm_roads_fimpact.csv`; `gauge_redundancy.py`, which dies as `KeyError: ['HPDT2']` — an illegible symptom of a missing `data/raw/usgs/*_daily.json`, naming neither the file nor the fetch command; and `second_event_validation.py`, for the missing `data/raw/usgs/iv/08114000_20160524.json`. The fast suite fails three tests: `test_source_integrity.py` (`missing artifact …/usgs/_summary.json`), `test_grid_parity.py` (no `app/node_modules`), and `test_second_event.py`, whose message names the file and the command that re-creates it. |
+| the USGS daily/peak caches (`node pipeline/fetch/fetch_usgs_history.mjs 1985`) and `app/node_modules` | **one** failure left: `test_second_event.py`. The 2016 event's 15-minute series is a cached event, not a history fetch, so the stage that comparison is scored at cannot be re-derived yet. |
+| also the event caches (`python pipeline/analyze/travel_time_subdaily.py 24`) | the fast suite passes — **82 passed, 2 skipped**. The skips are `test_raw_input_policy.py`'s two `git check-ignore` tests, which skip outside a git checkout by design. |
+| also the HAND archive | the golden regression passes, reproducing all **12** artifacts. |
+
+So the bootstrap is two commands, one download, and one install, and nothing else is missing in
+between. That is the trade the criterion makes deliberately: 162 MB is not going into git to make a
+test feel self-contained.
+
+The raw inputs the policy commits that a `git status` still shows as untracked are exactly four —
+`git ls-files --others --exclude-standard -- data/raw` lists `usgs/iv/08114000_20170822.json`,
+`fbcad_roads.json`, `usfimr/05302016_Brazos_River_at_Richmond_TX.zip` and `usfimr/_receipt.json`,
+and nothing else. The first two have a rule in `.gitignore` because they sit inside an excluded
+tree; the two USFIMR files are outside every excluded tree, so they need no rule — but a new raw
+input that is neither tracked nor ignored is the half-made decision this whole section refuses, and
+that is what `fetch_usfimr_2016.mjs` creates when it runs.
+
+**Why this section exists — two inputs were in the wrong class, and an audit found them.** Both
+were found by reading every rule against what actually reads the file, not by a hunch:
+
+1. **The 2017 interval record was ignored.** `data/raw/usgs/` was excluded wholesale, and the
+   hydrograph the 2017 backcast replays sits inside it — so a clone could not re-derive the
+   backcast or the ensemble, and `test_source_integrity.py` (which asserts that record is
+   present, precisely because the backcast has no other source) could not pass. It is now
+   committed through a negation rule, which is fragile in a specific way: broadening the rule
+   above it back to the directory form silently re-ignores it. `test_raw_input_policy.py` holds it.
+2. **`fbcad_roads.json` was neither tracked nor ignored.** It showed up as `??` on every
+   `git status`, which is how a 2.8 MB file that a shipped feature depends on stays undecided.
+   It is now declared committed.
+
+Unrelated but found while measuring: the `.gitignore` rule `data/raw/*.tmp` guarded a pattern that
+**nothing in the repo writes** (the only reference to `.tmp` anywhere is that line itself), so it
+was dropped rather than left looking like it protected something.
+
+**Not a raw-input problem, but it shows up in the same measurement:** the fast suite also needs
+`app/node_modules`. Without it `test_grid_parity.py` fails inside `npx vitest run` with
+`ERR_MODULE_NOT_FOUND` rather than taking its own `vitest is not installed — run \`cd app && npm
+install\`` skip path, because that path tests for the presence of `npx` and not for a resolvable
+`vitest`. Left as it is: a loud failure is what the suite wants when the cross-language claim
+goes unchecked, and the README already requires `npm install`.
 
 ## The premise, measured (from the cached claims)
 

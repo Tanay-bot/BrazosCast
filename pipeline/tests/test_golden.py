@@ -39,13 +39,14 @@ CHAIN = [
     "pipeline/derive/ensemble.py",
     "pipeline/derive/backcast.py",
     "pipeline/derive/address_index.py",
+    "pipeline/derive/gauge_history.py",
 ]
 
 ARTIFACTS = [
     "road_thresholds.geojson", "road_thresholds.json", "road_thresholds.summary.json",
     "isolation.summary.json", "routing_graph.json", "routing.summary.json",
     "gauge_redundancy.json", "harvey_validation.json", "second_event_validation.json",
-    "ensemble.json", "harvey_backcast.json", "address_index.json",
+    "ensemble.json", "harvey_backcast.json", "address_index.json", "gauge_history.json",
 ]
 
 VOLATILE = re.compile(r"(generated_at|generatedAt|fetchedAt|fetched_at|built_at|timestamp)", re.I)

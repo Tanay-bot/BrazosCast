@@ -89,6 +89,10 @@ REQUIRED = {
     "replay-harvey.json": [
         "points", "peak_ft", "peak_at", "site", "lid", "event", "source",
     ],
+    "gauge_history.json": [
+        "site", "lid", "unit", "n_peaks", "from", "to", "highest.at", "highest.ft",
+        "peaks.0.at", "peaks.0.ft",
+    ],
 }
 
 ROAD_PROPERTIES = [
@@ -163,7 +167,7 @@ def test_exported_files_are_the_derived_files(public_json):
     copied = ["road_thresholds.geojson", "travel_time_subdaily.json",
               "routing_graph.json", "gauge_redundancy.json",
               "harvey_validation.json", "harvey_backcast.json", "ensemble.json",
-              "address_index.json", "notifications.json"]
+              "address_index.json", "notifications.json", "gauge_history.json"]
     for name in copied:
         src = (DERIVED / name).read_bytes()
         dst = (PUBLIC / name).read_bytes()

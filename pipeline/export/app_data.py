@@ -66,7 +66,8 @@ def main():
                "harvey_backcast.json",
                "ensemble.json",
                "address_index.json",
-               "notifications.json"]
+               "notifications.json",
+               "gauge_history.json"]
     for name in payload:
         src = DERIVED / name
         if src.exists():
@@ -111,6 +112,21 @@ def main():
             f"road_thresholds.geojson now has {len(gj['features'])} — rebuild the index.")
     print(f"address_index.json: {len(a['ranges'])} address ranges on "
           f"{a['scope']['app_streets']} streets, {len(a['keys'])} lookup keys")
+
+    # What the river would have to do: the app answers "stays dry" on most days, and the
+    # honest version of that sentence needs the peak record. A missing history is a build
+    # error, not a quietly missing sentence.
+    gh = DERIVED / "gauge_history.json"
+    if not gh.exists():
+        raise SystemExit("data/derived/gauge_history.json missing — run "
+                         "pipeline/derive/gauge_history.py before exporting app data.")
+    g = json.loads(gh.read_text())
+    if not g["peaks"]:
+        raise SystemExit("gauge_history.json carries no peaks — the quiet-river answer "
+                         "would have nothing to say")
+    print(f"gauge_history.json: {g['n_peaks']} annual stage peaks, "
+          f"{g['from']} .. {g['to']}, highest {g['highest']['ft']:.2f} ft "
+          f"({g['highest']['at']})")
 
     hv = DERIVED / "harvey_validation.json"
     if not hv.exists():

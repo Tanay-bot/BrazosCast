@@ -3,294 +3,191 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>BrazosCast — when water reaches your street</title>
-  <meta name="description" content="Address-first flood lead-time for the lower Brazos at Richmond, Texas. Not whether the river is high — when water reaches your street, and how many hours you have." />
-  <!-- The webfonts are 85 KB measured (5 woff2 files plus their CSS), and ?text=1 exists
-       for a phone on a connection where 85 KB is the difference between an answer and a
-       spinner. They are attached here, inline, because this is the only point that runs
-       BEFORE the browser would request them — a check inside the module is always too
-       late, and that is measured, not assumed: as a static <link> text mode downloaded
-       all five woff2 files. Text mode also preconnects to neither font host.
-       The token "text=1" is therefore stated twice, here and in readUrl(). The text-mode
-       test asserts the two agree; the CSS font stacks (Impact/Narrow, system sans, mono)
-       are the fallback either way, so text mode is legible with no webfont at all. -->
+  <title>BrazosCast — how many hours until water reaches your street</title>
+  <meta name="description" content="The Brazos River at Richmond, read for one household. Type your street and see where it sits on the gauge, when water arrives, and how many hours you have." />
+  <meta name="theme-color" content="#0e1516" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+
+  <!-- Legacy links first, before anything renders. The app used to live at `/`, and every
+       link already sent — a household's street, a replay, a text-only view — carries its state
+       in the query string. Those links must still open the answer they were about, so this
+       redirects them to the app's new address with the query intact. It runs inline here
+       because a redirect after module download would flash the homepage first. -->
   <script>
-    if (!/[?&]text=1(&|$)/.test(location.search)) {
-      [
-        ["https://fonts.googleapis.com", false],
-        ["https://fonts.gstatic.com", true],
-      ].forEach(function (h) {
-        var p = document.createElement("link");
-        p.rel = "preconnect";
-        p.href = h[0];
-        if (h[1]) p.crossOrigin = "";
-        document.head.appendChild(p);
-      });
-      var f = document.createElement("link");
-      f.rel = "stylesheet";
-      f.href = "https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap";
-      document.head.appendChild(f);
-    }
+    (function () {
+      var q = new URLSearchParams(location.search);
+      if (["addr", "stage", "mode", "text", "lang"].some(function (k) { return q.has(k); })) {
+        location.replace("./app" + location.search + location.hash);
+      }
+    })();
   </script>
+
+  <!-- The lockup names Barlow Condensed, Public Sans and IBM Plex Mono, which are the three
+       faces the app already loads. Same hosts, same request, no new families. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" />
 </head>
-<body>
-  <header class="hdr">
-    <div class="hdr-in">
-      <div class="brand"><b>BrazosCast</b><span>Richmond · Fort&nbsp;Bend&nbsp;County</span></div>
-      <div class="hdr-sp"></div>
-      <!-- Shown only when the browser reports no connection. The service worker answers
-           from the last downloaded copy, which is why the page still works — but an old
-           reading presented as a live one would be worse than no reading, so the state
-           is stated instead of hidden. Its title says what "offline" means here. -->
-      <span class="offline-tag" id="offlineTag" hidden
-            title="Your browser reports no connection. The answer is coming from the last downloaded copy.">offline</span>
-      <span class="src-tag" id="srcTag">connecting…</span>
-      <div class="mode" role="group" aria-label="Data mode">
-        <button id="mLive" aria-pressed="true">Live</button>
-        <button id="mReplay" aria-pressed="false">Harvey replay</button>
+<body class="landing">
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="site-hdr">
+    <div class="site-hdr-in">
+      <a class="brand" href="./" aria-label="BrazosCast home">
+        <img class="brand-mark" src="/brand/mark.svg" alt="" width="34" height="34" />
+        <span class="brand-word">BrazosCast</span>
+        <span class="brand-sub">Richmond · Fort&nbsp;Bend</span>
+      </a>
+      <nav class="site-nav" aria-label="Sections">
+        <a href="#households">Households</a>
+        <a href="#responders">Responders</a>
+        <a href="#planning">Planning</a>
+      </nav>
+      <div class="site-actions">
+        <a class="open-app" href="./app">Open the map</a>
       </div>
-      <!-- ?text=1 — the low-bandwidth view. A link, not a button: the mode is in the
-           URL, so it survives a refresh and can be sent to someone else as-is.
-           Its href is rebuilt from the current parameters by syncUrl(). -->
-      <a class="view-toggle" id="viewToggle" href="?text=1"
-         aria-label="Switch to the text-only view: no map, no chart, far less to download">Text-only</a>
     </div>
   </header>
 
-  <main class="wrap">
-    <section class="ask" aria-label="Find your street">
-      <label for="addr">Your address</label>
-      <div class="ask-row">
-        <input id="addr" type="text" list="samples" placeholder="e.g. 1600 Jackson Street, Richmond, TX" autocomplete="off" aria-describedby="askHint" />
-        <button id="go" class="go">Check my street</button>
-      </div>
-      <datalist id="samples"></datalist>
-      <p class="hint" id="askHint">Type an address or a modelled street name, or click a road on the map. Separate several addresses with | to rank them together.</p>
-    </section>
+  <main id="main">
+    <div class="page">
+      <div class="content">
 
-    <section class="answer" id="answer" aria-live="polite">
-      <div class="sev-stripe" id="sevStripe"></div>
-      <div class="answer-in">
-        <div>
-          <div class="eyebrow"><span class="pill" id="sevPill">—</span> <span class="pill est" id="estPill" style="display:none">stage estimated</span> <span id="addrOut">no street selected</span></div>
-          <h1 class="verdict" id="verdict">Enter an address to see your lead time</h1>
-          <p class="sub" id="sub">The river is a number. Your street is the answer.</p>
-        </div>
-        <div class="count"><b id="hours">—</b><span id="hoursLab">hours of lead time</span></div>
-      </div>
-      <!-- The answer is only useful if it can be carried to someone else. The address,
-           stage and mode all live in the URL, so this row is how the link gets out. -->
-      <div class="share-row">
-        <button id="share" class="share" type="button">Copy link to this answer</button>
-        <span class="share-note" id="shareNote">the address, stage and mode travel in the link</span>
-      </div>
-      <!-- Uncertainty ensemble (pipeline/derive/ensemble.py). The point estimate above is
-           one run of one model; this is the same question asked across the measured error. -->
-      <div class="ens" id="ens" hidden>
-        <div class="ens-title">Uncertainty<span>·</span>with the measured threshold error applied</div>
-        <div class="ens-head"><b id="ensCount">—</b><span id="ensLab">runs reach this street</span></div>
-        <div class="ens-grid" id="ensGrid" aria-hidden="true"></div>
-        <div class="ens-bar">
-          <span class="ens-span" id="ensSpan"></span>
-          <i class="ens-tick" id="ensTick"></i>
-          <i class="ens-point" id="ensPoint"></i>
-        </div>
-        <p class="ens-meta"><span id="ensRange">—</span><span id="ensNever">—</span></p>
-        <p class="ens-note" id="ensNote"></p>
-      </div>
-      <div class="prov" id="prov"></div>
-    </section>
+        <section class="hero" aria-labelledby="thesis">
+          <p class="eyebrow"><span class="dot" aria-hidden="true"></span>Live gauge · RMOT2 · Brazos River at Richmond</p>
+          <h1 class="thesis" id="thesis">
+            <span class="thesis-line">The Brazos is at</span>
+            <span class="thesis-fig"><b id="stageNow">—</b><i>ft</i></span>
+          </h1>
+          <p class="hero-sub" id="heroSub">Reading the gauge…</p>
 
-    <!-- F3 — the household card. Hidden for one address: the answer above already IS that row.
-         Shown from two, ranked by when each is reached, with the row that is on screen marked
-         and every row clickable — the answer above is about exactly one of them. -->
-    <section class="card hh" id="hhCard" aria-label="Your household" hidden>
-      <div class="card-h"><h2>Your household</h2><span class="note" id="hhNote">—</span></div>
-      <div class="card-b">
-        <ol class="hh-list" id="hhList"></ol>
-        <p class="hint" id="hhHint">Soonest first. Click an address to make it the answer above.</p>
-      </div>
-    </section>
-
-    <!-- F7 — the answer, as it would reach someone who is not looking at the page. The
-         text and schedule are compiled at build time in English and Spanish
-         (pipeline/notify/templates.json), filled with THIS street's numbers, and the send
-         is simulated: nothing leaves the page. The language is a link parameter, because
-         the answer is meant to be passed on. Titles are filled from the same artifact, so
-         a half-translated card is not a state this can be in. -->
-    <section class="card al" id="alertCard" hidden aria-label="Simulated alert">
-      <div class="card-h"><h2 id="alTitle">The alert you would get</h2>
-        <span class="note" id="alNote">simulated send · nothing leaves this page</span></div>
-      <div class="card-b">
-        <div class="al-top">
-          <p class="al-lead" id="alLead"></p>
-          <div class="mode al-lang" id="alLang" role="group" aria-label="Alert language">
-            <button id="langEn" aria-pressed="true">EN</button>
-            <button id="langEs" aria-pressed="false">ES</button>
-          </div>
-        </div>
-        <ol class="al-list" id="alList"></ol>
-        <p class="al-none" id="alNone" hidden></p>
-        <p class="hint al-quiet" id="alQuiet"></p>
-      </div>
-    </section>
-
-    <!-- I2 — two gauges, one answer. The app is keyed to one gauge; a second one upstream,
-         transferred down the reach at the lag it was fitted at, is the only number here that
-         can disagree with the reading everything else depends on. Live mode only: in replay
-         there is no live reading to check. The band is the error the pipeline measured on
-         held-out events, so "agrees" is a claim with a measurement behind it. -->
-    <section class="card xc" id="xcCard" hidden aria-label="Upstream gauge cross-check">
-      <div class="card-h"><h2>Two gauges, one answer</h2><span class="note" id="xcNote">—</span></div>
-      <div class="card-b">
-        <div id="xcBody"></div>
-        <p class="hint" id="xcVerdict"></p>
-      </div>
-    </section>
-
-    <!-- I6 — does the answer survive? Every published number descends from two estimated
-         quantities (the street's threshold and the forecast), and both have a measured error.
-         This perturbs the answer by exactly those and asks whether the qualitative claim —
-         water reaches this street inside the window — still holds. -->
-    <section class="card rob" id="robCard" hidden aria-label="Robustness of the answer">
-      <div class="card-h"><h2>Does the answer survive?</h2>
-        <span class="note">perturbed by the errors this project measured</span></div>
-      <div class="card-b">
-        <p class="rob-head" id="robHead"></p>
-        <div class="rob-table" id="robBody"></div>
-        <p class="hint" id="robVerdict"></p>
-      </div>
-    </section>
-
-    <section class="chain" aria-label="Crest travelling down the gauge chain">
-      <div class="card-h"><h2>Crest lead time from upstream gauges</h2>
-        <span class="note" id="chainNote">derived from historical crest travel times</span></div>
-      <ol class="chain-list" id="chainList"></ol>
-    </section>
-
-    <div class="cols">
-      <section class="card map-card">
-        <div class="card-h"><h2>Roads at this stage</h2>
-          <span class="note" id="mapNote">—</span></div>
-        <div id="map" class="map"></div>
-        <div class="legend">
-          <span class="lg"><span class="sw" style="background:var(--dry)"></span>Passable</span>
-          <span class="lg"><span class="sw" style="background:var(--flood)"></span>Under water at this stage</span>
-          <span class="lg"><span class="sw" style="background:var(--you)"></span>Your segment</span>
-          <span class="lg"><span class="sw" style="background:var(--levee)"></span>Levee-protected (HAND unreliable)</span>
-          <span class="lg"><span class="sw" style="background:var(--island)"></span>Edge of your island (crossing under water)</span>
-          <span class="lg"><span class="sw" style="background:#10261d"></span>Modelled route to a destination</span>
-        </div>
-      </section>
-
-      <div class="side">
-        <section class="card">
-          <div class="card-h"><h2>River stage</h2><span class="note">drag to explore</span></div>
-          <div class="stagebox">
-            <div class="stage-top">
-              <div><div class="stage-lab">Richmond gauge · RMOT2</div>
-                <div class="stage-val"><span id="stageVal">—</span><i>ft</i></div></div>
-              <div style="text-align:right"><div class="stage-lab">Category</div>
-                <div class="cat" id="catVal">—</div></div>
+          <!-- `action` is the no-script path: the submit is intercepted below, but a browser
+               without JS posts the same query to the app, which reads `addr` on boot. -->
+          <form class="probe" id="probe" action="./app" method="get" novalidate>
+            <label for="addr">Your street</label>
+            <div class="probe-row">
+              <input id="addr" name="addr" type="text" autocomplete="off" spellcheck="false"
+                     placeholder="Skinner Lane, or 1600 Jackson Street"
+                     aria-describedby="probeNote" />
+              <button type="submit" class="probe-go">Put it on the gauge</button>
             </div>
-            <input type="range" id="stage" min="5" max="56" step="0.1" value="9" aria-label="River stage in feet" />
-            <div class="hint"><span id="stageHint">official NWS categories: action 20 · flood 45 · moderate 48 · major 50</span></div>
+            <p class="probe-note" id="probeNote" role="status" aria-live="polite">
+              A street name is enough. A house number picks the segment nearest you.
+            </p>
+            <p class="probe-link" id="probeLink" hidden>
+              <a id="probeHref" href="./app">Open the full answer<svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h9M8.5 3.5 13 8l-4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+            </p>
+          </form>
+
+          <p class="hero-alt"><a href="./app">Or open the map and pick a road directly</a></p>
+
+          <!-- Mobile gets the same scale as a band under the hero; the vertical rail is the
+               desktop reading. Both are rendered from one function, so they cannot disagree. -->
+          <div class="rail-h" id="railH" aria-hidden="true"></div>
+        </section>
+
+        <section class="meaning" aria-labelledby="meaning-h">
+          <p class="label">The measure</p>
+          <h2 id="meaning-h">A stage is a height. Your street is the answer.</h2>
+          <div class="meaning-body">
+            <p class="lede">
+              The gauge reports feet above its own zero, not a verdict. <b>20 ft</b> is action
+              stage — the river is out of its banks somewhere. <b>45 ft</b> is flood stage.
+              Neither is about you.
+            </p>
+            <p>
+              What matters is the stage at which water reaches the low point of <em>your</em>
+              street, and the hours between the crest passing upstream and that moment. BrazosCast
+              answers that per street segment, from the county's own address ranges, the national
+              HAND flood model and the observed 2017 flood — and it shows the error on every number
+              it prints.
+            </p>
           </div>
+          <dl class="scales" aria-label="Official stages on this gauge">
+            <div><dt>Action</dt><dd>20 ft</dd></div>
+            <div><dt>Flood</dt><dd>45 ft</dd></div>
+            <div><dt>Moderate</dt><dd>48 ft</dd></div>
+            <div><dt>Major</dt><dd>50 ft</dd></div>
+            <div><dt>Record · 1913</dt><dd>61.2 ft</dd></div>
+          </dl>
         </section>
 
-        <section class="card">
-          <div class="card-h"><h2>Ways out</h2><span class="note" id="exitNote">pick a street first</span></div>
-          <div class="card-b" id="exits"><p class="muted">Enter an address, or click a road on the map.</p></div>
-          <!-- F4 — the largest set of roads still reachable from this street without
-               crossing water (pipeline/derive/routing.py's island sweep, recomputed in the
-               browser). Its extent is a sentence and its BOUNDARY is the amber line on the
-               map: the cut is the smaller set, and it is the one the question is about. -->
-          <p class="hint island-note" id="islandNote" hidden></p>
+        <section class="case" id="households" aria-labelledby="households-h">
+          <p class="label">For households</p>
+          <h2 id="households-h">Know which of your streets goes first.</h2>
+          <p>
+            Add the addresses you actually care about — home, a parent's house, the school — and
+            they are ranked by when each is reached, not by how high the river is. Save them to an
+            account and they are there on any phone. The answer keeps working when the storm takes
+            the connection, because it was computed before the storm.
+          </p>
+        </section>
+
+        <section class="case" id="responders" aria-labelledby="responders-h">
+          <p class="label">For responders</p>
+          <h2 id="responders-h">Which roads are cut while the street is still dry.</h2>
+          <p>
+            The inverse question is the operational one: a street with no water on it and no dry
+            route to a hospital. The app computes that from the road graph at the stage you choose,
+            alongside the routes that still reach a fire station — and it says when the answer is a
+            boundary of the study area rather than a real cut.
+          </p>
+        </section>
+
+        <section class="case" id="planning" aria-labelledby="planning-h">
+          <p class="label">For planning and press</p>
+          <h2 id="planning-h">Every number carries the error it was measured at.</h2>
+          <p>
+            Thresholds scored against the observed 2017 extent, then against a second flood the
+            thresholds were not fitted on. The app publishes the result even where it is
+            unflattering: its own thresholds are <b>biased low<span id="biasFt"></span></b>, and it
+            says so on the answer itself rather than in a footnote. <!-- The size of the bias is
+            filled from harvey_validation.json by landing.ts, the same artifact the app reads it
+            from: a measured number typed into a page drifts from its artifact, and this one
+            already had. -->
+          </p>
+        </section>
+
+        <section class="limits" aria-labelledby="limits-h">
+          <p class="label">The limits</p>
+          <h2 id="limits-h">What this does not claim.</h2>
+          <ul>
+            <li>Road depths are <b>modelled, never observed</b>. A threshold is a model output.</li>
+            <li>Flood extents are <b>provisional</b> pending a unit check on the HAND raster.</li>
+            <li>A refuge is ground the modelled water does not reach at 50 ft — <b>not a shelter</b>.</li>
+            <li>Responder destinations are volunteer-mapped OpenStreetMap points, <b>not a dispatch feed</b>.</li>
+            <li>Twelve inches of moving water carries most cars away. <b>Never drive through water.</b></li>
+          </ul>
         </section>
       </div>
-    </div>
 
-    <section class="card hg">
-      <div class="card-h"><h2>Stage history and forecast</h2><span class="note" id="chartNote">—</span></div>
-      <div class="hgwrap"><canvas id="chart" height="300"></canvas></div>
-      <!-- The same series as a sentence, for the text-only route and for anyone the
-           canvas does not reach. renderChartText() fills it in both modes. -->
-      <p class="chart-text" id="chartText"></p>
-      <!-- I4 — bring your own forecast. The app's rule is a comparison between a series and
-           one number per street, so any series works; the honest answer to "why should I
-           trust your forecast?" is that you do not have to. Only the forecast half is
-           replaced (observations are what happened), and nothing is stored or put in the URL. -->
-      <details class="fc">
-        <summary>Use your own forecast instead</summary>
-        <p class="hint">One point per line: an ISO time (UTC unless you write an offset) or hours
-          from now, then the stage in feet. e.g. <code>+6, 34.2</code> or
-          <code>2026-10-18T06:00 41.5</code>. The observed record is kept; only the forecast is
-          replaced. Nothing you paste is stored or shared — clear restores the gauge's series.</p>
-        <textarea id="fcText" rows="5" spellcheck="false"
-          placeholder="+6, 33.0&#10;+12, 36.4&#10;+18, 39.1&#10;+24, 40.2"></textarea>
-        <div class="fc-row">
-          <button id="fcUse" type="button">Use this forecast</button>
-          <button id="fcClear" type="button" class="ghost">Clear</button>
+      <!-- The signature: a staff gauge pinned beside the page, carrying the real thresholds, the
+           live needle, and — once a street is resolved — that street's own red dot. Draggable and
+           keyboard-operable: a gauge you cannot touch is a picture of a gauge. -->
+      <aside class="rail" aria-label="River stage scale">
+        <div class="rail-head">
+          <span class="rail-lab">Stage</span>
+          <span class="rail-now" id="railNow">—</span>
         </div>
-        <p class="hint" id="fcNote">Not using a pasted forecast: the gauge's own series is shown.</p>
-      </details>
-    </section>
-
-    <!-- Harvey backcast (pipeline/derive/backcast.py). Replay only: 2017 is the one flood
-         in the record, so it is the one place the app's lead time can be counted rather
-         than asserted. The onsets and the crest are observed; which street floods when is
-         not, and the block separates the two instead of blurring them. -->
-    <section class="card bc" id="bcCard" hidden>
-      <div class="card-h"><h2>What BrazosCast would have sent</h2>
-        <span class="note" id="bcNote">—</span></div>
-      <div class="card-b">
-        <div class="bc-tl" id="bcTl"></div>
-        <!-- I3 — the same flood, for the street in front of you. The corridor's median is
-             not a household's answer, and the per-segment array is what makes the
-             historical claim personal. -->
-        <p class="bc-street" id="bcStreet"></p>
-        <p class="bc-stage" id="bcStage"></p>
-        <p class="bc-sum" id="bcSum"></p>
-        <p class="bc-cav" id="bcCav"></p>
-      </div>
-    </section>
-
-    <!-- I5 — the inverse question: not "is my street wet" but "who has a dry road and no way
-         out". The set is computed from the same graph the ways-out panel reads, in the same
-         segment order, and it excludes the streets the extract cannot route a responder to at
-         any stage rather than reporting them as trapped. -->
-    <section class="card cut" id="cutCard" hidden aria-label="Segments cut off before their street floods">
-      <div class="card-h"><h2>Dry road, no way out</h2><span class="note" id="cutNote">—</span></div>
-      <div class="card-b">
-        <p class="cut-head" id="cutHead"></p>
-        <ol class="cut-list" id="cutList"></ol>
-        <p class="hint" id="cutWorst"></p>
-      </div>
-    </section>
-
-    <footer class="src">
-      <p><b>Where the numbers come from.</b> Live stage and official forecast: NOAA NWPS <code>RMOT2</code> (USGS <code>08114000</code>), action 20 ft · flood 45 ft · moderate 48 ft · major 50 ft.
-      Per-street flood thresholds: NOAA-OWP HAND FIM (<code>hand_fim_4_9_9_0/12070104</code>), mainstem levelpath.
-      Crest lead times: derived in-repo by cross-correlating historical gauge peaks (<code>pipeline/analyze/travel_time_subdaily.py</code>).
-      Way out: computed in-repo from the road graph (<code>pipeline/derive/isolation.py</code>) — the stage at which every dry route off a street is cut.
-      If <code>RMOT2</code> stops reporting, the stage is estimated from the upstream gauges (<code>pipeline/derive/gauge_redundancy.py</code>), labelled as estimated with a measured uncertainty band — and only once the last observation is too old for that to be the better answer.
-      Routing: shortest path on that same graph to real OpenStreetMap destinations — hospitals, fire and police stations (<code>pipeline/derive/routing.py</code>), flooded segments weighted rather than removed so a fully-cut network still reports the best crossing.
-      Island: the same graph's connected pieces at the current stage — the roads still reachable from your street without crossing water — with the flooded segments at that island's edge drawn on the map. The extract is fragmented before any flooding, so an island without a responder is usually the boundary of the study area rather than a cut-off.
-      Harvey backcast: the observed 2017 gauge record replayed through the same rule (<code>pipeline/derive/backcast.py</code>) — what the app <em>would</em> have sent, with the onsets and the crest observed and the per-street timing not.
-      Flood zones: FEMA NFHL. Claims context: OpenFEMA.<br />
-      Cross-check: the upstream gauges (<code>HPDT2</code>, <code>BAWT2</code>) transferred down the reach at the lag each was fitted at, compared with the live reading against the error band measured on held-out events (<code>pipeline/derive/gauge_redundancy.py</code>).
-      Robustness: the answer re-run with the per-street threshold error and the benchmark's forecast RMSE applied (<code>pipeline/derive/ensemble.py</code>, <code>pipeline/models/forecast.py</code>).
-      Dry road, no way out: the same graph's <code>segment_route_cut_ft</code>, joined to each street's own threshold.
-      Past stages: the USGS annual peak record for <code>08114000</code> (<code>pipeline/derive/gauge_history.py</code>) — annual maxima, not a continuous series.
-      A forecast you paste is yours: it never leaves the page and is not part of any published number.</p>
-      <p class="disc">A working prototype. Road depths are modelled, never observed. Flood extents are provisional pending a unit check on the HAND raster.
-      A refuge is ground the modelled water does not reach at 50 ft — not a shelter — and routes leaving the mapped corridor are not counted, so a street
-      marked “no dry route out”, or one with no modelled route to a responder, may still have one outside the study area.
-      Destinations are volunteer-mapped OSM points, not a dispatch feed.
-      12 inches of moving water carries most cars away — never drive through water.</p>
-    </footer>
+        <div class="rail-track" id="railTrack" role="slider" tabindex="0"
+             aria-label="River stage in feet" aria-valuemin="0" aria-valuemax="66"
+             aria-valuenow="8.5" aria-valuetext="8.5 feet">
+          <div class="rail-ticks" id="railTicks"></div>
+          <div class="rail-needle" id="railNeedle" hidden><span></span></div>
+          <div class="rail-you" id="railYou" hidden><span class="rail-you-dot"></span><span class="rail-you-lab" id="railYouLab"></span></div>
+        </div>
+        <p class="rail-cap" id="railCap">Reading the gauge…</p>
+      </aside>
+    </div>
   </main>
 
-  <script type="module" src="/src/main.ts"></script>
+  <footer class="site-foot">
+    <img src="/brand/mark-mono.svg" alt="" width="26" height="26" class="foot-mark" />
+    <p><b>BrazosCast</b> — flood lead time for the lower Brazos. Live stage and forecast from NOAA NWPS <code>RMOT2</code>; street thresholds from NOAA-OWP HAND; the 2017 backcast from the observed USGS record; the peak record from <code>08114000</code>, 1884–2025.</p>
+    <p class="foot-links"><a href="./app">The map</a> · <a href="./app?mode=replay">Harvey replay</a> · <a href="./app?text=1">Text-only view</a></p>
+    <p class="foot-disc">A working prototype, not an official warning service. For life-safety decisions, follow NWS and Fort Bend County Emergency Management.</p>
+  </footer>
+
+  <script type="module" src="/src/landing.ts"></script>
 </body>
 </html>

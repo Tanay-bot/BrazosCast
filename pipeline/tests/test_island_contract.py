@@ -172,8 +172,10 @@ def test_the_attribution_rule_is_held_on_a_fixture_the_shipped_data_cannot_expre
 def test_the_map_layer_and_the_legend_are_wired_to_the_same_colour(root):
     """A boundary drawn in one colour and keyed in another is a boundary nobody can find."""
     src = (root / "app" / "src" / "main.ts").read_text()
-    html = (root / "app" / "index.html").read_text()
-    css = (root / "app" / "src" / "style.css").read_text()
+    html = (root / "app" / "app.html").read_text()
+    # Tokens moved to tokens.css when the landing began sharing them.
+    css = ((root / "app" / "src" / "tokens.css").read_text()
+           + (root / "app" / "src" / "style.css").read_text())
 
     token = re.search(r"--island:\s*(#[0-9a-fA-F]{3,8})", css)
     assert token, "style.css no longer defines an --island colour, so the legend has no swatch"

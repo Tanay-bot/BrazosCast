@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="16" height="16" role="img" aria-label="BrazosCast">
+  <rect width="120" height="120" rx="27" fill="#121819"/>
+  <path d="M 24 96 C 48 93, 58 86, 66 74 C 74 62, 84 44, 96 36" fill="none" stroke="#3fa0c8" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="66" cy="74" r="13" fill="#e0566c"/>
+</svg>

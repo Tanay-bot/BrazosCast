@@ -1,0 +1,49 @@
+/* BrazosCast — the layer both pages share.
+ *
+ * The app (style.css) and the landing (landing.css) are different documents with the same
+ * instrument in them: same ink, same water, same crossing red, same three typefaces. Those
+ * decisions live here so a homepage cannot quietly invent a fifth grey or a new accent, and so
+ * the brand assets in app/public/brand/ have exactly one palette to agree with.
+ *
+ * Barlow Condensed (highway signage) · Public Sans (US Web Design System face) · IBM Plex Mono
+ * for every number. No new font requests: the lockup names these three and the app already
+ * loads them.
+ */
+:root{
+  --bg:#eef1f0; --surface:#fff; --surface-2:#e3e9e8; --sunk:#d8e0df;
+  --fg:#121819; --fg-dim:#5c6a6b; --fg-faint:#879596;
+  --line:#c8d3d2; --line-soft:#dde4e3;
+  --water:#1a6d93; --dry:#2e7d5b; --action:#a8761a; --minor:#c4621c;
+  --moderate:#ab3a16; --major:#8f1d2e;
+  --flood:#a01b2b; --you:#1a6d93; --levee:#6b4fa0; --island:#f0a12a;
+  --f-display:"Barlow Condensed",Impact,"Arial Narrow",sans-serif;
+  --f-body:"Public Sans","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#0c1213; --surface:#141c1e; --surface-2:#1c2628; --sunk:#0a1011;
+  --fg:#e7eeed; --fg-dim:#93a3a4; --fg-faint:#6b7b7c;
+  --line:#2a3639; --line-soft:#222c2e;
+  --water:#3fa0c8; --dry:#49b589; --action:#d3a13f; --minor:#e0863f;
+  --moderate:#d9603a; --major:#e0566c;
+  --flood:#e0566c; --you:#3fa0c8; --levee:#a98be0; --island:#f4b95e; color-scheme:dark;
+}}
+/* The instrument surface is always ink, in both themes, because it is the mark's own card:
+   a gauge is read on dark glass. It is declared here rather than in landing.css so the app's
+   ink and the landing's ink can never diverge. */
+:root{
+  --ink:#0e1516; --ink-2:#131c1e; --ink-line:#2a3639;
+  --paper:#e7eeed; --paper-dim:#93a3a4;
+  /* The street's own dot, on ink. It is the dark theme's crossing colour in both themes,
+     because the plate it sits on is ink in both — a contrast decision, not a preference. */
+  --crossing:#e0566c;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--f-body);
+  line-height:1.5;-webkit-font-smoothing:antialiased}
+h1,h2{margin:0;font-family:var(--f-display);font-weight:600;letter-spacing:.01em}
+p{margin:0}
+a{color:var(--water)}
+:focus-visible{outline:2px solid var(--water);outline-offset:2px;border-radius:3px}
+.muted{color:var(--fg-dim);font-size:13.5px}

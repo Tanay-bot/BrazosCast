@@ -1,0 +1,208 @@
+/* BrazosCast — the landing page.
+ *
+ * One instrument, one page. The type does the work: Barlow Condensed carries the sentence,
+ * IBM Plex Mono carries every measurement, and the only two colours that are ever allowed to
+ * mean something are water (the river) and crossing (your threshold). Everything else is ink,
+ * paper and silT.
+ *
+ * The rail is the page's one bold move. It is an ink card in both themes — the mark's own
+ * card — because a gauge is read on dark glass, and it stays pinned while the prose scrolls
+ * past it so every claim is read against the river's real scale.
+ */
+
+.landing{overflow-x:hidden}
+.landing .skip{position:absolute;left:-9999px;top:0;background:var(--fg);color:var(--bg);
+  padding:10px 14px;border-radius:0 0 8px 0;z-index:100;font:600 13px/1 var(--f-body)}
+.landing .skip:focus{left:0}
+
+/* ------------------------------------------------------------------ header --- */
+.site-hdr{position:sticky;top:0;z-index:40;border-bottom:1px solid var(--line);
+  background:color-mix(in srgb,var(--bg) 90%,transparent);backdrop-filter:blur(10px)}
+.site-hdr-in{max-width:1240px;margin:0 auto;padding:12px 24px;display:flex;align-items:center;gap:22px}
+.site-hdr .brand{display:flex;align-items:center;gap:11px;text-decoration:none;color:inherit}
+.brand-mark{width:34px;height:34px;border-radius:9px;flex:none}
+.brand-word{font-family:var(--f-display);font-weight:700;font-size:25px;line-height:1;letter-spacing:.01em}
+.brand-sub{font:600 9.5px/1 var(--f-body);letter-spacing:.16em;text-transform:uppercase;
+  color:var(--fg-faint);padding-left:11px;border-left:1px solid var(--line)}
+.site-nav{display:flex;gap:20px;margin-left:auto}
+.site-nav a{font:500 13px/1 var(--f-body);color:var(--fg-dim);text-decoration:none;
+  padding:6px 0;border-bottom:1px solid transparent}
+.site-nav a:hover{color:var(--fg);border-bottom-color:var(--water)}
+.site-actions{display:flex;align-items:center;gap:9px}
+.open-app{font:600 12.5px/1 var(--f-body);padding:10px 14px;border-radius:7px;text-decoration:none;
+  background:var(--water);color:#fff;border:1px solid var(--water)}
+.open-app:hover{filter:brightness(1.08)}
+
+/* ------------------------------------------------------------------- page --- */
+.landing main{max-width:1240px;margin:0 auto;padding:0 24px}
+.page{display:grid;grid-template-columns:minmax(0,1fr) 128px;gap:44px;align-items:start}
+
+/* ------------------------------------------------------------------- hero --- */
+.hero{padding:66px 0 58px;border-bottom:1px solid var(--line)}
+.eyebrow{display:flex;align-items:center;gap:8px;font:600 10.5px/1.4 var(--f-mono);
+  letter-spacing:.13em;text-transform:uppercase;color:var(--fg-dim)}
+.eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--water);flex:none;
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--water) 22%,transparent)}
+.thesis{margin-top:22px;font-size:clamp(38px,6.4vw,94px);line-height:.94;font-weight:600;
+  letter-spacing:-.012em;max-width:17ch}
+.thesis-line{display:block;color:var(--fg)}
+.thesis-fig{display:flex;align-items:baseline;gap:.05em;margin-top:.04em}
+.thesis-fig b{font-family:var(--f-mono);font-weight:600;font-variant-numeric:tabular-nums;
+  font-size:clamp(52px,8.6vw,132px);line-height:.9;letter-spacing:-.045em;color:var(--water)}
+.thesis-fig i{font-style:normal;font:500 clamp(16px,1.9vw,26px)/1 var(--f-mono);
+  color:var(--fg-faint);margin-left:.35em;letter-spacing:.02em}
+.hero-sub{margin-top:20px;font-size:15.5px;line-height:1.6;color:var(--fg-dim);max-width:52ch}
+.hero-sub b{color:var(--fg);font-weight:600}
+.hero-sub .fail{color:var(--action)}
+
+/* The address box is the page's only form and its only ask: it gets weight, not decoration. */
+.probe{margin-top:34px;max-width:620px;background:var(--surface);border:1px solid var(--line);
+  border-radius:13px;padding:16px 17px 14px}
+.probe label{display:block;font:600 10px/1 var(--f-body);letter-spacing:.16em;
+  text-transform:uppercase;color:var(--fg-dim)}
+.probe-row{display:flex;gap:9px;margin-top:10px;flex-wrap:wrap}
+.probe input{flex:1 1 280px;min-width:0;font:400 15px/1 var(--f-body);padding:13px 13px;
+  border:1px solid var(--line);border-radius:9px;background:var(--bg);color:var(--fg)}
+.probe input::placeholder{color:var(--fg-faint)}
+.probe-go{font:600 13px/1 var(--f-body);padding:14px 17px;border-radius:9px;cursor:pointer;
+  border:1px solid var(--water);background:var(--water);color:#fff;white-space:nowrap}
+.probe-go:hover{filter:brightness(1.08)}
+.probe-note{margin-top:11px;font-size:12.5px;line-height:1.55;color:var(--fg-dim);min-height:2.4em}
+.probe-note.bad{color:var(--action)}
+.probe-note.ok{color:var(--fg)}
+.probe-link{margin-top:10px}
+.probe-link a,.hero-alt a{display:inline-flex;align-items:center;gap:7px;
+  font:600 12px/1 var(--f-body);letter-spacing:.03em;color:var(--water);text-decoration:none}
+.probe-link a:hover,.hero-alt a:hover{text-decoration:underline}
+.hero-alt{margin-top:16px;font-size:12.5px}
+.hero-alt a{color:var(--fg-dim);font-weight:500}
+
+/* ------------------------------------------------------------------- rail --- */
+/* The ink plate. Same in light and dark: the logo's own card, holding the river's own scale. */
+.rail{position:sticky;top:86px;height:calc(100vh - 120px);min-height:440px;max-height:720px;
+  display:flex;flex-direction:column;background:var(--ink);border:1px solid var(--ink-line);
+  border-radius:14px;padding:13px 11px 12px;color:var(--paper)}
+.rail-head{display:flex;flex-direction:column;gap:7px;padding-bottom:10px;border-bottom:1px solid var(--ink-line)}
+.rail-lab{font:600 8.5px/1 var(--f-body);letter-spacing:.17em;text-transform:uppercase;color:var(--paper-dim)}
+.rail-now{font:600 16px/1 var(--f-mono);font-variant-numeric:tabular-nums;color:var(--water);letter-spacing:-.02em}
+.rail-track{position:relative;flex:1 1 auto;margin:16px 2px 10px;cursor:ns-resize;touch-action:none}
+.rail-track:focus-visible{outline:2px solid var(--water);outline-offset:4px}
+.rail-ticks{position:absolute;inset:0}
+/* A tick is a mark and a number, not a rule across the plate: a full-width line behind the
+   label reads as a chart the page is not drawing. */
+.tick{position:absolute;left:0;right:0;bottom:calc(var(--p) * 100%);height:1px;background:transparent;
+  transform-origin:left center}
+.tick span{position:absolute;left:21px;top:0;transform:translateY(-50%);
+  font:500 9px/1 var(--f-mono);font-variant-numeric:tabular-nums;color:var(--paper-dim);white-space:nowrap}
+.tick.major span{color:var(--paper)}
+.tick .rule{position:absolute;left:0;top:0;width:9px;height:1px;background:#3d4c4f}
+.tick.major .rule{width:14px;background:var(--paper-dim)}
+.rail-needle{position:absolute;left:0;right:0;bottom:calc(var(--p) * 100%);height:2px;
+  background:var(--water);border-radius:2px;box-shadow:0 0 0 3px color-mix(in srgb,var(--water) 18%,transparent)}
+.rail-needle span{position:absolute;left:-3px;top:-3px;width:8px;height:8px;border-radius:50%;
+  background:var(--water)}
+.rail-you{position:absolute;left:0;right:0;bottom:calc(var(--p) * 100%);height:0}
+.rail-you-dot{position:absolute;left:-4px;top:-4.5px;width:9px;height:9px;border-radius:50%;
+  background:var(--crossing);box-shadow:0 0 0 3px color-mix(in srgb,var(--crossing) 20%,transparent)}
+.rail-you-lab{position:absolute;left:16px;top:-6px;font:600 9px/1 var(--f-mono);
+  color:var(--crossing);white-space:nowrap}
+/* break-word, not anywhere: a caption that can break inside "111" renders "68/11" over "1"
+   in this 104 px column, and a split number is a wrong number to anyone reading quickly. */
+.rail-cap{margin-top:auto;padding-top:10px;border-top:1px solid var(--ink-line);
+  font:400 9px/1.5 var(--f-mono);font-variant-numeric:tabular-nums;color:var(--paper-dim);
+  overflow-wrap:break-word}
+.rail-cap b{color:var(--paper);font-weight:600}
+
+/* Mobile: the same scale, laid on its side. Rendered from the same data by the same function.
+   The labels sit on two rows because 45, 48 and 50 are three feet apart and a phone is not
+   wide enough to put all three on one; the row is set per tick from JS, not by a media query,
+   because it depends on the width the band actually got. */
+.rail-h{display:none;position:relative;height:58px;margin-top:26px}
+.rail-h .h-track{position:absolute;inset:30px 0 10px;background:var(--ink);border-radius:8px}
+.rail-h .h-tick{position:absolute;top:-5px;bottom:-5px;left:calc(var(--p) * 100%);width:1px;
+  background:#4a5b5e}
+.rail-h .h-tick span{position:absolute;top:calc(-13px - var(--row, 0) * 12px);left:0;
+  transform:translateX(-50%);font:500 8.5px/1 var(--f-mono);
+  font-variant-numeric:tabular-nums;color:var(--fg-dim);white-space:nowrap}
+.rail-h .h-needle{position:absolute;top:-5px;bottom:-5px;left:calc(var(--p) * 100%);width:2px;
+  background:var(--water);border-radius:2px}
+.rail-h .h-you{position:absolute;top:50%;left:calc(var(--p) * 100%);width:8px;height:8px;
+  border-radius:50%;background:var(--crossing);box-shadow:0 0 0 3px color-mix(in srgb,var(--crossing) 22%,transparent);
+  transform:translate(-50%,-50%)}
+
+/* --------------------------------------------------------------- sections --- */
+.meaning,.case,.limits{padding:56px 0;border-bottom:1px solid var(--line)}
+.label{margin-bottom:10px;font:600 10px/1 var(--f-mono);letter-spacing:.16em;
+  text-transform:uppercase;color:var(--fg-faint)}
+.meaning h2,.case h2,.limits h2{font-size:clamp(26px,3.1vw,40px);line-height:1.06;
+  letter-spacing:-.005em;max-width:22ch}
+.meaning-body{margin-top:20px;max-width:64ch}
+.meaning-body p{font-size:15px;line-height:1.72;color:var(--fg-dim)}
+.meaning-body p+p{margin-top:14px}
+.meaning-body b,.case b{color:var(--fg);font-weight:600}
+.meaning-body em{font-style:normal;color:var(--water);font-weight:600}
+.lede{font-size:16.5px !important;color:var(--fg) !important}
+.case p{margin-top:16px;max-width:64ch;font-size:15px;line-height:1.72;color:var(--fg-dim)}
+.case{padding:52px 0}
+.scales{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));margin:26px 0 0;
+  border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.scales div{padding:13px 0 14px;border-left:1px solid var(--line-soft)}
+.scales div:first-child{border-left:0;padding-left:2px}
+.scales div+div{padding-left:14px}
+.scales dt{font:600 9.5px/1 var(--f-body);letter-spacing:.14em;text-transform:uppercase;color:var(--fg-faint)}
+.scales dd{margin:7px 0 0;font:600 17px/1 var(--f-mono);font-variant-numeric:tabular-nums;color:var(--fg)}
+.limits ul{margin:20px 0 0;padding:0;list-style:none;max-width:66ch}
+.limits li{position:relative;padding-left:22px;font-size:14.5px;line-height:1.7;color:var(--fg-dim)}
+.limits li+li{margin-top:8px}
+.limits li::before{content:"";position:absolute;left:0;top:.72em;width:10px;height:1px;background:var(--fg-faint)}
+.limits b{color:var(--fg);font-weight:600}
+
+/* ------------------------------------------------------------------- foot --- */
+.site-foot{max-width:1240px;margin:0 auto;padding:34px 24px 60px;display:grid;
+  grid-template-columns:auto minmax(0,52ch) minmax(0,1fr);gap:14px 18px;align-items:start}
+.foot-mark{opacity:.5}
+.site-foot p{font-size:12px;line-height:1.65;color:var(--fg-dim)}
+.site-foot code{font:400 11px/1 var(--f-mono);background:var(--surface-2);padding:2px 5px;border-radius:4px}
+.foot-links{grid-column:2;font:500 12px/1.6 var(--f-body)}
+.foot-links a{text-decoration:none}
+.foot-links a:hover{text-decoration:underline}
+.foot-disc{grid-column:2 / -1;color:var(--fg-faint)}
+
+/* ----------------------------------------------------------------- motion --- */
+/* Reveals are opt-in from JS (html.js), so a failed script leaves the page fully readable. */
+html.js .reveal{opacity:0;transform:translateY(14px)}
+html.js .reveal.in{opacity:1;transform:none;transition:opacity .6s ease,transform .6s cubic-bezier(.2,.7,.2,1)}
+html.js .hero .reveal{transition-delay:calc(var(--d,0) * 90ms)}
+html.js .tick{transform:scaleX(0);transform-origin:left center}
+html.js .in .tick{transform:none;transition:transform .5s cubic-bezier(.2,.7,.2,1);
+  transition-delay:calc(var(--i,0) * 55ms)}
+html.js .rail-needle,html.js .rail-you{opacity:0;transition:opacity .5s ease .5s}
+html.js .rail-ready .rail-needle,html.js .rail-ready .rail-you{opacity:1}
+
+@media (prefers-reduced-motion:reduce){
+  html.js .reveal,html.js .tick,html.js .rail-needle,html.js .rail-you{opacity:1;transform:none;transition:none}
+}
+
+/* ------------------------------------------------------------------ narrow --- */
+@media (max-width:980px){
+  .page{grid-template-columns:minmax(0,1fr)}
+  .rail{display:none}
+  .rail-h{display:block}
+  .site-nav{display:none}
+  .brand-sub{display:none}
+  .scales{grid-template-columns:repeat(3,minmax(0,1fr));border-bottom:0}
+  .scales div:nth-child(n+4){border-top:1px solid var(--line)}
+  .site-foot{grid-template-columns:auto minmax(0,1fr)}
+  .foot-links,.foot-disc{grid-column:2}
+}
+@media (max-width:620px){
+  .site-hdr-in{padding:10px 16px;gap:12px}
+  .landing main{padding:0 16px}
+  .hero{padding:40px 0 44px}
+  .thesis{max-width:none}
+  .probe{padding:14px}
+  .probe-go{flex:1 1 100%}
+  .meaning,.case,.limits{padding:40px 0}
+  .scales{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .scales div:nth-child(n+3){border-top:1px solid var(--line)}
+}

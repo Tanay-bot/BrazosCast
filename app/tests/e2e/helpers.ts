@@ -82,11 +82,16 @@ export async function stubGauge(
   });
 }
 
-/** Boot and wait until the app has a source line rather than "connecting…". */
+/** Boot the APP and wait until it has a source line rather than "connecting…".
+ *
+ *  The app lives at `/app` now; `/` is the landing page. Callers may still pass `?a=1` or
+ *  `/?a=1` — the second is the shape every link in the wild has, and the landing redirects it,
+ *  so normalising here keeps each test about the app rather than about that redirect (which
+ *  has its own test in landing.spec.ts). */
 export async function booted(page: Page, query = ""): Promise<void> {
-  // Accepts either "?a=1" or "/?a=1", because a caller writing a full path is not wrong
-  // and `//?a=1` is a URL the browser refuses to navigate to.
-  await page.goto(query.startsWith("/") ? query : `/${query}`);
+  const q = query.replace(/^\/\?/, "?");
+  const url = q === "" ? "/app" : q.startsWith("?") ? `/app${q}` : q;
+  await page.goto(url);
   await expect(page.locator("#srcTag")).not.toHaveText(/connecting/i);
 }
 

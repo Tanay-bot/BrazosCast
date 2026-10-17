@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 120" width="460" height="120" role="img" aria-label="BrazosCast — flood lead time for the lower Brazos">
+  <rect width="120" height="120" rx="27" fill="#121819"/>
+  <g stroke="#73878b" stroke-width="2.2" stroke-linecap="round">
+    <line x1="20" y1="74" x2="100" y2="74"/>
+    <line x1="26" y1="74" x2="26" y2="81"/><line x1="38" y1="74" x2="38" y2="81"/>
+    <line x1="50" y1="74" x2="50" y2="81"/><line x1="86" y1="74" x2="86" y2="81"/>
+    <line x1="98" y1="74" x2="98" y2="81"/>
+  </g>
+  <path d="M 20 99 C 45 96, 57 87, 65.5 74 C 74 61, 84 42, 100 33" fill="none" stroke="#3fa0c8" stroke-width="6.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="65.5" cy="74" r="13" fill="none" stroke="#e0566c" stroke-width="2.4" opacity=".55"/>
+  <circle cx="65.5" cy="74" r="7.2" fill="#e0566c"/>
+  <text x="150" y="68" font-family="Barlow Condensed, Arial Narrow, sans-serif" font-weight="700" font-size="62" fill="#121819">BrazosCast</text>
+  <text x="152" y="92" font-family="Public Sans, Helvetica, Arial, sans-serif" font-weight="600" font-size="13" letter-spacing="2.4" fill="#5c6a6b">FLOOD LEAD TIME · LOWER BRAZOS</text>
+</svg>

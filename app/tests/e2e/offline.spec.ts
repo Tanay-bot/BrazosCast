@@ -23,7 +23,7 @@ import { booted, stageflow, text } from "./helpers";
  */
 
 const GAUGE_URL = "https://api.water.noaa.gov/nwps/v1/gauges/RMOT2/stageflow";
-const ADDR = "/?addr=1600+Jackson+Street&stage=50";
+const ADDR = "/app?addr=1600+Jackson+Street&stage=50";
 
 /** Take the origin down (or bring it back). The gate runs in this process's sibling server,
  *  reached over Playwright's own request context, which is deliberately outside the browser:

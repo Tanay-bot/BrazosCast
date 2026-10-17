@@ -54,6 +54,43 @@ def check_isolation(dst: pathlib.Path) -> None:
           f"street floods, {no_ref} with no dry refuge at all")
 
 
+def app_data_streets(gj: dict, index: dict) -> dict:
+    """Every address-index lookup key, with the stage its street first floods at.
+
+    The keys are the index's own (the county's short and long suffix forms both appear), so a
+    street typed on the landing resolves exactly as it would in the app. `keys` maps a name to
+    STREET positions in `streets` (not to segments — that was the first bug here: reading them
+    as segments gave Chew Road Skinner Lane's threshold), and `streets[i].s` is the segment
+    list. The stage is the minimum over those segments, which is the one the app leads with
+    when no house number is given. Nothing here is invented: it is a join of two artifacts.
+    """
+    stages = [f["properties"]["flood_stage_ft"] for f in gj["features"]]
+    # The app's own rule for a bare street name (main.ts, `located`): among the segments the
+    # county files house numbers on, take the one that floods first. Segments the county files
+    # no addresses for are not in that set, so a copy of "all segments named X" would disagree
+    # with the app by a few tenths of a foot and by a different segment count.
+    addressed: dict[int, set[int]] = {}
+    for si, _lo, _hi, seg in index["ranges"]:
+        addressed.setdefault(si, set()).add(seg)
+    by_key = {}
+    for key, street_idx in index["keys"].items():
+        segs = sorted({s for i in street_idx for s in addressed.get(i, index["streets"][i]["s"])})
+        vals = [stages[s] for s in segs if 0 <= s < len(stages)]
+        if not vals:
+            continue
+        name = index["streets"][street_idx[0]]["n"]
+        by_key[key] = {"name": name, "min_ft": round(float(min(vals)), 2), "segments": len(segs)}
+    return {
+        "source": "road_thresholds.geojson joined to address_index.json",
+        "note": "min_ft is the earliest segment on that street to flood — what the app shows "
+                "for a bare street name. A house number is resolved to the nearest segment by "
+                "the app itself.",
+        "segments": len(gj["features"]),
+        "streets": len(index["streets"]),
+        "by_key": by_key,
+    }
+
+
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
     # Only what the app actually fetches. road_thresholds.json (287 KB) and
@@ -84,7 +121,7 @@ def main():
     # stays in the shipped bundle forever, because app_data.py only ever added
     # files — which is how road_thresholds.json kept being deployed after it
     # stopped being read.
-    expected = set(payload) | {"replay-harvey.json"}
+    expected = set(payload) | {"replay-harvey.json", "street_thresholds.json"}
     for stale in sorted(OUT.glob("*.json")):
         if stale.name in expected:
             continue
@@ -112,6 +149,17 @@ def main():
             f"road_thresholds.geojson now has {len(gj['features'])} — rebuild the index.")
     print(f"address_index.json: {len(a['ranges'])} address ranges on "
           f"{a['scope']['app_streets']} streets, {len(a['keys'])} lookup keys")
+
+    # The landing page puts a street on the gauge, and it must use the same threshold the app
+    # will answer with — not a second copy, and not a fetch of the 1 MB road layer. So this is
+    # the address index's own keys joined to the segments they name: one row per lookup key,
+    # carrying the EARLIEST segment's stage, which is exactly what the app shows for a bare
+    # street name. A house number still goes to the app, which resolves the nearest segment.
+    st = app_data_streets(gj, a)
+    (OUT / "street_thresholds.json").write_text(json.dumps(st, separators=(",", ":")))
+    print(f"street_thresholds.json: {len(st['by_key'])} lookup keys on {st['streets']} streets, "
+          f"lowest {min(v['min_ft'] for v in st['by_key'].values()):.1f} ft, "
+          f"{(OUT / 'street_thresholds.json').stat().st_size // 1024} KB")
 
     # What the river would have to do: the app answers "stays dry" on most days, and the
     # honest version of that sentence needs the peak record. A missing history is a build

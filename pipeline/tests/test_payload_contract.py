@@ -93,6 +93,9 @@ REQUIRED = {
         "site", "lid", "unit", "n_peaks", "from", "to", "highest.at", "highest.ft",
         "peaks.0.at", "peaks.0.ft",
     ],
+    # The landing resolves a street onto the gauge with this, so a key that loses its stage
+    # would leave the homepage's red dot silently at zero.
+    "street_thresholds.json": ["source", "segments", "streets", "by_key"],
 }
 
 ROAD_PROPERTIES = [
@@ -182,8 +185,10 @@ def test_no_exported_file_is_unused_by_the_app(root):
     because it caught exactly that: road_thresholds.json (287 KB) and
     stage_area_curve.json were being shipped and are read by nothing in the app.
     """
-    source = ((root / "app" / "src" / "main.ts").read_text()
-              + (root / "app" / "index.html").read_text())
+    source = "".join(
+        p.read_text() for p in
+        [(root / "app" / "src" / "main.ts"), (root / "app" / "src" / "landing.ts"),
+         (root / "app" / "index.html"), (root / "app" / "app.html")])
     unused = []
     for path in sorted((root / "app" / "public" / "data").iterdir()):
         if path.name not in source:

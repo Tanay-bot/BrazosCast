@@ -1,5 +1,10 @@
 /* BrazosCast service worker — the storm case.
  *
+ * TWO DOCUMENTS, one insight: the landing at `/` and the app at `/app` are both addresses this
+ * site publishes, and a cached landing served for an app reload (or the reverse) would look
+ * exactly like a broken deploy. So the shell is a pair, keyed by the path that was asked for,
+ * and both are stored all-or-nothing with the files they name.
+ *
  * The app exists for the hours when the river is rising, which is also when the
  * connection is most likely to be the thing that fails. This caches what the page has
  * already been asked for, so a reload with no network still answers.
@@ -50,7 +55,19 @@ const KEEP = [SHELL, RUNTIME];
 const MARK = "x-brazoscast-cache";
 
 const ROOT = new URL("./", self.location).href;   // the app may be deployed at a subpath
-const SHELL_URL = new URL("index.html", ROOT).href;
+const DOCS = {
+  landing: new URL("index.html", ROOT).href,
+  app: new URL("app.html", ROOT).href,
+};
+const SHELL_DOCS = [DOCS.landing, DOCS.app];
+/* `/app` is a rewrite in production and a dev-server middleware locally; the worker answers
+ * the same two addresses, because an offline reload has to land on the page it asked for. */
+const DOC_FOR_PATH = new Map([
+  [new URL("./", ROOT).pathname, DOCS.landing],
+  [new URL("index.html", ROOT).pathname, DOCS.landing],
+  [new URL("app", ROOT).pathname, DOCS.app],
+  [new URL("app.html", ROOT).pathname, DOCS.app],
+]);
 const DATA_DIR = new URL("data/", ROOT).href;
 const GAUGE_HOST = "api.water.noaa.gov";
 
@@ -70,37 +87,41 @@ self.addEventListener("install", (event) => {
  *  file the shell names cannot be cached, the shell is not stored and install fails, which
  *  leaves the page behaving exactly as it did before. */
 async function storeShell() {
-  const res = await fetch(new Request(SHELL_URL, { cache: "no-cache" }));
-  if (!res.ok) throw new Error(`shell ${res.status}`);
-  const html = await res.text();
-  const assets = shellAssets(html);
   const cache = await caches.open(SHELL);
+  const fetched = [];
+  for (const url of SHELL_DOCS) {
+    const res = await fetch(new Request(url, { cache: "no-cache" }));
+    if (!res.ok) throw new Error(`shell ${res.status} ${url}`);
+    fetched.push({ url, res, html: await res.text() });
+  }
+  const assets = fetched.flatMap((d) => shellAssets(d.html, d.url));
   const stored = await Promise.all(assets.map((u) => fetchInto(cache, u)));
-  if (stored.some((ok) => !ok)) throw new Error("an asset the shell names could not be cached");
-  await cache.put(SHELL_URL, shellResponse(res, html));
-  await pruneShell(cache, assets);
+  if (stored.some((ok) => !ok)) throw new Error("an asset a document names could not be cached");
+  for (const d of fetched) await cache.put(d.url, shellResponse(d.res, d.html));
+  await pruneShell(cache);
 }
 
-/** The same-origin files index.html names — the entry chunk and its stylesheet.
+/** The same-origin files one document names — its entry chunk and stylesheet.
  *
  *  Read from the built HTML rather than listed here, because those filenames are content
  *  hashes that change on every build, and a list maintained by hand is a list that
  *  silently stops matching. Cross-origin links are skipped on purpose: the only one present
  *  is the webfont stylesheet, which text mode does not load and which the stylesheet's own
- *  font stacks fall back from anyway. */
-function shellAssets(html) {
+ *  font stacks fall back from anyway. `base` is the document the URLs resolve against, so the
+ *  landing and the app can each name their own chunk. */
+function shellAssets(html, base) {
   const found = new Set();
   const tag = /<(?:script|link)\b[^>]*?(?:src|href)\s*=\s*["']([^"']+)["'][^>]*>/gi;
   let m;
   while ((m = tag.exec(html))) {
     let url;
     try {
-      url = new URL(m[1], SHELL_URL);
+      url = new URL(m[1], base);
     } catch {
       continue;                       // not a URL at all; nothing to cache
     }
     if (url.origin !== self.location.origin) continue;
-    if (url.href === SHELL_URL) continue;
+    if (url.href === base) continue;
     found.add(url.href.split("#")[0]);
   }
   return [...found];
@@ -163,10 +184,18 @@ async function fetchInto(cache, url) {
   }
 }
 
-/** Drop the shell entries the current HTML no longer names, so a deploy cannot leave the
- *  previous build's chunks in the cache for ever. */
-async function pruneShell(cache, keep) {
-  const alive = new Set([SHELL_URL, ...keep]);
+/** Drop the shell entries the stored documents no longer name, so a deploy cannot leave the
+ *  previous build's chunks in the cache for ever. Read from what is actually stored rather
+ *  than from a list passed in: two documents have two asset sets, and the union is only
+ *  knowable after both are in place. */
+async function pruneShell(cache) {
+  const alive = new Set();
+  for (const url of SHELL_DOCS) {
+    const hit = await cache.match(url, MATCH);
+    if (!hit) continue;
+    alive.add(url);
+    for (const a of shellAssets(await hit.text(), url)) alive.add(a);
+  }
   for (const req of await cache.keys()) {
     if (!alive.has(req.url)) await cache.delete(req);
   }
@@ -277,7 +306,11 @@ self.addEventListener("fetch", (event) => {
 });
 
 async function shellFor(req) {
-  const hit = await caches.match(SHELL_URL, MATCH);
+  const doc = DOC_FOR_PATH.get(new URL(req.url).pathname);
+  /* A navigation to something this site does not publish is not the app's to answer: the
+   * host 404s it, and so does this. Serving the shell there would invent a page. */
+  if (!doc) return fetch(req);
+  const hit = await caches.match(doc, MATCH);
   if (hit) return tag(hit, "hit");
   /* Nothing cached yet — a first visit, or the shell was evicted: go to the network and
    * let a failure look like a failure, rather than serve an empty page that looks loaded. */
@@ -288,24 +321,28 @@ async function shellFor(req) {
  *  navigation, which is what a browser does for the page anyway; the difference is that
  *  this one is not holding up the render. */
 async function revalidateShell() {
-  try {
-    const res = await fetch(new Request(SHELL_URL, { cache: "no-cache" }));
-    if (!res.ok) return;
-    const html = await res.text();
-    const cache = await caches.open(SHELL);
-    const cached = await cache.match(SHELL_URL, MATCH);
-    if (cached && (await cached.text()) === html) return;    // same build; nothing to do
-    const assets = shellAssets(html);
-    const stored = await Promise.all(assets.map((u) => fetchInto(cache, u)));
-    // A partly-cached new build is not a new build: swapping in a shell that names a file
-    // this cache does not hold is how an offline reload ends up blank. Keep the shell that
-    // is complete and try again on the next navigation.
-    if (stored.some((ok) => !ok)) return;
-    await cache.put(SHELL_URL, shellResponse(res, html));
-    await pruneShell(cache, assets);
-  } catch {
-    /* offline, or a deploy mid-flight: the cached shell stands */
+  const cache = await caches.open(SHELL);
+  let changed = false;
+  for (const url of SHELL_DOCS) {
+    try {
+      const res = await fetch(new Request(url, { cache: "no-cache" }));
+      if (!res.ok) continue;
+      const html = await res.text();
+      const cached = await cache.match(url, MATCH);
+      if (cached && (await cached.text()) === html) continue;   // same build; nothing to do
+      const assets = shellAssets(html, url);
+      const stored = await Promise.all(assets.map((u) => fetchInto(cache, u)));
+      // A partly-cached new build is not a new build: swapping in a shell that names a file
+      // this cache does not hold is how an offline reload ends up blank. Keep the document
+      // that is complete and try again on the next navigation.
+      if (stored.some((ok) => !ok)) continue;
+      await cache.put(url, shellResponse(res, html));
+      changed = true;
+    } catch {
+      /* offline, or a deploy mid-flight: the cached document stands */
+    }
   }
+  if (changed) await pruneShell(cache);
 }
 
 /** Serve the cached copy at once; refresh it for next time. One request, not two: the

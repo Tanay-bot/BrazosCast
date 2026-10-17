@@ -1,5 +1,14 @@
 # BrazosCast
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="app/public/brand/lockup-dark.svg">
+  <img src="app/public/brand/lockup.svg" width="300" alt="BrazosCast — flood lead time for the lower Brazos">
+</picture>
+
+The lockup is the product in one drawing: a staff gauge with waterline ticks, the rising
+hydrograph, and the red dot where the curve crosses a threshold. `app/public/brand/` holds both
+themes plus the square mark the pages use (`mark.svg`, and `mark-mono.svg` in the app's footer).
+
 > **BrazosCast tells a Fort Bend household when floodwater reaches *their street* and which of their
 > ways out will still be open — not whether the river is high.**
 
@@ -25,10 +34,11 @@ An address-first flood **lead-time** engine for the lower Brazos River at Richmo
 - [x] **Harvey backcast** — the lead time the app would actually have given in 2017, counted from the observed record: the action stage 109 h before the crest, the median street 96 h, and what applying the correction would cost
 - [x] **The alert, in English and Spanish** — three tiers counted back from **your street's** own crossing (T−72 h / T−24 h / T−6 h), compiled at build time, filled by two independent implementations the tests require to carry the same digits, and simulated over the 2017 record: **4,407 messages** to **1,469 streets**, none duplicated, none arriving after the water, longest 279 characters
 - [x] **Offline address index** — a typed house number resolves to the right street segment with no geocoder and no API key, from county address ranges: 819 ranges across 96 of the 154 modelled street names, and **96.8%** of them name the same segment a map click returns
-- [x] **Test suite** — **112 pipeline tests**, **115 kernel tests** (`app/tests/unit`, vitest) and **41 browser tests** (`scripts/check.sh`), including a golden-artifact regression that re-runs the whole pipeline and diffs every artifact, a payload-contract test, source-integrity checks, raw-input-policy checks (which raw inputs are committed, and why — the rule that caught the 2017 interval record being excluded from the repo it is the source of), doc-drift checks against the README, **cross-language grid parity** — the ensemble's 16 rows and the backcast's 17, plus the transfer's knots, recomputed through the app's own TypeScript and required to match the pipeline exactly — **invariants over generated inputs** (reachability, the isolation bound, the forecast-error curve, three orders of magnitude more inputs than the shipped corridor), a state-contract suite holding the app to "the address is never stored on the device, the URL is replaced and not pushed, and a parameter this version does not know survives a link", and a Playwright suite that boots the built app with a stubbed gauge and reloads it with the origin genuinely taken away
+- [x] **Two front doors, one dataset** — `/` is a landing page that answers the river's halves of the question in one screen: the live stage, a staff gauge you can drag to see what the river's own peak record says about any stage, and a box that resolves a street onto the same scale. `/app` is the map, unchanged; every link already sent still opens the answer it was about, because `/` redirects its legacy query to the app. Both documents render from the same payload — the gauge record and the street thresholds — and the build ships their chunks separately, so the storm page never downloads the homepage. Held by `app/tests/e2e/landing.spec.ts`, which asserts among other things that the scale is actually DRAWN (the ticks shipped collapsed to zero width once)
+- [x] **Test suite** — **113 pipeline tests**, **115 kernel tests** (`app/tests/unit`, vitest) and **48 browser tests** (`scripts/check.sh`), including a golden-artifact regression that re-runs the whole pipeline and diffs every artifact, a payload-contract test, source-integrity checks, raw-input-policy checks (which raw inputs are committed, and why — the rule that caught the 2017 interval record being excluded from the repo it is the source of), doc-drift checks against the README, **cross-language grid parity** — the ensemble's 16 rows and the backcast's 17, plus the transfer's knots, recomputed through the app's own TypeScript and required to match the pipeline exactly — **invariants over generated inputs** (reachability, the isolation bound, the forecast-error curve, three orders of magnitude more inputs than the shipped corridor), a state-contract suite holding the app to "the address is never stored on the device, the URL is replaced and not pushed, and a parameter this version does not know survives a link", and a Playwright suite that boots the built app with a stubbed gauge and reloads it with the origin genuinely taken away
 - [x] **Shareable state** — the street, the stage and the mode travel in the URL, so a copied link restores that answer on a fresh load in a browser that has never seen the app; parameters this version does not know are carried through rather than stripped
-- [x] **`?text=1` low-bandwidth route** — no map, no chart, no MapLibre, no webfonts: measured from the build by `scripts/check-text-mode.mjs` (gzip -9 of exactly what ships), **307.9 KB against 534.3 KB** for the full route — **226.3 KB saved, 42.4%**, with the 84.6 KB of webfonts and the map tiles requested by neither. The entry chunk itself is **27.6 KB gzipped** for every visitor
-- [x] **Offline cache** — a service worker keeps what the page has already been asked for, so a reload with no connection still answers. **One visit is enough**: measured on a fresh origin, a first load leaves the 11-file payload (~1.7 MB) and the current gauge reading cached, and a reload with every connection refused restored the same answer from the cache. The eager set is the shell only, because precaching 1.6 MB would hand back what `?text=1` saved
+- [x] **`?text=1` low-bandwidth route** — no map, no chart, no MapLibre, no webfonts: measured from the build by `scripts/check-text-mode.mjs` (gzip -9 of exactly what ships), **312.6 KB against 538.9 KB** for the full route — **226.3 KB saved, 42.0%**, with the 84.6 KB of webfonts and the map tiles requested by neither. The app's entry chunk is **28.2 KB gzipped** for every visitor, and the landing is a separate document with a chunk of its own
+- [x] **Offline cache** — a service worker keeps what the page has already been asked for, so a reload with no connection still answers. **One visit is enough**: measured on a fresh origin, a first load leaves the 12-file payload (~1.7 MB) and the current gauge reading cached, and a reload with every connection refused restored the same answer from the cache. The eager set is the shell only, because precaching 1.6 MB would hand back what `?text=1` saved
 - [x] **What the river would have to do** — on a dry day the answer is not "stays dry" but *"this street floods at 33.4 ft; the gauge last reached that in 2025 (34.76 ft)"*, from the USGS annual peak record (`pipeline/derive/gauge_history.py`, 111 annual peaks back to 1884, highest 61.20 ft in 1913)
 - [x] **Two gauges, one answer (I2)** — the upstream gauges transferred down the reach at the lag each was fitted at, compared with the live reading against the measured band, and honest when the river is too low for the transfer to mean anything
 - [x] **Does the answer survive (I6)** — the lead time re-run with the per-street threshold error, the corridor lift and the benchmark's forecast RMSE applied: *"the qualitative answer holds under all 4 perturbations"* or a named row that flips it
@@ -45,19 +55,27 @@ docs/       plan, verified data-source ledger
 pipeline/   fetch + analysis + (later) models, geo, road graph
 data/raw/   cached source snapshots + manifest.json
 data/derived/
-app/        frontend (static, deployable)
+app/        frontend (static, deployable): index.html = landing, app.html = the map
+app/src/    landing.ts/landing.css and main.ts/style.css, over one tokens.css
+app/public/ payload the browser fetches, and the brand marks
 ```
 
 ## Run the app
 
 ```bash
 cd app && npm install && node node_modules/esbuild/install.js
-npm run dev        # http://localhost:5173
-npm run build      # static bundle in app/dist
+npm run dev        # http://localhost:5173 — the landing; the app is /app
+npm run build      # static bundle in app/dist (index.html + app.html)
 ```
 
+Two documents ship: `/` (the landing, `index.html`) and `/app` (the map, `app.html`). The dev
+server, `vite preview` and the deployed host all rewrite `/app` to that document, so no address
+in the browser is a file name. Both documents render from `app/public/data/`.
+
 The app fetches the live NOAA NWPS gauge directly from the browser (CORS is open) and reads the
-per-street thresholds from `app/public/data/`.
+per-street thresholds from `app/public/data/`. The landing reads the same live gauge, the USGS
+peak record in `gauge_history.json` and the street minimums in `street_thresholds.json` — and
+then hands the typed address to `/app` rather than answering the household's question twice.
 
 **Typing an address needs no key and no network.** House numbers resolve from an offline index
 built out of Fort Bend County's own road centerlines, which carry address ranges per segment —
@@ -75,8 +93,12 @@ close, and a typo is offered the real address that works.
 The app is a static bundle; any host that serves `app/dist` works. `app/vercel.json` carries the
 three response headers the app depends on — `sw.js` uncached, or a browser can be pinned to an old
 service worker; `/data/*` revalidated, or a stale thresholds file answers about a river the app no
-longer models; hashed `/assets/*` immutable — and deliberately **no SPA rewrite**, so a missing
-payload is a 404 rather than an HTML page a JSON parse would choke on.
+longer models; hashed `/assets/*` immutable — and exactly **one rewrite**, `/app -> app.html`,
+rather than an SPA catch-all: a missing payload is a 404 rather than an HTML page a JSON parse
+would choke on. `scripts/check-vercel-config.mjs` reads the config, applies the rules the way a
+request would, and fails if a shipped file gets the wrong header — or if a document names a
+payload the bundle does not ship. The payload list is read out of the two documents' sources, not
+typed into the check: a typed count is how a check ends up guarding the wrong thing.
 
 **Vercel, from a Git import.** Import the repo and set **Root Directory to `app`**; the Vite preset
 fills in `npm run build` and `dist`. No environment variable is needed, and the build fetches no

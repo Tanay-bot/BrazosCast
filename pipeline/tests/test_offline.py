@@ -19,7 +19,7 @@ import re
 
 SW = "app/public/sw.js"
 MAIN = "app/src/main.ts"
-SHELL = "app/index.html"
+SHELL = "app/app.html"
 
 
 def worker(root) -> str:
@@ -271,9 +271,11 @@ def test_the_first_visit_hands_over_what_it_already_paid_for(root):
     # to be one the app asks for somewhere. `replay-harvey.json` is fetched by loadReplay(),
     # which is not part of boot — and it is fetched exactly when it will be needed.
     payload = sorted(p.name for p in (root / "app" / "public" / "data").iterdir())
-    unnamed = [name for name in payload if f'"{name}"' not in src]
+    landing = (root / "app" / "src" / "landing.ts").read_text()
+    named_by = src + landing   # the landing serves a street from street_thresholds.json
+    unnamed = [name for name in payload if name not in named_by]
     assert not unnamed, (
-        f"{unnamed} ship(s) in app/public/data but is never named in main.ts, so no load of "
+        f"{unnamed} ship(s) in app/public/data but is never named in the app or landing sources, so no load of "
         "the app can put it in the timeline and the offline copy can never include it"
     )
     assert "keepOfflineCopy(loadedHere())" in load_static, (
@@ -368,7 +370,7 @@ def test_the_offline_tag_reports_the_browser_rather_than_guessing(root):
     offline — which is the difference between 'no news' and 'nothing is being fetched'."""
     html = (root / SHELL).read_text()
     assert re.search(r'id="offlineTag"[^>]*hidden', html), (
-        "the offline tag is not in index.html hidden by default, so it either cannot be shown "
+        "the offline tag is not in app.html hidden by default, so it either cannot be shown "
         "before the first paint or it is shown to everyone"
     )
     body = body_of(main_ts(root), "function wireOfflineTag()", MAIN)

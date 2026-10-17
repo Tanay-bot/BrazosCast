@@ -18,7 +18,7 @@ Two things here are deliberately NOT asserted:
 import re
 
 MAIN = "app/src/main.ts"
-SHELL = "app/index.html"
+SHELL = "app/app.html"
 CSS = "app/src/style.css"
 
 
@@ -138,7 +138,7 @@ def test_the_flag_travels_in_the_url(root):
     src = source(root)
     assert re.search(r'const TEXT_PARAM = "text"', src), (
         "the parameter name is no longer a single named constant; it is then free to drift "
-        "from the inline font guard in index.html, which tests the same token")
+        "from the inline font guard in app.html, which tests the same token")
     assert re.search(r"text: p\.get\(TEXT_PARAM\) === \"1\"", src), (
         "readUrl() no longer recognises ?text=1")
     sync = body_of(src, "function syncUrl")
@@ -157,7 +157,7 @@ def test_the_inline_font_guard_tests_the_same_token(root):
     assert name, "TEXT_PARAM is gone from main.ts"
     guard = re.search(r"if \(!/\[\?&\](\w+)=1\(&\|\$\)/\.test\(location\.search\)\)", shell(root))
     assert guard, (
-        "the inline font guard in index.html no longer tests a URL parameter, so the "
+        "the inline font guard in app.html no longer tests a URL parameter, so the "
         "webfonts (84.6 KB measured) load in text mode")
     assert guard.group(1) == name.group(1), (
         f"the font guard tests ?{guard.group(1)}=1 and main.ts reads ?{name.group(1)}=1 — one "

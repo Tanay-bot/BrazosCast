@@ -24,7 +24,7 @@ property was lost, so the cost of a false failure is one comment.
 import re
 
 APP = "app/src/main.ts"
-SHELL = "app/index.html"
+SHELL = "app/app.html"
 
 
 def source(root) -> str:

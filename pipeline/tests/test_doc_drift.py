@@ -252,6 +252,32 @@ def test_every_findings_reference_resolves_to_a_section():
         f"whether or not a number moved")
 
 
+def test_the_landing_bias_is_the_artifact_s_too(root):
+    """The landing states the threshold bias as well, and it typed "24 ft" into its prose.
+
+    Two documents holding one measured number is drift whether or not anyone re-runs the
+    pipeline, so the landing must read it from the same artifact the app discloses it from and
+    leave the sentence as an empty slot a script fills. The slot is what is asserted, not the
+    wording: a sentence that can still be written without the number is fine, a sentence with
+    the number in it is not.
+    """
+    html = (root / "app" / "index.html").read_text()
+    src = (root / "app" / "src" / "landing.ts").read_text()
+    assert 'id="biasFt"' in html, "the landing's bias sentence lost the element the script fills"
+
+    # The sentence specifically, tags stripped: the shipped wording put the number inside <b>,
+    # so searching the markup for the phrase would have missed the very thing it is guarding.
+    section = re.search(r'id="planning".*?</section>', html, re.S)
+    assert section, "the landing's planning section is gone"
+    sentence = re.sub(r"<[^>]+>", " ", section.group(0))
+    assert re.search(r"biased low", sentence), "the bias sentence is gone from the landing"
+    assert not re.search(r"\d+\s*(?:ft\s*)?low|low\s*(?:by\s*)?\d+", sentence), \
+        "the landing types the measured lift into its markup; it drifts the moment the fit moves"
+    assert "harvey_validation.json" in src, \
+        "the landing no longer reads the artifact the app discloses the bias from"
+    assert "biasFt" in src, "nothing fills the landing's bias sentence"
+
+
 def test_the_app_disclosure_is_driven_by_the_artifact(derived_json, root):
     """The app tells the user their threshold runs low. That sentence must be
     computed from the artifact rather than hard-coded, or it will drift silently."""

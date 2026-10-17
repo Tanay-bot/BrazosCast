@@ -50,16 +50,25 @@ function headersFor(path) {
   return out;
 }
 
-/* No rewrite may swallow a missing file: the app routes on the query string only, so every
- * path it requests is a real file. */
-check(!config.rewrites, "app/vercel.json has a rewrite — a missing payload would answer 200 text/html");
+/* One rewrite is allowed and exactly one shape of it: `/app` is a document, not a catch-all.
+ * The app routes on the query string, so every other path it requests is a real file, and a
+ * rewrite that swallowed a missing payload would answer 200 text/html — a typo disguised as
+ * success, and the reason this check exists. */
+const rewrites = config.rewrites ?? [];
 check(!config.routes, "app/vercel.json uses the legacy `routes` key, which bypasses `headers`");
+for (const r of rewrites) {
+  const re = matcher(r.source);
+  check(!re.test("/data/nope.json"), `rewrite ${r.source} would swallow a missing payload`);
+  check(r.destination === "/app.html", `rewrite ${r.source} points at ${r.destination}; the only document rewrite is /app -> /app.html`);
+}
+check(rewrites.some((r) => r.source === "/app"), "app/vercel.json lost the /app rewrite — the app's published address would 404");
 
 const cases = [
   ["/sw.js", "cache-control", /no-store/],
   ["/sw.js", "service-worker-allowed", /^\/$/],
   ["/", "cache-control", /no-cache/],
   ["/index.html", "cache-control", /no-cache/],
+  ["/app.html", "cache-control", /no-cache/],
   ["/data/ensemble.json", "cache-control", /no-cache/],
   ["/data/ensemble.json", "content-type", /^application\/json/],
   ["/data/road_thresholds.geojson", "cache-control", /no-cache/],
@@ -73,9 +82,26 @@ for (const [path, key, want] of cases) {
   check(got && want.test(got), `${path} does not get ${key}: ${want} (got ${got ?? "nothing"})`);
 }
 
-/* Every shipped payload file and hashed chunk, not just the examples above. */
+/* Every shipped payload file and hashed chunk, not just the examples above.
+ *
+ * The expected NAMES are read out of the two documents' sources (`DATA + "x.json"` in the
+ * app, `"./data/x.json"` in the landing), not typed here. A typed count was already the wrong
+ * kind of check: the landing added a twelfth payload and this failed while every header it
+ * exists to verify was correct. A source that names a file and a bundle that does not ship it
+ * is the drift this can actually catch, so compare the sets. */
+const src = ["main.ts", "landing.ts"]
+  .flatMap((f) => [...readFileSync(join(ROOT, "app/src", f), "utf8")
+    .matchAll(/DATA \+ "([^"]+)"|\.\/data\/([\w.-]+)/g)])
+  .map((m) => m[1] ?? m[2]);
+const wanted = new Set(src);
+check(wanted.size > 0, "no payload is named in app/src/main.ts or landing.ts");
+
 const data = readdirSync(join(DIST, "data"));
-check(data.length === 11, `app/dist/data has ${data.length} files; the app fetches 11`);
+const shipped = new Set(data);
+check([...wanted].every((f) => shipped.has(f)),
+  `the sources fetch ${[...wanted].filter((f) => !shipped.has(f)).join(", ")}, which app/dist/data does not ship`);
+check(data.length === wanted.size,
+  `app/dist/data has ${data.length} files; the two documents fetch ${wanted.size} (${data.filter((f) => !wanted.has(f)).join(", ")} unexplained)`);
 for (const f of data) {
   const h = headersFor(`/data/${f}`);
   check(/no-cache/.test(h["cache-control"] ?? ""), `/data/${f} is served without no-cache`);
@@ -88,7 +114,11 @@ check(assets.length > 0, "app/dist/assets has no js/css — the bundle is missin
 for (const f of assets) {
   const h = headersFor(`/assets/${f}`);
   check(/immutable/.test(h["cache-control"] ?? ""), `/assets/${f} is not immutable (got ${h["cache-control"] ?? "nothing"})`);
-  check(/-[A-Za-z0-9_]{8}\.(js|css)$/.test(f), `/assets/${f} is not content-hashed, so immutable caching is unsafe`);
+  /* Vite's hash alphabet is base64url — it includes `-` and `_`, so `landing-tG4uOfM-.css` is a
+   * correctly hashed name and an alphanumeric-only pattern rejects it. The check that hashing
+   * happened must not be narrower than the thing that does the hashing. */
+  check(/-[A-Za-z0-9_-]{8}\.(js|css)$/.test(f),
+    `/assets/${f} is not content-hashed, so immutable caching is unsafe`);
 }
 
 /* The config is copied into the deploy root, so a stale copy would deploy stale rules. */

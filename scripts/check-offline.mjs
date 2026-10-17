@@ -44,7 +44,11 @@ const DIST = join(ROOT, "app", "dist");
 
 const ORIGIN = "http://localhost:4173";
 const SW_URL = `${ORIGIN}/sw.js`;
-const SHELL_URL = `${ORIGIN}/index.html`;
+/* Two documents ship now: the landing at `/` and the app at `/app`. The harness treats the
+ * app as the shell it has always tested, and asserts the landing is cached alongside it —
+ * a cached landing served for an app reload is the bug this split could introduce. */
+const SHELL_URL = `${ORIGIN}/app.html`;
+const LANDING_URL = `${ORIGIN}/index.html`;
 const DATA_DIR = `${ORIGIN}/data/`;
 const GAUGE = "https://api.water.noaa.gov/nwps/v1/gauges/RMOT2/stageflow";
 const TILE = "https://tile.openstreetmap.org/12/940/1702.png";
@@ -274,8 +278,11 @@ function makeWorld() {
 
 const world = makeWorld();
 const read = (p) => readFileSync(join(DIST, p));
-const htmlFile = read("index.html").toString("utf8");
-const entryAssets = [...htmlFile.matchAll(/["']\.?\/?(assets\/[^"']+\.(?:js|css))["']/g)].map((m) => m[1]);
+const htmlFile = read("app.html").toString("utf8");
+const landingHtml = read("index.html").toString("utf8");
+const assetsOf = (html) => [...new Set([...html.matchAll(/["']\.?\/?(assets\/[^"']+\.(?:js|css))["']/g)].map((m) => m[1]))];
+const entryAssets = assetsOf(htmlFile);
+const landingAssets = assetsOf(landingHtml);
 const shellCache = () => world.stores.get(SHELL_CACHE) ?? new Map();
 const runtimeCache = () => world.stores.get(RUNTIME_CACHE) ?? new Map();
 /* The entries of a cache, read through the shim's own Map rather than through the
@@ -305,13 +312,19 @@ if (installed.some((u) => u.includes("maplibre"))) {
   fail("install fetched the MapLibre chunk. It is a dynamic import, deliberately not referenced by index.html, " +
        "so the map arrives after the answer rather than with it.");
 }
-if (entryAssets.length !== 2) {
-  fail(`dist/index.html names ${entryAssets.length} hashed assets, expected 2 (the entry chunk and its stylesheet)`);
+if (!entryAssets.some((a) => /\/app-[^/]+\.js$/.test(a))) {
+  fail(`dist/app.html names no app-*.js entry chunk (found ${entryAssets.join(", ")})`);
+}
+if (!landingAssets.some((a) => /\/landing-[^/]+\.js$/.test(a))) {
+  fail(`dist/index.html names no landing-*.js entry chunk (found ${landingAssets.join(", ")})`);
 }
 
+for (const [which, url, wanted] of [["the app", SHELL_URL, htmlFile], ["the landing", LANDING_URL, landingHtml]]) {
+  const doc = await shellCache().get(url);
+  if (!doc) fail(`install did not cache ${which} document (${url}) — an offline reload would have nothing to load`);
+  if (doc.body.toString("utf8") !== wanted) fail(`the cached ${which} document is not the built file`);
+}
 const shell = await shellCache().get(SHELL_URL);
-if (!shell) fail("install did not cache index.html — an offline reload would have nothing to load");
-if (shell.body.toString("utf8") !== htmlFile) fail("the cached shell is not the built index.html");
 if (shell.headers.get("content-encoding")) {
   fail("the cached shell keeps content-encoding from the host. Its stored body is decoded, so a browser " +
        "replaying it tries to gunzip plain text and renders nothing — plain()/shellResponse() exist for this.");
@@ -320,14 +333,18 @@ if (!/text\/html;\s*charset=utf-8/i.test(shell.headers.get("content-type") ?? ""
   fail(`the cached shell has content-type ${JSON.stringify(shell.headers.get("content-type"))}; it must restate ` +
        `utf-8, because the document is not ASCII (em dashes, "·") and the meta tag is the only other guarantee.`);
 }
-for (const a of entryAssets) {
+for (const a of [...entryAssets, ...landingAssets]) {
   if (!(await shellCache().get(`${ORIGIN}/${a}`))) {
-    fail(`install did not cache ${a}, which the shell names. A cached shell whose entry chunk is missing renders ` +
+    fail(`install did not cache ${a}, which a document names. A cached shell whose entry chunk is missing renders ` +
          `a blank page offline — worse than not being offline-capable at all.`);
   }
 }
+/* What install actually stored, used below as the invariant a failed revalidation must not
+ * change. Taken from storage rather than predicted from the HTML, because the documents also
+ * name their favicon and any other same-origin file the worker resolves. */
+const shellAfterInstall = cacheKeys(SHELL_CACHE).sort();
 console.log(`   install: ${installed.length} requests, ${kb(installBytes)} uncompressed — ` +
-            `shell + ${entryAssets.length} hashed assets, no payload, no fonts, no tiles`);
+            `2 documents + ${shellAfterInstall.length - 2} hashed assets, no payload, no fonts, no tiles`);
 
 /* --- 1b. the first visit hands over what it has already paid for --------------- */
 /* Without this, offline works from the SECOND visit: the page fetches its payload before
@@ -421,7 +438,12 @@ console.log(`   warm:     6 entries offered, 1 read out of the HTTP cache, 1 bod
 /* --- 2. a reload with no network answers -------------------------------------- */
 stage = "offline reload";
 world.setOffline(true);
-for (const [label, url] of [["a plain reload", SHELL_URL], ["a text-only link", `${ORIGIN}/?text=1`]]) {
+for (const [label, url, wanted] of [
+  ["a plain reload", SHELL_URL, htmlFile],
+  ["a legacy `/app` reload", `${ORIGIN}/app`, htmlFile],
+  ["a text-only link", `${ORIGIN}/app?text=1`, htmlFile],
+  ["the landing", `${ORIGIN}/`, landingHtml],
+]) {
   const r = await world.request(url, { mode: "navigate" });
   if (!r.intercepted) fail(`${label} was not intercepted by the worker, so there is nothing offline about it`);
   const res = await outcome(r.response);
@@ -430,7 +452,9 @@ for (const [label, url] of [["a plain reload", SHELL_URL], ["a text-only link", 
   if (res.value.headers.get(MARK) !== "hit") {
     fail(`${label} was not answered from the cache (marker ${JSON.stringify(res.value.headers.get(MARK))})`);
   }
-  if ((await res.value.text()) !== htmlFile) fail(`${label} returned something other than the built index.html`);
+  if ((await res.value.text()) !== wanted) {
+    fail(`${label} returned the wrong document — an offline reload must land on the page it asked for`);
+  }
 }
 // A navigation also starts a revalidation. Offline that must settle quietly: a rejection
 // here is an unhandled promise inside waitUntil, which is a console error in production.
@@ -441,7 +465,7 @@ await world.drain(quiet.waits);
 // a page that no longer loads at all — which is the one way this worker could make things
 // worse than having no worker.
 const intact = cacheKeys(SHELL_CACHE).sort();
-const expected = [SHELL_URL, ...entryAssets.map((a) => `${ORIGIN}/${a}`)].sort();
+const expected = shellAfterInstall;
 if (intact.join(" ") !== expected.join(" ")) {
   fail(`after three offline reloads the shell cache holds ${intact.join(", ")}; expected ` +
        `${expected.join(", ")}. A failed revalidation must be a no-op.`);
@@ -569,17 +593,21 @@ if ((await world.request(`${ORIGIN}/nothing`, { method: "POST" })).intercepted) 
 /* A deploy is noticed on the next visit WITH a connection: this is that visit. */
 stage = "deploy";
 world.setOffline(false);
-const newJs = `${ORIGIN}/assets/index-DEPLOY01.js`;
-const newCss = `${ORIGIN}/assets/index-DEPLOY02.css`;
-const previous = cacheKeys(SHELL_CACHE).filter((u) => u !== SHELL_URL);
-if (previous.length !== entryAssets.length) {
-  fail(`the shell cache holds ${previous.length} asset entries before the deploy, expected ${entryAssets.length}`);
+const newJs = `${ORIGIN}/assets/app-DEPLOY01.js`;
+const newCss = `${ORIGIN}/assets/app-DEPLOY02.css`;
+const previous = cacheKeys(SHELL_CACHE).filter((u) => u !== SHELL_URL && u !== LANDING_URL);
+const expectedAssets = shellAfterInstall.filter((u) => u !== SHELL_URL && u !== LANDING_URL).length;
+if (previous.length !== expectedAssets) {
+  fail(`the shell cache holds ${previous.length} asset entries before the deploy, expected ${expectedAssets}`);
 }
+/* Only the app's OWN assets are expected to disappear: the landing names some of the same
+ * tokens files, so those must survive the prune. */
+const appOnly = entryAssets.filter((a) => !landingAssets.includes(a));
 world.overlay.set(newJs, { body: Buffer.from("/* the next build */"), type: "text/javascript" });
 world.overlay.set(newCss, { body: Buffer.from("/* the next build */"), type: "text/css" });
 const nextHtml = htmlFile
-  .replace(/(["'][^"']*assets\/)index-[^"']+\.js/, "$1index-DEPLOY01.js")
-  .replace(/(["'][^"']*assets\/)index-[^"']+\.css/, "$1index-DEPLOY02.css");
+  .replace(/(["'][^"']*assets\/)app-[^"']+\.js/, "$1app-DEPLOY01.js")
+  .replace(/(["'][^"']*assets\/)app-[^"']+\.css/, "$1app-DEPLOY02.css");
 if (nextHtml === htmlFile) fail("could not build a new shell for the deploy test — the asset reference pattern moved");
 world.overlay.set(SHELL_URL, { body: Buffer.from(nextHtml), type: "text/html; charset=utf-8" });
 
@@ -598,9 +626,10 @@ if (!after.includes(newJs) || !after.includes(newCss)) {
 if ((await shellCache().get(SHELL_URL)).body.toString("utf8") !== nextHtml) {
   fail("the shell in the cache is still the previous build");
 }
-for (const old of previous) {
-  if (after.includes(old)) {
-    fail(`the previous build's ${old} is still in the shell cache; nothing will ever request it again`);
+for (const old of appOnly) {
+  const url = `${ORIGIN}/${old}`;
+  if (after.includes(url)) {
+    fail(`the previous build's ${url} is still in the shell cache; nothing will ever request it again`);
   }
 }
 if (!(await runtimeCache().get(ensemble))) fail("the deploy dropped the runtime cache");

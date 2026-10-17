@@ -54,16 +54,25 @@ const kb = (n) => `${(n / 1000).toFixed(1)} KB`;
 if (!existsSync(DIST)) fail("app/dist is missing — this check runs after `vite build`");
 
 /* ---- what the build produced ------------------------------------------------- */
-const html = readFileSync(join(DIST, "index.html"), "utf8");
+/* The APP document, not the landing: `?text=1` is a route of the app, and `/` is now the
+ * homepage. Reading index.html here would measure the homepage's bytes and call it the
+ * app's budget. */
+const html = readFileSync(join(DIST, "app.html"), "utf8");
 const assets = readdirSync(join(DIST, "assets"));
-const entryJs = assets.filter((f) => /^index-.*\.js$/.test(f));
-const entryCss = assets.filter((f) => /^index-.*\.css$/.test(f));
+const refs = [...html.matchAll(/(?:src|href)="\.\/(assets\/[^"]+)"/g)].map((m) => m[1]);
+/* The entry is the app-*.js chunk; the tokens-*.js preload is the CSS-in-JS module both pages
+ * share, and it is part of the same-origin cost either way. */
+const entryJs = refs.filter((r) => /\/app-[^/]+\.js$/.test(r));
+const entryCss = refs.filter((r) => r.endsWith(".css"));
 const mlJs = assets.filter((f) => /^maplibre-gl-.*\.js$/.test(f));
 const mlCss = assets.filter((f) => /^maplibre-gl-.*\.css$/.test(f));
 
-if (entryJs.length !== 1 || entryCss.length !== 1) {
-  fail(`expected exactly one entry js and one entry css in dist/assets, found ` +
-       `${entryJs.length} and ${entryCss.length} — the split changed shape`);
+if (entryJs.length !== 1) {
+  fail(`the app document names ${entryJs.length} scripts, expected exactly one entry chunk — ` +
+       `the split changed shape`);
+}
+if (entryCss.length < 1) {
+  fail("the app document names no stylesheet — the split changed shape");
 }
 if (mlJs.length === 0) {
   fail("dist/assets has no maplibre-*.js chunk: the library is no longer code-split, so " +
@@ -74,7 +83,7 @@ if (mlCss.length === 0) {
   fail("dist/assets has no maplibre-*.css chunk: the map stylesheet is merged into the " +
        "entry stylesheet, so every text-only visitor downloads the map's CSS.");
 }
-const entryJsFile = entryJs[0], entryCssFile = entryCss[0];
+const entryJsFile = entryJs[0].replace(/^assets\//, "");
 const mlJsFile = mlJs[0], mlCssFile = mlCss[0];
 
 /* ---- 1. the entry must not pull the map in -----------------------------------
@@ -104,9 +113,9 @@ if (staticImport.test(entrySrc)) {
        `is what keeps it out of the entry.`);
 }
 
-const entryCssSrc = readFileSync(join(DIST, "assets", entryCssFile), "utf8");
+const entryCssSrc = entryCss.map((f) => readFileSync(join(DIST, f), "utf8")).join("\n");
 if (ML_CSS_FINGERPRINT.test(entryCssSrc)) {
-  fail(`${entryCssFile} contains MapLibre's stylesheet (${ML_CSS_FINGERPRINT}), so the map's ` +
+  fail(`${entryCss.join(", ")} contains MapLibre's stylesheet (${ML_CSS_FINGERPRINT}), so the map's ` +
        `CSS rides along in the entry. It must be imported inside buildMap() alongside the JS.`);
 }
 if (!ML_CSS_FINGERPRINT.test(readFileSync(join(DIST, "assets", mlCssFile), "utf8"))) {
@@ -157,7 +166,7 @@ if (!FONT_HOST.test(html)) {
 /* ---- 3. the budget ----------------------------------------------------------- */
 const payload = readdirSync(DATA).map((f) => join(DATA, f));
 const payloadBytes = payload.reduce((a, f) => a + gz(f), 0);
-const entryBytes = gz(join(DIST, "assets", entryJsFile)) + gz(join(DIST, "assets", entryCssFile));
+const entryBytes = refs.reduce((a, f) => a + gz(join(DIST, f)), 0);
 const mapBytes = gz(join(DIST, "assets", mlJsFile)) + gz(join(DIST, "assets", mlCssFile));
 
 const textTotal = entryBytes + payloadBytes;
@@ -176,5 +185,5 @@ if (saving < MIN_SAVING_BYTES) {
        `${kb(MIN_SAVING_BYTES)} floor — MapLibre is not out of the text-only path`);
 }
 
-console.log(`   index.html is ${kb(gz(join(DIST, "index.html")))} (the ${kb(FONTS_BYTES)} of ` +
+console.log(`   app.html is ${kb(gz(join(DIST, "app.html")))} (the ${kb(FONTS_BYTES)} of ` +
             `fonts and the map tiles are third-party; text mode requests neither)`);

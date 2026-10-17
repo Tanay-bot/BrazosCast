@@ -88,6 +88,12 @@ else
   echo "   (browser suite skipped — run scripts/check.sh --browser, or --all)"
 fi
 
+step "host config (Vercel headers still mirror the Worker's)"
+# Fast, and after the build because it reads what would be uploaded. The Worker's whole job was
+# three cache headers; moving hosts without them pins browsers to an old service worker and
+# serves yesterday's thresholds, and neither shows up in a screenshot.
+node "$ROOT/scripts/check-vercel-config.mjs" || fail "app/vercel.json vs the shipped tree"
+
 step "shipped payload is current"
 # The build copies app/public/data into dist; if the two disagree the deployed
 # bundle is serving artifacts from a previous run of the pipeline.

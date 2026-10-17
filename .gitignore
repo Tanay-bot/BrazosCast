@@ -73,3 +73,6 @@ data/raw/usgs/iv/*.json
 # Python
 __pycache__/
 *.pyc
+
+# vercel deploy token (scripts/deploy-vercel.sh reads it if VERCEL_TOKEN is unset)
+.vercel-token

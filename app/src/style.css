@@ -258,8 +258,74 @@ body.text-only .cols{grid-template-columns:minmax(0,1fr)}
 .bc-sum b{font-family:var(--f-mono);font-weight:600;color:var(--fg)}
 .bc-cav{margin-top:9px;font-size:12.5px;color:var(--fg-faint);line-height:1.55;max-width:84ch}
 
+/* I2 — the upstream cross-check. Two gauges that should agree, the divergence against the
+   band the pipeline measured on held-out events. Deliberately not a chart: there are two
+   numbers and one of them is a difference. */
+.xc,.rob,.cut{margin-top:16px}
+.xc[hidden],.rob[hidden],.cut[hidden]{display:none}
+.xc-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr) auto;gap:12px;
+  align-items:baseline;padding:10px 12px;border-radius:9px;background:var(--surface-2);
+  border-left:3px solid var(--dry);margin-bottom:8px}
+.xc-row.bad{border-left-color:var(--action)}
+.xc-row b{font-size:13.5px}
+.xc-row span{font-size:11.5px;color:var(--fg-dim);font-family:var(--f-mono)}
+.xc-row .st{font-weight:600;padding:4px 7px;border-radius:5px;font-size:11px}
+.xc-row .st.ok{background:color-mix(in srgb,var(--dry) 16%,transparent);color:var(--dry)}
+.xc-row .st.bad{background:color-mix(in srgb,var(--action) 18%,transparent);color:var(--action)}
+.xc-row .st.warn{background:var(--surface);color:var(--fg-faint);border:1px solid var(--line)}
+
+/* I6 — the perturbation table. Mono numbers, because every column is comparable to the
+   one above it and that is the whole function of the card. */
+.rob-head{margin-bottom:9px;font-size:13.5px;color:var(--fg-dim)}
+.rob-row{display:grid;grid-template-columns:minmax(140px,1.1fr) 92px 76px minmax(0,2fr);gap:10px;
+  align-items:baseline;padding:8px 0;border-top:1px solid var(--line-soft);font-size:12.5px}
+.rob-row:first-child{border-top:0}
+.rob-row b{font-weight:600}
+.rob-row span{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.rob-row i{font-style:normal;color:var(--fg-faint);font-size:11.5px;line-height:1.45}
+.rob-row.bad{background:color-mix(in srgb,var(--flood) 7%,transparent);border-radius:7px;padding-left:8px}
+.rob-row.skip{color:var(--fg-faint)}
+.rob-row.rob-head{padding:0 0 6px;border-top:0;color:var(--fg-faint);
+  font:600 10px/1 var(--f-body);letter-spacing:.12em;text-transform:uppercase}
+.rob-row.rob-head span{font-family:var(--f-body);font-size:10px}
+
+/* I5 — the inverse view. Rows, not map geometry: the question is a list of places with no
+   way out, and the numbers that matter are two stages and the distance between them. */
+.cut-list{list-style:none;margin:0;padding:0;display:grid;gap:7px}
+.cut-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2.4fr);gap:12px;
+  align-items:baseline;padding:9px 12px;border-radius:9px;background:var(--surface-2);
+  border-left:3px solid var(--moderate)}
+.cut-row.more{border-left-color:var(--line);color:var(--fg-faint);font-size:11.5px}
+.cut-row b{font-size:13px;overflow-wrap:anywhere}
+.cut-row .m{font-size:11.5px;color:var(--fg-dim);line-height:1.5}
+.cut-head{margin-bottom:10px;font-size:13.5px;color:var(--fg-dim)}
+.cut-head b{font-family:var(--f-mono);color:var(--fg)}
+
+/* I3 — the selected street's own 2017 answer, set as the block's own line rather than
+   inside the corridor paragraph, because it is the only number there about the reader. */
+.bc-street{margin-top:11px;padding:10px 12px;border-radius:9px;font-size:13px;line-height:1.55;
+  background:color-mix(in srgb,var(--water) 9%,var(--surface-2));border-left:3px solid var(--water)}
+.bc-street[hidden]{display:none}
+.bc-street b{font-family:var(--f-mono);font-weight:600}
+
+/* I4 — bring your own forecast. A <details> because it is an optional path: the app must
+   not present its own numbers and a demand for input as the same thing. */
+.fc{margin:4px 16px 16px;border-top:1px solid var(--line-soft);padding-top:12px}
+.fc summary{font:600 11.5px/1 var(--f-body);letter-spacing:.04em;color:var(--water);
+  cursor:pointer;padding:4px 0}
+.fc summary:hover{text-decoration:underline}
+.fc textarea{width:100%;margin-top:11px;font:400 12.5px/1.6 var(--f-mono);padding:10px 11px;
+  border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);resize:vertical}
+.fc-row{display:flex;gap:9px;margin-top:9px;flex-wrap:wrap}
+.fc-row button{font:600 12px/1 var(--f-body);letter-spacing:.02em;padding:9px 13px;border-radius:7px;
+  border:1px solid var(--water);background:var(--water);color:#fff;cursor:pointer}
+.fc-row button.ghost{background:transparent;color:var(--water)}
+.fc-row button:hover{filter:brightness(1.08)}
+.fc .hint code{font:400 11.5px/1 var(--f-mono);background:var(--surface-2);padding:2px 5px;border-radius:4px}
+
 @media (max-width:900px){
   .bc-row{grid-template-columns:80px minmax(0,1fr) 118px;gap:8px}
+  .xc-row,.cut-row,.rob-row{grid-template-columns:minmax(0,1fr);row-gap:4px}
   /* Two columns of prose beside a number do not fit a phone, and the ranking is carried by
      ORDER — which survives a single column. */
   .hh-row{grid-template-columns:minmax(0,1fr) auto;row-gap:3px}

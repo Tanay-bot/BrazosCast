@@ -13,9 +13,16 @@ import type maplibregl from "maplibre-gl";
  * project's one check command. main.ts reads state and draws; it does not own the arithmetic. */
 import { firstForecastIndex, mulberry32, rmseFt, runEnsemble } from "./lib/ensemble";
 import type { EnsembleOut, EnsembleSpec } from "./lib/ensemble";
-import { flagCounts, tierOnsets } from "./lib/backcast";
+import { flagCounts, streetLeadHours, tierOnsets } from "./lib/backcast";
 import { applyTransfer, applyTransferClamped } from "./lib/transfer";
 import type { Transfer } from "./lib/transfer";
+import { crossCheck, valueAt } from "./lib/crosscheck";
+import type { CrossVerdict, UpstreamReading } from "./lib/crosscheck";
+import { cutOffAt, hospitalCutAt } from "./lib/responders";
+import type { CutRow } from "./lib/responders";
+import { MAX_USER_HOURS, applyUserForecast, parseForecast } from "./lib/userforecast";
+import { robustness } from "./lib/robustness";
+import type { RobustOut } from "./lib/robustness";
 import { islandForSegment } from "./lib/islands";
 import type { IslandSpec, IslandView } from "./lib/islands";
 import { messagesFor } from "./lib/notify";
@@ -104,7 +111,10 @@ type Backcast = {
     window: { from: string; to: string; hours: number; n_points: number } };
   tiers: BackcastTier[];
   street_lead_time: { segments: number; segments_reaching_threshold: number;
-    p10_h: number; median_h: number; p90_h: number; min_h: number; max_h: number; note: string };
+    p10_h: number; median_h: number; p90_h: number; min_h: number; max_h: number; note: string;
+    /* Per segment, indexed by position in road_thresholds.geojson — what I3 reads for the
+     * selected street, and what the app's own recomputation is checked against. */
+    per_segment_h?: (number | null)[] };
   correction_tradeoff: {
     lift_ft: number;
     flags_at_crest: { stage_ft: number; shipped: number; corrected: number; of: number };
@@ -115,7 +125,20 @@ type Backcast = {
     reading: string };
   verification_grid: {
     flag_counts: { stage_ft: number; shipped: number; corrected: number }[];
-    tier_onsets_h: Record<string, number | null> };
+    tier_onsets_h: Record<string, number | null>;
+    /* I3 — the per-segment rows the browser re-derives for the selected street. */
+    segment_lead_h?: Record<string, number | null> };
+};
+
+/* The quiet-river record (pipeline/derive/gauge_history.py): the Richmond gauge's annual stage
+ * peaks, which is what turns "stays dry" into "the gauge would need 33.4 ft; it last reached
+ * that in 2024". Annual maxima only — the artifact's own limits say so, and the app repeats it
+ * rather than implying a continuous record. */
+type GaugeHistory = {
+  site: string; lid: string; unit: string; n_peaks: number; from: string; to: string;
+  highest: { at: string; ft: number };
+  peaks: { at: string; ft: number }[];
+  source: string;
 };
 
 /* Offline address index, built by pipeline/derive/address_index.py.
@@ -143,11 +166,23 @@ const state: {
   /* F7 — the compiled alert templates and the reader's language. The templates travel in
    * the payload rather than in this file: what is tested is what is shown. */
   notifications: TemplateSet | null; lang: Lang;
+  /* The quiet-river record, and the three post-submission kernels' outputs. Each is cached
+   * against a key that names what it depends on (see the `*Key` fields), because render() runs
+   * on every stage change and none of these depends on the stage except the cut set. */
+  history: GaugeHistory | null;
+  cross: CrossVerdict | null; crossKey: string;
+  cut: CutRow[]; cutKey: string;
+  rob: RobustOut | null; robKey: string;
+  /* I4 — the series with a pasted forecast in place of the gauge's, and the gauge's own series
+   * kept so `Clear` restores exactly what it replaced. Never persisted: no storage, no URL. */
+  baseSeries: Pt[] | null; userForecast: { points: number; note: string } | null;
 } = { roads: [], address: null, chain: [], series: [], current: 0, mode: "live", selIdx: -1, selected: null,
   source: "", graph: null, routes: [], routeSel: null,
   redundancy: null, estimated: false, staleHours: 0, estimateNote: "", validation: null,
   ensembleSpec: null, ensemble: null, ensKey: "", backcast: null, bcKey: "", island: null,
-  household: [], notifications: null, lang: "en" };
+  household: [], notifications: null, lang: "en",
+  history: null, cross: null, crossKey: "", cut: [], cutKey: "", rob: null, robKey: "",
+  baseSeries: null, userForecast: null };
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -224,7 +259,7 @@ function keepOfflineCopy(entries: OfflineEntry[]) {
 
 /* ---------------- data ---------------- */
 async function loadStatic() {
-  const [gj, chain, gph, red, val, ens, bc, addr, notify] = await Promise.all([
+  const [gj, chain, gph, red, val, ens, bc, addr, notify, hist] = await Promise.all([
     fetch(DATA + "road_thresholds.geojson").then((r) => r.json()),
     fetch(DATA + "travel_time_subdaily.json").then((r) => r.json()),
     fetch(DATA + "routing_graph.json").then((r) => r.json()),
@@ -234,6 +269,7 @@ async function loadStatic() {
     fetch(DATA + "harvey_backcast.json").then((r) => r.json()),
     fetch(DATA + "address_index.json").then((r) => r.json()),
     fetch(DATA + "notifications.json").then((r) => r.json()),
+    fetch(DATA + "gauge_history.json").then((r) => r.json()),
   ]);
   // After the fetches above and not before: the hand-over copies what the browser's HTTP
   // cache already has, so the payload has to have been requested first.
@@ -247,6 +283,7 @@ async function loadStatic() {
   state.ensembleSpec = ens as EnsembleSpec;
   state.backcast = bc as Backcast;
   state.notifications = notify as TemplateSet;
+  state.history = hist as GaugeHistory;
   buildRouting();
   state.chain = Object.entries(chain.gauges as Record<string, ChainRow>)
     .map(([lid, g]) => ({ lid, ...g }))
@@ -342,15 +379,6 @@ async function fetchUpstream(lid: string): Promise<{ t: number; v: number }[]> {
     .sort((a, b) => a.t - b.t);
 }
 
-function valueAt(series: { t: number; v: number }[], targetMs: number, tolMs: number): number | null {
-  let best = Infinity, out: number | null = null;
-  for (const p of series) {
-    const d = Math.abs(p.t - targetMs);
-    if (d < best) { best = d; out = p.v; }
-  }
-  return best <= tolMs ? out : null;
-}
-
 /** Estimate the current Richmond stage from the upstream gauges. Returns null when
  *  no gauge can supply the lagged value the transfer needs — in which case the app
  *  falls back to the last observation and says so, rather than inventing a number. */
@@ -384,6 +412,59 @@ async function estimateFromUpstream(gapH: number, lastObs: number) {
   return { stage: parts.reduce((a, b) => a + b, 0) / parts.length, names, anchor, clamped };
 }
 
+/* ---------------- I2: two gauges, one answer ----------------
+ * The kernel is ./lib/crosscheck.ts (the pipeline's own transfer, with the band it measured on
+ * held-out events). What belongs here is the network and the moment: fetch what the upstream
+ * gauges are reporting, compare at the lag each transfer was fitted at, and say so when they
+ * disagree — the one place the app can notice that the reading it is keyed to is wrong. */
+async function runCrossCheck() {
+  const red = state.redundancy;
+  if (!red || state.mode !== "live") {
+    state.cross = null;
+    state.crossKey = "";
+    renderCrossCheck();
+    return;
+  }
+  const gauges: UpstreamReading[] = [];
+  await Promise.all(Object.entries(red.transfer).map(async ([lid, t]) => {
+    try { gauges.push({ lid, transfer: t, series: await fetchUpstream(lid) }); }
+    catch { /* a gauge that will not answer is reported as missing, never as agreement */ }
+  }));
+  const band = red.uncertainty.band_ft;
+  state.cross = crossCheck(state.current, gauges, Date.now(), [band[0], band[1]]);
+  state.crossKey = `live|${Math.round(state.current)}`;
+  renderCrossCheck();
+}
+
+function renderCrossCheck() {
+  const c = state.cross;
+  $("xcCard").hidden = state.mode !== "live";
+  if (state.mode !== "live") { $("xcBody").innerHTML = ""; return; }
+  if (!c) {
+    $("xcNote").textContent = "reading the upstream gauges…";
+    $("xcBody").innerHTML = "";
+    return;
+  }
+  const rows = c.rows.map((r) => {
+    const div = `${r.divergenceFt >= 0 ? "+" : ""}${r.divergenceFt.toFixed(2)} ft`;
+    // A clamped upstream value is outside the range the transfer was fitted on, so its
+    // "divergence" is the gap between a floor value and the river — reported as such rather
+    // than as a gauge disagreeing with the reading.
+    return `<div class="xc-row${r.clamped || r.agrees ? "" : " bad"}">` +
+      `<b>${r.name}</b><span>${r.upstreamFt!.toFixed(2)} ft at −${r.lagH} h → ` +
+      `${r.estimateFt.toFixed(2)} ft here</span>` +
+      `<span class="st ${r.clamped ? "warn" : r.agrees ? "ok" : "bad"}">` +
+      `${r.clamped ? "out of range" : div}</span></div>`;
+  }).join("");
+  $("xcBody").innerHTML = rows || `<p class="muted">No upstream gauge is reporting.</p>`;
+  $("xcNote").textContent = c.rows.length
+    ? `${c.rows.length} upstream gauge${c.rows.length > 1 ? "s" : ""} · live reading ` +
+      `${state.current.toFixed(2)} ft · ${c.inRange} inside the fitted range` +
+      (c.missing.length ? ` · ${c.missing.join(", ")} silent` : "")
+    : "no upstream reading";
+  $("xcVerdict").textContent = c.note;
+}
+
 /* ---------------- lead time ---------------- */
 function crossingHours(threshold: number): number | null {
   const now = state.series.length ? state.series[state.series.length - 1].t : Date.now();
@@ -394,6 +475,41 @@ function crossingHours(threshold: number): number | null {
   return null;
 }
 
+/* ---------------- what the river would have to do (F1's second half) ----------------
+ * On the day the river is at 9 ft the app's answer is "your street stays dry", which is true
+ * and useless. The honest version is arithmetic on a record the repo already had: the stage it
+ * would take, and when that last happened. The record is annual peaks, so "last reached" means
+ * the last year whose peak was at or above the stage — exact for the question asked, and the
+ * artifact says so in its own limits rather than leaving the app to imply a daily series. */
+
+function lastReached(threshold: number): { at: string; ft: number } | null {
+  const h = state.history;
+  if (!h) return null;
+  let best: { at: string; ft: number } | null = null;
+  for (const p of h.peaks) if (p.ft >= threshold && (!best || p.at > best.at)) best = p;
+  return best;
+}
+
+/** The sentence for a street the forecast never reaches. `leads` is the isolation case: the
+ *  number that matters to a household is the one that cuts them off, not the one that floods
+ *  the road, and the two are different stages for 230 segments. */
+function quietLine(at: number, leads: boolean): string {
+  const h = state.history;
+  const need = leads
+    ? `It would take ${at.toFixed(1)} ft at the gauge to cut your last dry way out.`
+    : `This street floods at ${at.toFixed(1)} ft.`;
+  if (!h) return `${need} The gauge's peak record did not load, so how often it has been that high is not shown.`;
+  const hit = lastReached(at);
+  const hi = `${h.highest.ft.toFixed(1)} ft in ${h.highest.at.slice(0, 4)}`;
+  if (!hit) {
+    return `${need} The gauge has not reached that in the whole record (${h.from.slice(0, 4)}–` +
+      `${h.to.slice(0, 4)}, ${h.n_peaks} annual peaks, highest ${hi}).`;
+  }
+  const age = new Date().getUTCFullYear() - Number(hit.at.slice(0, 4));
+  return `${need} It last reached that in ${hit.at.slice(0, 4)} (${hit.ft.toFixed(1)} ft, ` +
+    `${age} year${age === 1 ? "" : "s"} ago); the record's highest is ${hi}. ` +
+    `Annual peaks only, at ${h.lid}.`;
+}
 /* ---------------- uncertainty ensemble ---------------- */
 /* The algorithm is ./lib/ensemble.ts, where the pipeline's verification grid can be recomputed
  * against it. What is decided HERE is what belongs to the app rather than to the arithmetic: the
@@ -1457,7 +1573,8 @@ function renderChartText() {
   }
   el.textContent = parts.join(" ");
   // The card header carries the one number worth having outside the paragraph.
-  $("chartNote").textContent = `crest ${hi.v.toFixed(2)} ft · ${when(hi.t)}`;
+  $("chartNote").textContent = `crest ${hi.v.toFixed(2)} ft · ${when(hi.t)}` +
+    (state.userForecast ? ` · your forecast (${state.userForecast.points} points)` : "");
 }
 
 function renderEnsemble(sel: Road | null) {
@@ -1542,7 +1659,19 @@ function checkBackcastGrid(): { ok: boolean; rows: number; bad: string[] } {
       bad.push(`stage ${g.stage_ft}: ${c.shipped}/${c.corrected} != ${g.shipped}/${g.corrected}`);
     }
   }
-  return { ok: bad.length === 0, rows: bc.tiers.length + bc.verification_grid.flag_counts.length, bad };
+  // I3 — the per-street half, recomputed for the rows the pipeline named. The selected
+  // street's own row is added here rather than in render(), so the number on screen and the
+  // number in the grid are the same computation.
+  const segGrid = bc.verification_grid.segment_lead_h ?? {};
+  if (state.selIdx >= 0) segGrid[String(state.selIdx)] = bc.street_lead_time.per_segment_h?.[state.selIdx] ?? null;
+  for (const [k, want] of Object.entries(segGrid)) {
+    const i = Number(k);
+    const got = state.series.length ? streetLeadHours(state.series, roadThresholds[i]) : null;
+    if (got !== want) bad.push(`segment ${i}: ${got} != ${want}`);
+  }
+  return { ok: bad.length === 0,
+    rows: bc.tiers.length + bc.verification_grid.flag_counts.length + Object.keys(segGrid).length,
+    bad };
 }
 
 function renderBackcast() {
@@ -1588,6 +1717,29 @@ function renderBackcast() {
     state.bcKey = key;
   }
 
+  // I3 — the personal half of the historical claim: what THIS street's alert would have said.
+  // The per-segment array is read by the same index the map and the answer use, and the local
+  // recomputation is compared with it rather than trusted, so the two cannot drift.
+  const sel = state.selected;
+  if (!sel || state.selIdx < 0) {
+    $("bcStreet").hidden = true;
+  } else {
+    $("bcStreet").hidden = false;
+    const at = sel.properties.flood_stage_ft;
+    const lead = state.series.length ? streetLeadHours(state.series, at) : null;
+    const published = bc.street_lead_time.per_segment_h?.[state.selIdx] ?? null;
+    const name = sel.properties.name ?? `segment ${sel.properties.osmid}`;
+    const agree = lead === published ? ""
+      : ` ⚠ This recomputation (${lead}) disagrees with the artifact (${published}) — treat the block above as the published figure.`;
+    $("bcStreet").innerHTML = lead === null
+      ? `<b>Your street (${name})</b> was never reached inside the 2017 window: it floods at ` +
+        `${at.toFixed(1)} ft and the observed crest was ` +
+        `${bc.event.crest.stage_ft.toFixed(2)} ft.` + agree
+      : `<b>Your street (${name})</b>: the alert would have landed <b>${lead} h</b> before the ` +
+        `observed crest — this street floods at ${at.toFixed(1)} ft and crossed it ` +
+        `${Math.round(lead)} h ahead of the peak.${agree}`;
+  }
+
   const c = flagCounts(roadThresholds, state.current, bc.correction_tradeoff.lift_ft);
   $("bcStage").innerHTML =
     `At <b>${state.current.toFixed(2)} ft</b> the app flags <b>${c.shipped}</b> of ${state.roads.length} segments` +
@@ -1595,6 +1747,145 @@ function renderBackcast() {
       : `; with the measured correction, <b>${c.corrected}</b>`) + ".";
   $("bcNote").textContent = `replay \u00b7 ${bc.event.window.n_points} hourly observations \u00b7 ` +
     `crest ${bc.event.crest.stage_ft.toFixed(2)} ft`;
+}
+
+/* ---------------- I5: who is cut off right now ----------------
+ * The inverse of "ways out". The set that matters operationally is not the flooded streets: it
+ * is the streets whose route to help is already cut while their own road is still DRY — no water
+ * to see and no way out, and the gap between those two stages is how long it lasts. The rule is
+ * ./lib/responders.ts; what is here is the population it reads (the road layer and the graph, in
+ * one segment order) and the card. */
+function updateCuts(stage: number) {
+  const g = state.graph;
+  const rows = g
+    ? cutOffAt(stage, roadThresholds, g.segment_route_cut_ft, g.segment_route_cut_medical_ft,
+      state.roads.map((r) => r.properties.name ?? `segment ${r.properties.osmid}`))
+    : [];
+  state.cut = rows;
+  state.cutKey = `cut|${stage.toFixed(1)}`;
+
+  const noHosp = rows.reduce((n, r) => n + (hospitalCutAt(r, stage) ? 1 : 0), 0);
+  $("cutCard").hidden = !g;
+  $("cutNote").textContent = `at ${stage.toFixed(2)} ft`;
+  $("cutHead").textContent = rows.length
+    ? `${rows.length} of ${state.roads.length} segments have a dry road and no modelled route to help`
+    : `No segment has lost its route to help while its street is still dry at ${stage.toFixed(2)} ft`;
+  const list = $("cutList");
+  list.innerHTML = "";
+  for (const r of rows.slice(0, 12)) {
+    const li = document.createElement("li");
+    li.className = "cut-row";
+    const b = document.createElement("b");
+    b.textContent = r.name;
+    const m = document.createElement("span");
+    m.className = "m";
+    m.textContent = `route cut at ${r.cutFt.toFixed(1)} ft · street floods at ${r.floodFt.toFixed(1)} ft` +
+      ` · ${r.marginFt.toFixed(1)} ft before the water` +
+      (r.cutToHospitalFt === null ? " · no hospital route modelled at any stage"
+        : hospitalCutAt(r, stage) ? ` · hospital route cut at ${r.cutToHospitalFt.toFixed(1)} ft` : "");
+    li.append(b, m);
+    list.appendChild(li);
+  }
+  if (rows.length > 12) {
+    const li = document.createElement("li");
+    li.className = "cut-row more";
+    li.textContent = `…and ${rows.length - 12} more, worst first`;
+    list.appendChild(li);
+  }
+  $("cutWorst").textContent = rows.length
+    ? `Worst: ${rows[0].marginFt.toFixed(1)} ft between losing the way out and the street flooding. ` +
+      `${noHosp} of them have no modelled hospital route at this stage either.`
+    : "Drag the stage up to see the set grow; each segment's own cut is in routing_graph.json.";
+}
+
+/* ---------------- I6: does the answer survive the measured error? ----------------
+ * The kernel is ./lib/robustness.ts, and it is driven by the artifact's own numbers: the
+ * per-street sigma and the corridor lift from the 2017 extent, and the benchmark's forecast
+ * RMSE at the horizon the answer lands on. Cached on the selection AND the series, because the
+ * card must not cost the drag anything (T8 measures that budget). */
+function updateRobustness(sel: Road | null) {
+  const spec = state.ensembleSpec;
+  const box = $("robCard");
+  if (!spec || !sel || !state.series.length) {
+    box.hidden = true;
+    state.rob = null;
+    return;
+  }
+  const p = spec.parameters;
+  const key = `${state.selIdx}|${state.mode}|${state.series.length}|` +
+    `${state.series[state.series.length - 1]?.t ?? 0}|${state.userForecast ? "user" : "gauge"}`;
+  if (key !== state.robKey || !state.rob) {
+    state.rob = robustness(state.series, seriesRef(), sel.properties.flood_stage_ft, {
+      sigmaFt: p.per_street_sigma_ft,
+      liftFt: p.lift_ft,
+      rmseAtHours: (h) => rmseFt(h / 24, spec),
+      forecastFrom: firstForecastIndex(state.series),
+      horizonHours: 72,
+    });
+    state.robKey = key;
+  }
+  box.hidden = false;
+  const r = state.rob;
+  const fmt = (h: number | null) => (h === null ? "not reached" : `${h.toFixed(1)} h`);
+  $("robHead").textContent = r.base === null
+    ? "The point estimate is that water does NOT reach this street in the window. Do the measured errors change that?"
+    : `The point estimate is ${r.base.toFixed(1)} h. Under the errors this project has measured:`;
+  $("robBody").innerHTML =
+    `<div class="rob-row rob-head"><span>perturbation</span><span>lead time</span>` +
+    `<span>Δ</span><span>what changed</span></div>` +
+    r.rows.map((row) => (row.skipped
+      ? `<div class="rob-row skip"><b>${row.label}</b><span>—</span><span></span><i>${row.detail}</i></div>`
+      : `<div class="rob-row${row.holds ? "" : " bad"}"><b>${row.label}</b>` +
+        `<span>${fmt(row.hours)}</span>` +
+        `<span>${row.delta === null ? "—" : `${row.delta > 0 ? "+" : ""}${row.delta.toFixed(1)} h`}</span>` +
+        `<i>${row.detail}</i></div>`)).join("");
+  $("robVerdict").textContent = r.survives
+    ? `The qualitative answer holds under all ${r.appliedCount} perturbations: ` +
+      (r.base === null ? "no perturbation reaches this street either."
+        : "water still reaches this street inside the window, though the hours move.")
+    : "⚠ The measured errors do not all preserve the answer — a row above turns 'reached' into " +
+      "'not reached' or back. The point estimate alone does not say which.";
+}
+
+/* ---------------- I4: bring your own forecast ----------------
+ * The rule the app runs is a comparison between a stage series and one number per street, so a
+ * pasted series works. Only the FORECAST half is replaced — the observations are what happened —
+ * and nothing is stored: the series lives in memory, never in the URL or on the device. */
+function readUserForecast() {
+  const ta = $("fcText") as unknown as HTMLTextAreaElement;
+  const parsed = parseForecast(ta.value, Date.now());
+  const applied = applyUserForecast(state.series, parsed.points);
+  if (!applied) {
+    $("fcNote").textContent = parsed.errors.length
+      ? `Nothing applied: ${parsed.errors.length} line(s) could not be read ` +
+        `(first: line ${parsed.errors[0].line} — ${parsed.errors[0].why}). ` +
+        `Need at least 3 readable points after the last observation.`
+      : `Nothing applied: need at least 3 readable points after the last observation.`;
+    return;
+  }
+  state.baseSeries = state.series;
+  state.series = applied.series;
+  state.userForecast = { points: parsed.points.length, note: applied.note };
+  state.robKey = "";
+  state.ensKey = "";
+  const dropped = parsed.errors.length
+    ? ` ${parsed.errors.length} line(s) skipped (first: line ${parsed.errors[0].line}, ` +
+      `${parsed.errors[0].why}).` : "";
+  const far = parsed.tooFar ? ` ${parsed.tooFar} point(s) beyond ${MAX_USER_HOURS} h dropped.` : "";
+  $("fcNote").textContent = `Using your forecast: ${applied.note}${dropped}${far} ` +
+    `Nothing is stored — clearing restores the gauge's own series.`;
+  render();
+}
+
+function clearUserForecast() {
+  if (state.baseSeries) state.series = state.baseSeries;
+  state.baseSeries = null;
+  state.userForecast = null;
+  state.robKey = "";
+  state.ensKey = "";
+  ($("fcText") as unknown as HTMLTextAreaElement).value = "";
+  $("fcNote").textContent = "Not using a pasted forecast: the gauge's own series is shown.";
+  render();
 }
 
 /* ---------------- F7: the alert ---------------- */
@@ -1822,9 +2113,12 @@ function render() {
       vEl.innerHTML = leads
         ? `Your <em>last way out</em> stays open in this forecast`
         : `Your street stays <em>dry</em> in this forecast`;
+      // "Stays dry" is true and useless on its own. F1's second half: what would have to
+      // happen, and when it last did — computed from the cached peak record, so it costs no
+      // request and works during the outage that motivates the product.
       sEl.textContent = leads
-        ? `You keep a dry route out until ${limit.toFixed(1)} ft; the street floods at ${at.toFixed(1)} ft. The forecast does not reach either, and the gauge is at ${stage.toFixed(2)} ft.`
-        : `This segment floods at ${at.toFixed(1)} ft and the forecast does not reach it. The gauge is at ${stage.toFixed(2)} ft.`;
+        ? `You keep a dry route out until ${limit.toFixed(1)} ft; the street floods at ${at.toFixed(1)} ft. The forecast does not reach either, and the gauge is at ${stage.toFixed(2)} ft. ` + quietLine(limit, true)
+        : `The forecast does not reach it, and the gauge is at ${stage.toFixed(2)} ft. ` + quietLine(at, false);
       hEl.textContent = "—"; hlEl.textContent = "no crossing forecast";
     } else {
       const when = fmtTime((state.mode === "replay" ? state.series[0].t : Date.now()) + hrsLimit * 3_600_000,
@@ -1867,6 +2161,9 @@ function render() {
   renderBackcast();
   renderAlerts();
   renderHousehold(stage);
+  updateRobustness(sel);
+  updateCuts(stage);
+  renderCrossCheck();
 
   const lowConf = state.roads.filter((r) => r.properties.confidence === "low").length;
   const trapped = state.roads.filter((r) => r.properties.isolation_gap_ft !== null
@@ -2017,6 +2314,9 @@ function wire() {
   $("langEn").addEventListener("click", () => setAlertLang("en"));
   $("langEs").addEventListener("click", () => setAlertLang("es"));
   $("share").addEventListener("click", () => { void shareLink(); });
+  // I4 — a pasted forecast. Both controls are local: the series never leaves the page.
+  $("fcUse").addEventListener("click", readUserForecast);
+  $("fcClear").addEventListener("click", clearUserForecast);
 }
 
 function setAlertLang(lang: Lang) {
@@ -2068,6 +2368,14 @@ async function shareLink() {
 async function setMode(mode: "live" | "replay") {
   state.mode = mode;
   setModeButtons();
+  // A pasted forecast is a statement about the series this mode loaded, so it does not
+  // survive a mode switch: the observations in the new mode are a different event.
+  state.baseSeries = null;
+  state.userForecast = null;
+  ($("fcNote") as HTMLElement).textContent = "";
+  state.cross = null;
+  state.robKey = "";
+  state.ensKey = "";
   try {
     if (mode === "live") {
       await fetchLive();
@@ -2078,6 +2386,8 @@ async function setMode(mode: "live" | "replay") {
     $("askHint").textContent = `Could not load ${mode} data: ${e}`;
   }
   render();
+  if (mode === "live") void runCrossCheck();
+  else { state.cross = null; renderCrossCheck(); }
 }
 
 /* ---------------- offline ---------------- *
@@ -2143,6 +2453,9 @@ async function boot() {
   setModeButtons();
   render();
   await applyUrl();
+  // I2 — after the first paint, never in front of it: the upstream gauges are two more
+  // requests, and the answer the page already has must not wait for a cross-check of it.
+  if (state.mode === "live") void runCrossCheck();
   // The net, once everything boot needs has loaded and the timeline can be read in one go.
   keepOfflineCopy(loadedHere());
   // Dev-only inspection hook: the routing panel is verified against the pipeline
@@ -2155,7 +2468,10 @@ async function boot() {
         checkAddresses, located, urlAddresses, parseAddress, canonicalStreet, editDistance,
         nearestRoadIndex, buildRoadIndex,
         islandForSegment, islandSpec, computeIsland,
-        readUrl, syncUrl, applyUrl, shareLink, shareSummary };
+        readUrl, syncUrl, applyUrl, shareLink, shareSummary,
+        runCrossCheck, crossCheck, cutOffAt, hospitalCutAt, robustness,
+        parseForecast, applyUserForecast, streetLeadHours, lastReached, quietLine,
+        render, updateCuts, updateRobustness, renderCrossCheck, drawChart };
   }
 }
 

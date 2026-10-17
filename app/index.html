@@ -135,6 +135,33 @@
       </div>
     </section>
 
+    <!-- I2 — two gauges, one answer. The app is keyed to one gauge; a second one upstream,
+         transferred down the reach at the lag it was fitted at, is the only number here that
+         can disagree with the reading everything else depends on. Live mode only: in replay
+         there is no live reading to check. The band is the error the pipeline measured on
+         held-out events, so "agrees" is a claim with a measurement behind it. -->
+    <section class="card xc" id="xcCard" hidden aria-label="Upstream gauge cross-check">
+      <div class="card-h"><h2>Two gauges, one answer</h2><span class="note" id="xcNote">—</span></div>
+      <div class="card-b">
+        <div id="xcBody"></div>
+        <p class="hint" id="xcVerdict"></p>
+      </div>
+    </section>
+
+    <!-- I6 — does the answer survive? Every published number descends from two estimated
+         quantities (the street's threshold and the forecast), and both have a measured error.
+         This perturbs the answer by exactly those and asks whether the qualitative claim —
+         water reaches this street inside the window — still holds. -->
+    <section class="card rob" id="robCard" hidden aria-label="Robustness of the answer">
+      <div class="card-h"><h2>Does the answer survive?</h2>
+        <span class="note">perturbed by the errors this project measured</span></div>
+      <div class="card-b">
+        <p class="rob-head" id="robHead"></p>
+        <div class="rob-table" id="robBody"></div>
+        <p class="hint" id="robVerdict"></p>
+      </div>
+    </section>
+
     <section class="chain" aria-label="Crest travelling down the gauge chain">
       <div class="card-h"><h2>Crest lead time from upstream gauges</h2>
         <span class="note" id="chainNote">derived from historical crest travel times</span></div>
@@ -189,6 +216,24 @@
       <!-- The same series as a sentence, for the text-only route and for anyone the
            canvas does not reach. renderChartText() fills it in both modes. -->
       <p class="chart-text" id="chartText"></p>
+      <!-- I4 — bring your own forecast. The app's rule is a comparison between a series and
+           one number per street, so any series works; the honest answer to "why should I
+           trust your forecast?" is that you do not have to. Only the forecast half is
+           replaced (observations are what happened), and nothing is stored or put in the URL. -->
+      <details class="fc">
+        <summary>Use your own forecast instead</summary>
+        <p class="hint">One point per line: an ISO time (UTC unless you write an offset) or hours
+          from now, then the stage in feet. e.g. <code>+6, 34.2</code> or
+          <code>2026-10-18T06:00 41.5</code>. The observed record is kept; only the forecast is
+          replaced. Nothing you paste is stored or shared — clear restores the gauge's series.</p>
+        <textarea id="fcText" rows="5" spellcheck="false"
+          placeholder="+6, 33.0&#10;+12, 36.4&#10;+18, 39.1&#10;+24, 40.2"></textarea>
+        <div class="fc-row">
+          <button id="fcUse" type="button">Use this forecast</button>
+          <button id="fcClear" type="button" class="ghost">Clear</button>
+        </div>
+        <p class="hint" id="fcNote">Not using a pasted forecast: the gauge's own series is shown.</p>
+      </details>
     </section>
 
     <!-- Harvey backcast (pipeline/derive/backcast.py). Replay only: 2017 is the one flood
@@ -200,9 +245,26 @@
         <span class="note" id="bcNote">—</span></div>
       <div class="card-b">
         <div class="bc-tl" id="bcTl"></div>
+        <!-- I3 — the same flood, for the street in front of you. The corridor's median is
+             not a household's answer, and the per-segment array is what makes the
+             historical claim personal. -->
+        <p class="bc-street" id="bcStreet"></p>
         <p class="bc-stage" id="bcStage"></p>
         <p class="bc-sum" id="bcSum"></p>
         <p class="bc-cav" id="bcCav"></p>
+      </div>
+    </section>
+
+    <!-- I5 — the inverse question: not "is my street wet" but "who has a dry road and no way
+         out". The set is computed from the same graph the ways-out panel reads, in the same
+         segment order, and it excludes the streets the extract cannot route a responder to at
+         any stage rather than reporting them as trapped. -->
+    <section class="card cut" id="cutCard" hidden aria-label="Segments cut off before their street floods">
+      <div class="card-h"><h2>Dry road, no way out</h2><span class="note" id="cutNote">—</span></div>
+      <div class="card-b">
+        <p class="cut-head" id="cutHead"></p>
+        <ol class="cut-list" id="cutList"></ol>
+        <p class="hint" id="cutWorst"></p>
       </div>
     </section>
 
@@ -215,7 +277,12 @@
       Routing: shortest path on that same graph to real OpenStreetMap destinations — hospitals, fire and police stations (<code>pipeline/derive/routing.py</code>), flooded segments weighted rather than removed so a fully-cut network still reports the best crossing.
       Island: the same graph's connected pieces at the current stage — the roads still reachable from your street without crossing water — with the flooded segments at that island's edge drawn on the map. The extract is fragmented before any flooding, so an island without a responder is usually the boundary of the study area rather than a cut-off.
       Harvey backcast: the observed 2017 gauge record replayed through the same rule (<code>pipeline/derive/backcast.py</code>) — what the app <em>would</em> have sent, with the onsets and the crest observed and the per-street timing not.
-      Flood zones: FEMA NFHL. Claims context: OpenFEMA.</p>
+      Flood zones: FEMA NFHL. Claims context: OpenFEMA.<br />
+      Cross-check: the upstream gauges (<code>HPDT2</code>, <code>BAWT2</code>) transferred down the reach at the lag each was fitted at, compared with the live reading against the error band measured on held-out events (<code>pipeline/derive/gauge_redundancy.py</code>).
+      Robustness: the answer re-run with the per-street threshold error and the benchmark's forecast RMSE applied (<code>pipeline/derive/ensemble.py</code>, <code>pipeline/models/forecast.py</code>).
+      Dry road, no way out: the same graph's <code>segment_route_cut_ft</code>, joined to each street's own threshold.
+      Past stages: the USGS annual peak record for <code>08114000</code> (<code>pipeline/derive/gauge_history.py</code>) — annual maxima, not a continuous series.
+      A forecast you paste is yours: it never leaves the page and is not part of any published number.</p>
       <p class="disc">A working prototype. Road depths are modelled, never observed. Flood extents are provisional pending a unit check on the HAND raster.
       A refuge is ground the modelled water does not reach at 50 ft — not a shelter — and routes leaving the mapped corridor are not counted, so a street
       marked “no dry route out”, or one with no modelled route to a responder, may still have one outside the study area.

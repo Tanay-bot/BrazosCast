@@ -93,6 +93,15 @@ def main():
     print(f"measured lift {lift:+.2f} ft; published Harvey peak {peak_published:.2f} ft")
 
     s = replay_series()
+    # Rounded to the 2 dp the app is SERVED, with Python's round — the same call
+    # pipeline/export/app_data.py makes on every point it ships — because the per-segment array
+    # below is read positionally by the browser and compared with its own recomputation. The
+    # difference is not cosmetic: an hour reading 52.298 ft in the raw cache ships as 52.30, and
+    # a street with a 52.3 ft threshold crosses there rather than an hour later. numpy's round
+    # is NOT the same function at a tie (55.135 became 55.14 here and 55.13 in the payload), and
+    # that one-off moved the crest, which moves every lead time at once. Both numbers were
+    # self-consistent and only one could be shown.
+    s = s.map(lambda x: round(float(x), 2))
     v = s.to_numpy(float)
     t = s.index
     hours = np.array((t - t[0]).total_seconds() / 3600.0, float)
@@ -136,6 +145,10 @@ def main():
     lead = np.array(lead, float)
     ship_h = np.array(ship_h, dtype=object)
     n_reach = int(lead.size)
+    # Per segment, not just the corridor: "what would MY alert have said in 2017" is the
+    # question a household actually has, and it is the same array the percentiles above
+    # were taken from — so the block and the selection cannot disagree.
+    seg_lead = [None if h is None else round(crest_h - float(h), 1) for h in ship_h]
     print(f"\nsegments reaching their own threshold within the window: {n_reach} of {thr.size}")
     print(f"  lead time to the crest: median {np.median(lead):.0f} h, "
           f"p10 {np.percentile(lead, 10):.0f} h, p90 {np.percentile(lead, 90):.0f} h, "
@@ -191,6 +204,19 @@ def main():
     # ---- verification grid the browser must reproduce ----------------------------
     grid = [{"stage_ft": st, "shipped": shipped_flags[st], "corrected": corrected_flags[st]}
             for st in GRID_STAGES]
+    # The rows of the per-segment array the browser re-derives for the selected street:
+    # every 137th segment (a fixed stride, so the sample is reproducible), plus the
+    # earliest and latest onsets, which are the rows most likely to catch an off-by-one
+    # in "the first hour at or above the threshold". Also the highest threshold in the
+    # corridor and one segment that was never reached, because the null branch — most of the
+    # corridor in 2017 — is otherwise never exercised by the cross-check.
+    sample_idx = sorted(set(list(range(0, int(thr.size), 137))
+                            + ([int(np.argmin(lead)), int(np.argmax(lead))] if lead.size else [])))
+    sample_idx = sorted(set(sample_idx + [x for x, v in enumerate(seg_lead) if v is None][:1]
+                            + [int(np.argmax(thr))]))
+    segment_grid = {str(int(i)): seg_lead[int(i)] for i in sample_idx}
+    print(f"per-segment lead times: {n_reach} of {thr.size} segments reached their threshold; "
+          f"{len(segment_grid)} of them named for the browser cross-check")
     tier_grid = {f"{name}_{thr:g}": (None if x["onset_h"] is None else round(x["onset_h"], 1))
                  for (name, thr), x in zip(TIERS, tiers)}
     print(f"\nverification grid: {len(grid)} stages + {len(tier_grid)} tier onsets "
@@ -219,6 +245,12 @@ def main():
     assert grid[-1]["shipped"] > grid[0]["shipped"], "the flag curve is flat — nothing rose"
     assert grid[0]["shipped"] == 0, "some segment claims to flood below the grid's floor"
     assert n_reach > 0 and lead.min() >= 0, "lead times must be non-negative"
+    assert len(seg_lead) == int(thr.size) and \
+        sum(1 for x in seg_lead if x is not None) == n_reach, \
+        "the per-segment lead array is not the population the percentiles were taken from"
+    assert (len(lead) == 0) or (abs(float(np.median(lead)) - float(np.median(
+        [x for x in seg_lead if x is not None]))) < 0.1), \
+        "the per-segment array disagrees with the published median"
     assert float(np.percentile(lead, 10)) <= float(np.median(lead)) <= \
         float(np.percentile(lead, 90)), "lead-time quantiles are not ordered"
     assert gave_up.min(initial=0) >= 0, "correcting a threshold cannot alert EARLIER"
@@ -273,6 +305,10 @@ def main():
             "p90_h": round(float(np.percentile(lead, 90)), 1),
             "min_h": round(float(lead.min()), 1),
             "max_h": round(float(lead.max()), 1),
+            "per_segment_h": seg_lead,
+            "per_segment_note": ("indexed by position in road_thresholds.geojson, the same "
+                                 "order the app addresses segments by; null means the "
+                                 "segment's threshold was never reached inside the window"),
             "note": ("the crest moves downstream during the event, so a street below "
                      "Richmond crests later than the gauge it is keyed to "
                      "(FINDINGS section 1) — this number is against the gauge"),
@@ -293,12 +329,15 @@ def main():
             "threshold_error": "data/derived/harvey_validation.json "
                               "(USGS SIR 2018-5070 extent, doi:10.5066/F7VH5N3N)",
         },
-        "verification_grid": {"flag_counts": grid, "tier_onsets_h": tier_grid},
+        "verification_grid": {"flag_counts": grid, "tier_onsets_h": tier_grid,
+                              "segment_lead_h": segment_grid},
         "reference_algorithm": (
             "tier_onset(tier) = hours of the first hourly point with stage >= tier; "
             "hours_before_crest = crest_h - tier_onset; flags(stage) = count of segments "
             "with flood_stage_ft <= stage; corrected flags(stage) = count with "
-            "flood_stage_ft + lift <= stage. The app recomputes all of these from its own "
+            "flood_stage_ft + lift <= stage; street_lead(segment) = crest_h minus the hours "
+            "of the first hourly point at or above that segment's own flood_stage_ft, null "
+            "when it is never reached. The app recomputes all of these from its own "
             "replay series and its own road list, and must match verification_grid exactly."),
         "limits": [
             "no per-street timing is validated: the only street-level observation is one "

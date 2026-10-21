@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-15T14:58:37.461547+00:00",
+  "generated_at": "2026-10-19T01:57:24.743371+00:00",
   "step": "UPGRADE-PLAN.md Step 7 \u2014 uncertainty ensemble",
   "question": "given what the 2017 flood measured about these thresholds, when does water reach this street, as a distribution?",
   "answer_template": "{crossing} of {of} runs reach this street within the window",
@@ -38,7 +38,7 @@
         6.057353872726056
       ]
     ],
-    "forecast_rmse_beyond_measured_ft": 6.057
+    "forecast_rmse_beyond_measured_ft": 6.057353872726056
   },
   "method": {
     "threshold": "true flood stage = shipped threshold + lift + sigma*N(0,1), the probit model fitted in harvey_validation.py",

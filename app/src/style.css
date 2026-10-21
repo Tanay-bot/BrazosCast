@@ -136,6 +136,10 @@
 .legend{display:flex;gap:14px;flex-wrap:wrap;padding:11px 16px;border-top:1px solid var(--line-soft);
   font-size:11.5px;color:var(--fg-dim)}
 .lg{display:inline-flex;align-items:center;gap:6px}
+/* The extent's score, directly under the key. Not a tooltip: the number that says how far
+   the water is over-drawn has to be readable without hovering anything. */
+.flood-note{margin:0;padding:0 16px 12px;font-size:11.5px;line-height:1.45;color:var(--fg-dim)}
+.flood-note:empty{display:none}
 .sw{width:17px;height:3px;border-radius:2px;flex:none}
 
 /* stage */
@@ -172,7 +176,7 @@ input[type=range]{width:100%;margin:0;accent-color:var(--water);height:26px}
    What goes is the base map, its raster tiles and the chart canvas: the three things
    that cost megabytes or battery. What stays is every sentence, including the flood
    count that the map's legend was only illustrating. */
-body.text-only #map,body.text-only .legend,body.text-only .hgwrap{display:none}
+body.text-only #map,body.text-only .legend,body.text-only .flood-note,body.text-only .hgwrap{display:none}
 body.text-only .chart-text{display:block}
 body.text-only .map-card .card-h{margin-bottom:0}
 /* With the map gone the wide column holds one line of text, so the two-column grid
@@ -259,6 +263,29 @@ body.text-only .cols{grid-template-columns:minmax(0,1fr)}
 .rob-row.rob-head{padding:0 0 6px;border-top:0;color:var(--fg-faint);
   font:600 10px/1 var(--f-body);letter-spacing:.12em;text-transform:uppercase}
 .rob-row.rob-head span{font-family:var(--f-body);font-size:10px}
+
+/* I7 — the model's record. A real <table>, because it is a numeric matrix and there is no
+   prose version of "the same quantity under three windows"; the caption carries the question
+   so the header row can stay three characters wide. Numbers are mono and tabular so a column
+   can be read down, which is the only reason to print a table at all. */
+.md-head{margin-bottom:11px;font-size:13.5px;color:var(--fg-dim);line-height:1.6}
+.md-table table{width:100%;border-collapse:collapse;font-size:12.5px}
+.md-table caption{caption-side:top;text-align:left;font-size:12.5px;color:var(--fg-dim);
+  padding-bottom:9px}
+.md-table th,.md-table td{padding:7px 6px;border-top:1px solid var(--line-soft);text-align:right;
+  font:400 12.5px/1.3 var(--f-mono);font-variant-numeric:tabular-nums}
+.md-table thead th{font:600 10.5px/1.3 var(--f-body);letter-spacing:.06em;text-transform:uppercase;
+  color:var(--fg-faint);border-top:0;white-space:nowrap}
+.md-table th[scope="row"]{text-align:left;color:var(--fg-dim);font-family:var(--f-body)}
+.md-table td i{font-style:normal;color:var(--fg-faint)}
+.md-table td.bad{background:color-mix(in srgb,var(--action) 8%,transparent)}
+.md-table td.bad i{color:var(--fg-dim)}
+.md-table td .flag{display:block;font:600 9.5px/1.3 var(--f-body);letter-spacing:.04em;
+  text-transform:uppercase;color:var(--action)}
+.md-table td.na{color:var(--fg-faint)}
+.md-sum{margin-top:11px;font-size:13px;line-height:1.6}
+.md-loss{margin-top:9px;font-size:12.5px;color:var(--fg-dim);line-height:1.6}
+.md-stages{margin-top:9px;font:400 12px/1.7 var(--f-mono);color:var(--fg-dim)}
 
 /* I5 — the inverse view. Rows, not map geometry: the question is a list of places with no
    way out, and the numbers that matter are two stages and the distance between them. */

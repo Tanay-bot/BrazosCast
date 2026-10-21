@@ -351,22 +351,96 @@ safety guarantee: the clip means a route cannot leave the study area, thresholds
 facility positions are volunteer-mapped points rather than a dispatch feed — a station may be
 closed or relocated.
 
-## 8. Inundation bands — PROVISIONAL (`pipeline/derive/inundation.py`)
+## 8. Inundation bands — the unit is settled, the bias is measured (`pipeline/derive/inundation.py`)
 
-Inundation = cells where HAND < stage. Getting there surfaced an unresolved unit question:
+Inundation = cells where HAND is below the water surface stage of **that cell's own reach**.
+The raster's unit was open for two sessions and had been decided by plausibility; it is now a
+measurement, `pipeline/derive/hand_unit_resolution.py`, and it records both checks, both
+readings, and what the wrong reading would have cost.
 
-- the hydrotable `stage` column is unambiguously **metres** (0.3048 m = 1 ft steps);
-- the `rem_zeroed_masked_*.tif` raster is int16, values 0–32766. Read as **millimetres** it
-  reproduces the hydrotable's cell counts (~10.07M vs 9.9M at a 12 m stage) but implies
-  **383 km² flooded at 45 ft inside the Richmond window (65% of the domain)** — absurd;
-- read as **centimetres** it gives **13.5 km² at 45 ft** — plausible for the Brazos floodplain —
-  but does not reproduce the cell counts.
+### 8a. Two independent checks, same answer
 
-We ship the centimetre reading because it is the physically credible one, and label every
-output `provisional: true`. **This must be confirmed against NOAA-OWP docs before the extents
-are presented as authoritative.** Stage→area: 40 ft 13.16 km², 45 ft 13.51 km², 48 ft 13.70 km²,
-50 ft 13.84 km². The area barely grows with stage, i.e. nearly all low-HAND cells are already
-wet by 40 ft — another reason to distrust the scale until confirmed.
+`rem_zeroed_masked_3125000011.tif` is int16 with values 0–32766 and nodata 32767. The only two
+readings ever proposed are millimetres (`per_m = 1000`) and centimetres (`per_m = 100`), a 10×
+difference.
+
+**A. The hydrotable is an independent count of the same cells.** Per reach, at a stage in
+0.3048 m steps, `Number of Cells` is NOAA's own wetted-cell count from the synthetic rating
+curve, on the same 10 m grid. Compared per reach (225 of them), not in total, so a total
+cannot agree by cancellation:
+
+| stage | millimetres, median ratio [p10–p90] | centimetres, median ratio [p10–p90] |
+|---|---|---|
+| 40 ft (12.19 m) | **1.000** [0.809–1.015] | 0.054 [0.001–0.207] |
+| 50 ft (15.24 m) | **1.000** [0.991–1.016] | 0.048 [0.001–0.173] |
+| 60 ft (18.29 m) | **1.000** [0.999–1.016] | 0.045 [0.002–0.173] |
+
+Below ~9 m the comparison is not usable and is not used: the SRC's counts there include cells
+this raster masks away, so a disagreement at 10 ft says nothing about the unit.
+
+**B. The 2016 Sentinel-1 water edge is an observation, not a model product.** Rasterised onto
+the same grid, at the gauge stage at the image's own acquisition instant
+(2016-05-30T00:26:20Z, RMOT2 49.40 ft, 212.7 km² mapped):
+
+| reading | IoU at 49.40 ft | area there | best IoU (stage swept 4–22 m) | stage that best explains the image |
+|---|---|---|---|---|
+| millimetres | **0.191** | 1,063.6 km² | **0.208** | 43.5 ft (**5.9 ft** from the gauge) |
+| centimetres | 0.093 | 25.9 km² | 0.101 | 72.2 ft (**22.8 ft** from the gauge) |
+
+At Harvey's crest (54.74 ft) the same comparison gives 0.179 against 0.095 — but the image is
+three days *before* the crest, so that is not the like-for-like number and the artifact says so.
+
+**Why the old reasoning was wrong.** The centimetre reading was chosen because 383 km² at 45 ft
+"seemed absurd" against a 593 km² corridor — 65% of it wet. The absurdity was not the raster's:
+it was one gauge stage applied to 225 reaches whose beds are at different elevations, and it
+disappears when the stage is per reach (§ 8b). The hydrotable disagreed by 20× at the same time,
+and the plan's own rule — a unit is settled by measurement, not plausibility — would have caught
+that immediately.
+
+### 8b. Per-reach stage, from the SRC the hydrotable already contains (NEXT-PLAN § 5.3)
+
+The observed stage is turned into a discharge with the Richmond rating (`gauge_rating.py`,
+inverted by bisection), then each reach's own rating curve is asked what stage passes that
+discharge. Steady state: the mainstem carries the same discharge from reach to reach. In the
+study corridor this moves the extent at 50 ft from 439.6 km² (uniform stage) to **288.7 km²**
+(−34%), and the overlap with the observation from 0.19 to **0.31** — so the uniform-stage
+simplification was a real part of the over-prediction, but not the dominant one.
+
+| gauge stage | discharge from the rating | modelled area | reach stage range |
+|---|---|---|---|
+| 45 ft (flood) | 1,943 m³/s | 248.1 km² | 2.87–21.40 m |
+| 48 ft (moderate) | 2,268 m³/s | 276.9 km² | 3.25–22.51 m |
+| 50 ft (major) | 2,413 m³/s | 288.7 km² | 3.41–22.97 m |
+| 54.74 ft (Harvey's crest) | 3,146 m³/s | 330.8 km² | 4.17–25.08 m |
+
+One reach extrapolates past the top of its rating curve at every stage, and the artifact counts
+it rather than clamping it silently.
+
+### 8c. The score the app prints
+
+Scored on the corridor, with the radar clipped to it (the polygon reaches further upstream than
+the corridor carries addresses), at the image's stage, with the shipped per-reach method:
+
+| | value |
+|---|---|
+| observed (radar, clipped) | 125.9 km² |
+| modelled at 49.40 ft | 285.3 km² — **2.3×** |
+| IoU | **0.312** |
+| recall / precision | 0.777 / 0.343 |
+| modelled at Harvey's crest, IoU | 330.8 km², **0.315** (not like-for-like) |
+
+**The extent is an upper bound with a measured bias, and it is shipped as one.** Two reasons,
+both named in the artifact: HAND treats every low cell as connected to its channel, and the
+radar is a water edge under a forested floodplain, where C-band under-maps. One observation,
+three days before the crest, is not enough to fit a correction to — the same argument the
+thresholds make for refusing their own lift — so the number is stated and the layer is drawn
+without one.
+
+Artifacts: `data/derived/flood_extent.json` (95 polygons, 450.0 KB raw, 90.5 KB gzipped) and
+`data/derived/stage_area_curve.json`. The app draws it under the road layer at the nearest band
+at or below the current stage (45 / 48 / 50 / 54.74 ft), and prints the score under the legend
+from the artifact's own `meta.validation`, so the number on screen cannot drift from the number
+that was measured.
 
 ## 9. Forecast benchmark (`pipeline/models/forecast.py`, `lstm.py`)
 
@@ -383,11 +457,86 @@ Holdout **2016–2017** (contains the 2016 flood and Harvey); trained ≤ 2015. 
 | +7 d | XGBoost | **6.057** | 3.823 | **0.571** | **0.781** |
 | +7 d | persistence | 6.905 | 3.891 | 0.442 | 0.732 |
 
-- **XGBoost beats persistence on RMSE and NSE at every horizon**, decisively at +1–2 d and +7 d;
-  persistence still wins KGE/MAE at +3–5 d. Reported honestly rather than spun.
+- **On this window XGBoost beats persistence on RMSE and NSE at every horizon**, decisively at
+  +1–2 d and +7 d; persistence still wins KGE/MAE at +3–5 d. Reported honestly rather than spun.
+  **The scope of that sentence matters, and § 9b is why: it is true of the holdout and not true
+  of the windows that came after it.**
 - **Top features at +2 d are `BAWT2_s0` (San Felipe, 0.465) and `HPDT2_s0` (Hempstead, 0.452)** —
   the two nearest upstream gauges. The model independently rediscovered the travel-time structure.
   That is the best single demo visual in the project.
+
+### 9b. The later windows — the loss a single-window table hides (NEXT-PLAN § 4.1–4.4)
+
+The benchmark was one window, and the model's published numbers could drift without a test
+noticing, because nothing ran it. Both are now fixed: `forecast.py` scores the same train-once
+model on **2018–2021** and **2022–2026** as well (the caches run to 2026-10), and it is a stage in
+the golden regression (`pipeline/tests/test_golden.py`) and in `pipeline/tests/
+test_forecast_contract.py`.
+
+RMSE in feet, out of sample. Trained ≤ 2015 in every case; nothing after the holdout was ever used
+to choose a feature.
+
+| window | +1 d model / pers. | +3 d | +5 d | +7 d |
+|---|---|---|---|---|
+| 2016–17 (holdout) | **1.159** / 1.494 | **3.568** / 3.672 | **5.365** / 5.510 | **6.057** / 6.905 |
+| 2018–21 | **0.630** / 1.435 | **2.587** / 3.275 | 4.540 / **4.242** | 5.580 / **4.842** |
+| 2022–26 | **0.582** / 1.319 | **2.393** / 3.092 | **3.805** / 3.947 | 4.846 / **4.265** |
+
+**The model beats persistence at +1, +2 and +3 days on all three windows (12 of 15 out-of-sample
+window-horizons) and loses at +5 and +7 days.** The holdout is also the hardest window: the two
+later ones are roughly half the error at every horizon, so a table with only 2016–17 in it
+overstates the difficulty and hides the horizon limit at the same time.
+
+**Threshold exceedance — the stages the app actually answers in — is worse than the RMSE column
+suggests.** POD/FAR/CSI at +3 days (hits/misses/false alarms):
+
+| window | 20 ft action | 33.4 ft median street | 45 ft minor | 50 ft major |
+|---|---|---|---|---|
+| 2016–17 | **0.82** (152/7/26) / 0.80 (144/15/22) | 0.66 (52/16/11) / **0.75** (61/7/13) | 0.35 (6/9/2) / **0.57** (12/3/6) | **0.00** (0/8/0) / 0.31 (4/4/5) |
+| 2018–21 | **0.87** (270/10/30) / 0.81 (252/28/30) | **0.74** (100/12/23) / 0.64 (87/25/24) | 0.00 / 0.00 (both 0 hits of 6) | — nothing exceeded it |
+| 2022–26 | **0.68** (119/13/42) / 0.57 (96/36/36) | **0.75** (41/5/9) / 0.59 (34/12/12) | **0.33** (4/1/7) / 0.00 (0/5/5) | — nothing exceeded it |
+
+- **At the two stages the project exists for, persistence is the better classifier**: on the holdout
+  at 50 ft the model misses **all 9** exceedances (CSI 0.00) while persistence catches 7 of 9 with 2
+  false alarms (0.31). At +1 day the same split appears at 45 ft — the model 14/3/2 against
+  persistence 16/1/2. A low RMSE does not survive being turned into a threshold, which is the only
+  form the product uses.
+- Below 45 ft the model is the better one, and at 20 ft (action) it is better on every window.
+- **Harvey is the one event where the model loses at +1 day**, and it is the event it would be
+  shipped for: RMSE **6.10 ft against persistence's 4.52**, and its peak prediction is **7.55 ft
+  below** the observed crest. The 1962-ft-wide upstream fetch that is the model's whole input is
+  evidently not enough once the floodplain is the channel. Every other flood in the record
+  (24 of 25 events with ≥5 days above action stage) it wins.
+
+**What the model is therefore for, in the app:** the uncertainty block perturbs forecast points by
+this benchmark's measured RMSE, so the model is load-bearing for the *shape* of that spread. It is
+shipped as a cross-check on that curve — with a card that prints both the 12 wins and the 3 losses,
+the per-stage CSIs including the 0.00, and Harvey by name — and never as the forecast, because a
+live model number cannot even be computed in the browser: it needs the daily stage of all seven
+gauges, which the page does not fetch.
+
+**Three defects this surfaced, all fixed at the cause:**
+
+1. `model_forecast.json` emitted bare `NaN` for climatology's KGE (a constant prediction has no
+   correlation) — which `JSON.parse` rejects, so the artifact could not have been shipped to a
+   browser at all. Undefined statistics are now `null`, and the writer uses `allow_nan=False`, so a
+   future NaN fails here instead of downstream.
+2. `ensemble.py` kept its **own typed copy** of the RMSE curve, so re-training would have changed
+   the benchmark and left the ensemble propagating last run's error. It now reads the knots from the
+   CSV, and both `test_forecast_contract.py` and the app's copy are asserted against it.
+3. The floor of that curve was the last knot **rounded to three places** (6.057 against 6.057354),
+   a 3.5e-4 ft downward step at 7 days that `test_invariants.py` had documented as pinned rather
+   than corrected. Reading the curve removed the hand-typed copy, and the seam is now zero.
+
+**Not done, and why:** the feature set is unchanged. The measured alternatives (travel-time lags
+from `travel_time.json`, flow-regime indicators, basin antecedent stage) moved holdout RMSE by under
+0.1 ft at every horizon and inconsistently between windows, and the two `_lag` columns are exact
+duplicates of `HPDT2_s2` / `BBZT2_s3` — dropping them changes the holdout by ±0.05 ft. Choosing
+between those on the holdout would be selecting on the test set, so the published numbers stand and
+the measurements are here instead. **Antecedent precipitation is blocked on data, not on
+modelling:** MRMS QPE starts in 2014 and the complete-case feature matrix starts 2013-08-05 (San
+Felipe's stage cache is the binding one), so a precipitation feature would be missing for the first
+40% of training — a Phase 2 item, recorded rather than faked.
 
 ### LSTM vs XGBoost (`pipeline/models/lstm.py`)
 

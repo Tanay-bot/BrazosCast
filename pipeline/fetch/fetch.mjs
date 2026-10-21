@@ -13,7 +13,7 @@
  * San Felipe datum trap).
  */
 import { mkdir, writeFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -195,4 +195,6 @@ async function main() {
   }
 }
 
-main();
+/* Run only when executed, so `pipeline/ingest/` can import GAUGE_CHAIN — one list of the
+ * gauge chain for both the bulk fetch and the adapters, rather than two that drift. */
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();

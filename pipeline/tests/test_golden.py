@@ -7,10 +7,14 @@ every emitted artifact is compared to the committed one.
 
 Measured before it was written: the chain reproduces all 11 artifacts IDENTICALLY,
 so any difference is a real change in behaviour rather than noise. The only fields
-excluded are timestamps. I1's second-event stage made it 12, and it reproduces too.
+excluded are timestamps. I1's second-event stage made it 12, and it reproduces too;
+the XGBoost stage made it 13, and it does as well — except that its artifact records
+the library version, so an xgboost upgrade is MEANT to fail here rather than pass
+silently with numbers that were produced by a different tree builder.
 
-Cost is ~2 minutes, almost all of it harvey_validation.py (99 s), which is why this
-is marked `slow` and excluded from the default run. `scripts/check.sh --all` runs it.
+Cost is ~2 minutes, almost all of it harvey_validation.py (99 s), plus ~15 s for the
+model, which is why this is marked `slow` and excluded from the default run.
+`scripts/check.sh --all` runs it.
 """
 import json
 import pathlib
@@ -27,6 +31,12 @@ from conftest import ROOT
 # place, and road_thresholds regeneration would wipe those fields. Running them
 # out of order produces different artifacts, which is itself worth pinning.
 CHAIN = [
+    # FIRST, because ensemble.py reads the RMSE curve this stage writes: run it any later
+    # and the ensemble would verify itself against a benchmark that has just been replaced.
+    # It is also the only stage in here that is a MODEL rather than a derivation, and until
+    # NEXT-PLAN.md § 4.1 it was not in the chain at all, so its published numbers could
+    # drift without a test noticing.
+    "pipeline/models/forecast.py",
     "pipeline/derive/road_thresholds.py",
     "pipeline/derive/isolation.py",
     "pipeline/derive/routing.py",
@@ -43,6 +53,7 @@ CHAIN = [
 ]
 
 ARTIFACTS = [
+    "model_forecast.json",
     "road_thresholds.geojson", "road_thresholds.json", "road_thresholds.summary.json",
     "isolation.summary.json", "routing_graph.json", "routing.summary.json",
     "gauge_redundancy.json", "harvey_validation.json", "second_event_validation.json",

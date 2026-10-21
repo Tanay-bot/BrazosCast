@@ -96,6 +96,20 @@ REQUIRED = {
     # The landing resolves a street onto the gauge with this, so a key that loses its stage
     # would leave the homepage's red dot silently at zero.
     "street_thresholds.json": ["source", "segments", "streets", "by_key"],
+    # I7 — the fields are POSITIONAL arrays (the shape is named in the artifact's own
+    # `fields` block and in the model's type in main.ts), so these paths pin the columns the
+    # card reads by index. A reordered column would otherwise render the model's RMSE as the
+    # baseline's, which looks like a number rather than an error.
+    "model_crosscheck.json": [
+        "source", "question", "model.name", "model.version", "model.train_end",
+        "stages.0.0", "stages.0.1", "windows.0.id", "fields.benchmark", "fields.exceedance",
+        "benchmark.0.0", "benchmark.0.1", "benchmark.0.2", "benchmark.0.3",
+        "comparison.summary", "comparison.loses.0.0", "comparison.loses.0.1",
+        "comparison.loses.0.2", "comparison.note",
+        "exceedance.0.0", "exceedance.0.2", "exceedance.0.3", "exceedance.0.9",
+        "events.0.label", "events.0.peak_ft", "events.0.peak_at", "events.0.rows.0.1",
+        "events.0.rows.0.2", "events.0.rows.0.5", "limits.0",
+    ],
 }
 
 ROAD_PROPERTIES = [
@@ -170,11 +184,39 @@ def test_exported_files_are_the_derived_files(public_json):
     copied = ["road_thresholds.geojson", "travel_time_subdaily.json",
               "routing_graph.json", "gauge_redundancy.json",
               "harvey_validation.json", "harvey_backcast.json", "ensemble.json",
-              "address_index.json", "notifications.json", "gauge_history.json"]
+              "address_index.json", "notifications.json", "gauge_history.json",
+              # Written straight into app/public/data by inundation.py (it is 500 KB and
+              # re-serialising it here would only risk the two copies diverging), so this
+              # is the check that they have not.
+              "flood_extent.json"]
     for name in copied:
         src = (DERIVED / name).read_bytes()
         dst = (PUBLIC / name).read_bytes()
         assert src == dst, f"{name} differs between data/derived and app/public/data"
+
+
+def test_the_model_crosscheck_keeps_its_losses(public_json):
+    """The card's honesty is data, not copy: if the payload's loss list were emptied the app
+    would keep rendering the wins and say nothing about +5 and +7 days, and every other test
+    here would still pass. The benchmark rows are cross-checked against the loss list too, so a
+    reordered or mis-paired column fails here rather than on screen."""
+    mc = public_json("model_crosscheck.json")
+    assert mc["comparison"]["loses"], (
+        "model_crosscheck.json carries no losses, so the card cannot say where the model is "
+        "worse than persistence")
+    losses = {(w, h) for w, h, _pen in mc["comparison"]["loses"]}
+    computed = {(w, h) for w, h, x, p, _xk, _pk in mc["benchmark"]
+                if w != "train_2013_15" and x >= p}
+    assert computed == losses, (
+        f"the card's loss list and its benchmark table disagree: computed {sorted(computed)}, "
+        f"listed {sorted(losses)}")
+    # Every benchmark row names a window the artifact also describes, and the two baselines are
+    # in the order the card's `x / p` cells assume.
+    ids = {w["id"] for w in mc["windows"]}
+    assert {w for w, _h, _x, _p, _a, _b in mc["benchmark"]} <= ids
+    assert all(x > 0 and p > 0 for _w, _h, x, p, _a, _b in mc["benchmark"])
+    assert sum(1 for r in mc["benchmark"] if r[0] == "train_2013_15"), \
+        "the in-sample window is missing, so the card's 'memorising' contrast has no number"
 
 
 def test_no_exported_file_is_unused_by_the_app(root):

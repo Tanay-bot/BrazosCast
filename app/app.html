@@ -169,6 +169,25 @@
       </div>
     </section>
 
+    <!-- I7 — the model's own record. The uncertainty block perturbs forecast points by an
+         error curve that IS this model's measured RMSE, so the model is load-bearing for a
+         number already on screen; this card is where it is held to account, including on the
+         windows where it loses to assuming today's stage. It shows measured skill, not a
+         forecast: the model needs the daily stage of all seven gauges and the browser does
+         not fetch them. -->
+    <section class="card md" id="mdCard" hidden aria-label="XGBoost baseline cross-check">
+      <div class="card-h"><h2>The model behind the range</h2>
+        <span class="note">xgboost +1 to +7 d, scored on windows it was not fitted on</span></div>
+      <div class="card-b">
+        <p class="md-head" id="mdHead"></p>
+        <div class="md-table" id="mdTable"></div>
+        <p class="md-sum" id="mdSum"></p>
+        <p class="md-loss" id="mdLoss"></p>
+        <p class="md-stages" id="mdStages"></p>
+        <p class="hint" id="mdHint"></p>
+      </div>
+    </section>
+
     <section class="chain" aria-label="Crest travelling down the gauge chain">
       <div class="card-h"><h2>Crest lead time from upstream gauges</h2>
         <span class="note" id="chainNote">derived from historical crest travel times</span></div>
@@ -181,6 +200,7 @@
           <span class="note" id="mapNote">—</span></div>
         <div id="map" class="map"></div>
         <div class="legend">
+          <span class="lg"><span class="sw" style="background:var(--water);opacity:.45"></span>Modelled flood extent (HAND)</span>
           <span class="lg"><span class="sw" style="background:var(--dry)"></span>Passable</span>
           <span class="lg"><span class="sw" style="background:var(--flood)"></span>Under water at this stage</span>
           <span class="lg"><span class="sw" style="background:var(--you)"></span>Your segment</span>
@@ -188,6 +208,10 @@
           <span class="lg"><span class="sw" style="background:var(--island)"></span>Edge of your island (crossing under water)</span>
           <span class="lg"><span class="sw" style="background:#10261d"></span>Modelled route to a destination</span>
         </div>
+        <!-- I8 — the HAND extent, under the roads. Its score against the one observation is
+             printed here rather than left to a tooltip: a layer that draws water where the
+             model thinks it could be is only honest if the bias is on screen next to it. -->
+        <p class="hint flood-note" id="floodNote"></p>
       </section>
 
       <div class="side">
@@ -287,6 +311,7 @@
       Flood zones: FEMA NFHL. Claims context: OpenFEMA.<br />
       Cross-check: the upstream gauges (<code>HPDT2</code>, <code>BAWT2</code>) transferred down the reach at the lag each was fitted at, compared with the live reading against the error band measured on held-out events (<code>pipeline/derive/gauge_redundancy.py</code>).
       Robustness: the answer re-run with the per-street threshold error and the benchmark's forecast RMSE applied (<code>pipeline/derive/ensemble.py</code>, <code>pipeline/models/forecast.py</code>).
+      Model cross-check: that benchmark's own record — xgboost against persistence at +1…+7 d on the 2016–17 holdout and two later windows, with threshold exceedance at the stages above. It beats persistence to +3 d and does not beyond, which is why its error is used as a spread and never as the forecast.
       Dry road, no way out: the same graph's <code>segment_route_cut_ft</code>, joined to each street's own threshold.
       Past stages: the USGS annual peak record for <code>08114000</code> (<code>pipeline/derive/gauge_history.py</code>) — annual maxima, not a continuous series.
       A forecast you paste is yours: it never leaves the page and is not part of any published number.</p>

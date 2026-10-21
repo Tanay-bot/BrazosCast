@@ -47,12 +47,38 @@ IVCACHE = ROOT / "data" / "raw" / "usgs" / "iv" / "08114000_20170822.json"
 
 MEMBERS = 50
 SEED = 20261014
-FORECAST_FLOOR_FT = 6.057      # measured +7 d RMSE, held beyond the measured range
 
-# RMSE (ft) by days ahead, from model_forecast_benchmark.csv for the shipped model.
-RMSE_KNOTS = [(1.0, 1.159335767351426), (2.0, 2.1626943913098886),
-              (3.0, 3.568178711656254), (5.0, 5.365043746179423),
-              (7.0, 6.057353872726056)]
+
+# RMSE (ft) by days ahead, READ from model_forecast_benchmark.csv for the shipped model.
+# These five numbers were typed in here, which made the ensemble's uncertainty a second,
+# hand-maintained copy of the model's error: re-training the model would have changed the
+# benchmark and left this file quietly quoting the old curve. It is the same class of bug
+# as a stale thresholds payload, and the cure is the same — read the artifact, and let the
+# gate below fail if the curve the ensemble propagates is not the one the benchmark states.
+HOLDOUT_WINDOW = "holdout_2016_17"
+
+def forecast_error_knots() -> list:
+    """(days, RMSE ft) for the shipped model on the published holdout, from the benchmark."""
+    path = DERIVED / "model_forecast_benchmark.csv"
+    if not path.exists():
+        raise SystemExit("data/derived/model_forecast_benchmark.csv missing — run "
+                         "pipeline/models/forecast.py before ensemble.py")
+    bench = pd.read_csv(path)
+    rows = bench[(bench.window == HOLDOUT_WINDOW) & (bench.model == "xgboost")]
+    rows = rows.sort_values("horizon_days")
+    if rows.empty:
+        raise SystemExit(
+            f"model_forecast_benchmark.csv has no {HOLDOUT_WINDOW} rows for xgboost — the "
+            f"ensemble would propagate an error curve measured on nothing")
+    if rows.rmse.isna().any() or (rows.rmse <= 0).any():
+        raise SystemExit("a benchmark RMSE is missing or non-positive; the error curve "
+                         "would be flat where it must grow")
+    return [(float(d), float(v)) for d, v in zip(rows.horizon_days, rows.rmse)]
+
+
+RMSE_KNOTS = forecast_error_knots()
+# Measured +7 d RMSE, held beyond the measured range: no data supports growth past it.
+FORECAST_FLOOR_FT = RMSE_KNOTS[-1][1]
 
 
 def rmse_ft(days: float) -> float:

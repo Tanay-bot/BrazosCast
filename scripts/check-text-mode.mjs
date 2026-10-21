@@ -16,9 +16,12 @@
  *      <link> they are fetched before any script could object — measured 85 KB.
  *   3. The budget: text mode is smaller by at least MIN_SAVING_BYTES of gzipped
  *      same-origin bytes. The model of what each route fetches is the entry assets
- *      plus the WHOLE shipped payload, which is exact rather than an estimate because
+ *      plus the shipped payload, which is exact rather than an estimate because
  *      pipeline/tests/test_payload_contract.py already asserts every exported file is
- *      fetched by the app. The delta is therefore the map, nothing else.
+ *      fetched by the app — and the one MAP-ONLY artifact (MAP_ONLY below) is charged to
+ *      the full route and not to text mode, because text mode never requests it. That
+ *      exclusion is asserted from the browser in app/tests/e2e/flood.spec.ts, so it is a
+ *      measured route difference rather than a wish; the delta is the map plus that file.
  *
  * Byte counts are gzip -9 of the files on disk, because that is what a compressing
  * host sends and it is the number that compares fairly across asset types. The
@@ -57,6 +60,11 @@ if (!existsSync(DIST)) fail("app/dist is missing — this check runs after `vite
 /* The APP document, not the landing: `?text=1` is a route of the app, and `/` is now the
  * homepage. Reading index.html here would measure the homepage's bytes and call it the
  * app's budget. */
+/* Fetched inside buildMap() and nowhere else: ?text=1 never calls buildMap, and the browser
+ * suite asserts that text mode issues no request for it. Charging the text route for it
+ * would overstate its cost — and understate the saving this file exists to state. */
+const MAP_ONLY = new Set(["flood_extent.json"]);
+
 const html = readFileSync(join(DIST, "app.html"), "utf8");
 const assets = readdirSync(join(DIST, "assets"));
 const refs = [...html.matchAll(/(?:src|href)="\.\/(assets\/[^"]+)"/g)].map((m) => m[1]);
@@ -166,15 +174,18 @@ if (!FONT_HOST.test(html)) {
 /* ---- 3. the budget ----------------------------------------------------------- */
 const payload = readdirSync(DATA).map((f) => join(DATA, f));
 const payloadBytes = payload.reduce((a, f) => a + gz(f), 0);
+const textPayload = payload.filter((f) => !MAP_ONLY.has(f.split("/").pop()));
+const textPayloadBytes = textPayload.reduce((a, f) => a + gz(f), 0);
 const entryBytes = refs.reduce((a, f) => a + gz(join(DIST, f)), 0);
 const mapBytes = gz(join(DIST, "assets", mlJsFile)) + gz(join(DIST, "assets", mlCssFile));
 
-const textTotal = entryBytes + payloadBytes;
-const fullTotal = textTotal + mapBytes;
+const textTotal = entryBytes + textPayloadBytes;
+const fullTotal = entryBytes + payloadBytes + mapBytes;
 const saving = fullTotal - textTotal;
 
 console.log(`   entry (js+css, gzipped)   ${kb(entryBytes).padStart(10)}`);
-console.log(`   payload (${String(payload.length).padStart(2)} files)      ${kb(payloadBytes).padStart(10)}`);
+console.log(`   payload (${String(payload.length).padStart(2)} files)      ${kb(payloadBytes).padStart(10)}` +
+            `   (${payload.length - textPayload.length} of them map-only)`);
 console.log(`   text-only same-origin     ${kb(textTotal).padStart(10)}`);
 console.log(`   full same-origin          ${kb(fullTotal).padStart(10)}   (+${kb(mapBytes)} map)`);
 console.log(`   saved                     ${kb(saving).padStart(10)}   ` +

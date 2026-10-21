@@ -30,6 +30,36 @@ test("a live gauge boots the live view and says where it read to", async ({ page
   expect(await text(page, "chartText")).toMatch(/observed and forecast points/);
 });
 
+test("the model card shows its record, including where it loses", async ({ page }) => {
+  // Every number on this card is computed in renderModelCross() from the payload, so the
+  // assertions are about the two halves that matter: that the table pairs the model with
+  // persistence in that order, and that the losses survive to the screen. A card that
+  // rendered only the wins would pass a looser test and be exactly the failure this blocks.
+  await stubGauge(page, { value: 29.4, peak: 31.2, forecastTo: 30.1 });
+  await booted(page);
+
+  await expect(page.locator("#mdCard")).toBeVisible();
+  const table = page.locator("#mdTable");
+  // The published holdout at +3 d: 3.568 ft against persistence's 3.672, which is the
+  // narrowest margin in the table and therefore the row most likely to be quietly rounded
+  // into a win it is not.
+  await expect(table).toContainText("3.57/3.67");
+  await expect(table).toContainText("2022-26");
+  // The losses are marked in the DOM, not only in prose.
+  expect(await page.locator("#mdTable td.bad").count()).toBe(3);
+  await expect(page.locator("#mdSum")).toContainText("loses on 3");
+  await expect(page.locator("#mdSum")).toContainText("never as the answer");
+  // Harvey is the one flood where the model is the worse of the two at +1 day.
+  await expect(page.locator("#mdLoss")).toContainText("August 2017 flood");
+  await expect(page.locator("#mdLoss")).toContainText("the model 6.1 ft off");
+  // The per-stage rates carry their counts, and a stage nothing reached says so rather
+  // than printing a rate of zero.
+  await expect(page.locator("#mdStages")).toContainText("20 ft action CSI 0.68");
+  await expect(page.locator("#mdStages")).toContainText("no rate to report");
+  // And the tie-in: the ensemble block's own error curve is this model's.
+  await expect(page.locator("#mdHint")).toContainText("+7 d 6.1 ft");
+});
+
 test("a replay link boots 2017 without asking the live gauge anything", async ({ page }) => {
   let gaugeCalls = 0;
   await page.route(NWPS, async (route) => {

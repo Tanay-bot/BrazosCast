@@ -1,44 +1,93 @@
 {
+  "generated_at": "2026-10-19T13:04:41.936879+00:00",
   "bbox": [
     -96.1,
     29.44,
     -95.55,
     29.76
   ],
+  "unit": "millimetres",
   "provisional": true,
-  "units": {
-    "hand_raster": "cm (provisional)",
-    "hydrotable_stage": "m"
+  "note": "per-reach stage from the hydrotable SRC at the mainstem discharge the observed Richmond rating gives for the band's stage; a cell is wet when its HAND is below its own reach's stage",
+  "validation": {
+    "observation": "USFIMR Sentinel-1 water edge, 2016-05-30T00:26:20Z",
+    "domain": "the study corridor, with the radar extent clipped to it \u2014 the polygon reaches further upstream than the corridor does",
+    "observed_stage_ft": 49.4,
+    "observed_km2": 125.9,
+    "modelled_km2_at_that_stage": 285.3,
+    "area_ratio": 2.27,
+    "iou_at_that_stage": 0.3122,
+    "recall": 0.7771,
+    "precision": 0.3429,
+    "harvey_peak_ft": 54.74,
+    "iou_at_harvey_peak": 0.3153,
+    "peak_is_not_like_for_like": "the image was taken at 49.40 ft; the crest three days later was 54.74 ft, so comparing the crest to it charges the map for water the image could never have shown",
+    "reading": "an upper bound with a measured bias: at the one observed stage this maps 2.3x the radar's area, with recall 0.78 and precision 0.34. The radar is a water edge under a forested floodplain, which C-band under-maps, and HAND treats every low cell as connected to its channel. Use the outline, not the waterline."
   },
-  "note": "uniform stage across mainstem branch; HAND level-water assumption",
   "curve": [
     {
-      "stage_ft": 40,
-      "stage_m": 12.19,
-      "cells": 131619,
-      "area_km2": 13.16,
-      "polygons": 16
+      "stage_ft": 45.0,
+      "category": "flood",
+      "discharge_cms": 1942.5,
+      "cells": 2481153,
+      "area_km2": 248.1,
+      "polygons": 24,
+      "polygons_dropped_for_topology": 0,
+      "reach_stage_m": {
+        "min": 2.869,
+        "median": 11.166,
+        "max": 21.399
+      },
+      "reaches_with_extrapolated_rating": 1,
+      "unassigned_cells": 119
     },
     {
-      "stage_ft": 45,
-      "stage_m": 13.72,
-      "cells": 135051,
-      "area_km2": 13.51,
-      "polygons": 16
+      "stage_ft": 48.0,
+      "category": "moderate",
+      "discharge_cms": 2267.9,
+      "cells": 2768843,
+      "area_km2": 276.9,
+      "polygons": 30,
+      "polygons_dropped_for_topology": 0,
+      "reach_stage_m": {
+        "min": 3.247,
+        "median": 11.663,
+        "max": 22.514
+      },
+      "reaches_with_extrapolated_rating": 1,
+      "unassigned_cells": 119
     },
     {
-      "stage_ft": 48,
-      "stage_m": 14.63,
-      "cells": 136981,
-      "area_km2": 13.7,
-      "polygons": 17
+      "stage_ft": 50.0,
+      "category": "major",
+      "discharge_cms": 2412.7,
+      "cells": 2887176,
+      "area_km2": 288.7,
+      "polygons": 24,
+      "polygons_dropped_for_topology": 1,
+      "reach_stage_m": {
+        "min": 3.409,
+        "median": 11.846,
+        "max": 22.974
+      },
+      "reaches_with_extrapolated_rating": 1,
+      "unassigned_cells": 119
     },
     {
-      "stage_ft": 50,
-      "stage_m": 15.24,
-      "cells": 138399,
-      "area_km2": 13.84,
-      "polygons": 18
+      "stage_ft": 54.74,
+      "category": "major",
+      "discharge_cms": 3146.0,
+      "cells": 3308187,
+      "area_km2": 330.8,
+      "polygons": 17,
+      "polygons_dropped_for_topology": 1,
+      "reach_stage_m": {
+        "min": 4.172,
+        "median": 12.716,
+        "max": 25.078
+      },
+      "reaches_with_extrapolated_rating": 1,
+      "unassigned_cells": 119
     }
   ]
 }

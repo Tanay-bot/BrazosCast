@@ -29,6 +29,7 @@ import type { IslandSpec, IslandView } from "./lib/islands";
 import { messagesFor } from "./lib/notify";
 import type { Lang, TemplateSet } from "./lib/notify";
 import type { Pt } from "./lib/series";
+import { bandFor } from "./lib/flood";
 
 /* ------------------------------------------------------------------ *
  * BrazosCast — address-first flood lead time for the lower Brazos.
@@ -71,6 +72,22 @@ type RoutingGraph = {
 };
 /* One destination as seen from the selected street at the current stage. */
 type RouteOut = { f: Facility; ok: boolean; meters: number; wet: number; deepestFt: number | null; path: number[]; edges: number[] };
+
+/* The modelled flood extent (pipeline/derive/inundation.py, NEXT-PLAN § 5.4). Only the
+ * metadata is typed here — the polygons go straight to MapLibre — because the metadata is
+ * what the card is allowed to say. Every number below is measured by that script: the
+ * bands it cut, the area it mapped, and the one radar image it was scored against. */
+type FloodMeta = {
+  bands_ft: number[];
+  band_areas_km2: Record<string, number>;
+  unit: string;
+  provisional: boolean;
+  validation: {
+    observed_stage_ft: number; observed_km2: number; modelled_km2_at_that_stage: number;
+    area_ratio: number; iou_at_that_stage: number; recall: number; precision: number;
+    harvey_peak_ft: number; iou_at_harvey_peak: number;
+  };
+};
 
 /* Gauge-failure redundancy (pipeline/derive/gauge_redundancy.py): what to report when
  * RMOT2 stops reporting. The regime boundaries and the band are MEASURED there, not
@@ -142,6 +159,31 @@ type GaugeHistory = {
   source: string;
 };
 
+/* The XGBoost baseline's measured skill (pipeline/models/forecast.py, exported by
+ * pipeline/export/app_data.py). Fields are POSITIONAL arrays, so the shape is named here
+ * rather than guessed: benchmark is [window, horizon, xgb_rmse, persist_rmse, xgb_kge,
+ * persist_kge]; exceedance is [window, horizon, stage_ft, model, hits, misses, false_alarms,
+ * pod, far, csi]; event rows are [horizon, rmse, persist_rmse, peak_pred_ft, peak_err_ft,
+ * csi@each stage]. A rate is null when its denominator is empty — never 0, because
+ * "nothing exceeded this stage" and "no false alarms" are different statements. */
+type ModelCross = {
+  source: string; question: string;
+  model: { name: string; version: string; seed: number; train_end: string;
+    n_features: number; train_rows: number };
+  stages: [number, string][];
+  windows: { id: string; from: string; to: string; role: string }[];
+  fields: Record<string, string>;
+  benchmark: [string, number, number, number, number | null, number | null][];
+  comparison: { summary: string; per_horizon: string;
+    loses: [string, number, number][]; note: string };
+  exceedance: [string, number, number, string, number, number, number,
+    number | null, number | null, number | null][];
+  events: { label: string; from: string; to: string; peak_ft: number; peak_at: string;
+    days: number;
+    rows: [number, number, number, number, number, (number | null)[]][] }[];
+  limits: string[];
+};
+
 /* Offline address index, built by pipeline/derive/address_index.py.
  * A house number resolves to the app's own segment POSITION, so no geocoder and
  * no API key is involved. `keys` maps a canonical street name to the app streets
@@ -161,6 +203,7 @@ const state: {
   redundancy: Redundancy | null; estimated: boolean; staleHours: number; estimateNote: string;
   validation: Validation | null;
   ensembleSpec: EnsembleSpec | null; ensemble: EnsembleOut | null; ensKey: string;
+  modelCross: ModelCross | null;
   backcast: Backcast | null; bcKey: string;
   island: IslandView | null;
   household: HouseholdRow[];
@@ -181,6 +224,7 @@ const state: {
   source: "", graph: null, routes: [], routeSel: null,
   redundancy: null, estimated: false, staleHours: 0, estimateNote: "", validation: null,
   ensembleSpec: null, ensemble: null, ensKey: "", backcast: null, bcKey: "", island: null,
+  modelCross: null,
   household: [], notifications: null, lang: "en",
   history: null, cross: null, crossKey: "", cut: [], cutKey: "", rob: null, robKey: "",
   baseSeries: null, userForecast: null };
@@ -260,7 +304,7 @@ function keepOfflineCopy(entries: OfflineEntry[]) {
 
 /* ---------------- data ---------------- */
 async function loadStatic() {
-  const [gj, chain, gph, red, val, ens, bc, addr, notify, hist] = await Promise.all([
+  const [gj, chain, gph, red, val, ens, bc, addr, notify, hist, mc] = await Promise.all([
     fetch(DATA + "road_thresholds.geojson").then((r) => r.json()),
     fetch(DATA + "travel_time_subdaily.json").then((r) => r.json()),
     fetch(DATA + "routing_graph.json").then((r) => r.json()),
@@ -271,6 +315,7 @@ async function loadStatic() {
     fetch(DATA + "address_index.json").then((r) => r.json()),
     fetch(DATA + "notifications.json").then((r) => r.json()),
     fetch(DATA + "gauge_history.json").then((r) => r.json()),
+    fetch(DATA + "model_crosscheck.json").then((r) => r.json()),
   ]);
   // After the fetches above and not before: the hand-over copies what the browser's HTTP
   // cache already has, so the payload has to have been requested first.
@@ -285,6 +330,7 @@ async function loadStatic() {
   state.backcast = bc as Backcast;
   state.notifications = notify as TemplateSet;
   state.history = hist as GaugeHistory;
+  state.modelCross = mc as ModelCross;
   buildRouting();
   state.chain = Object.entries(chain.gauges as Record<string, ChainRow>)
     .map(([lid, g]) => ({ lid, ...g }))
@@ -464,6 +510,113 @@ function renderCrossCheck() {
       (c.missing.length ? ` · ${c.missing.join(", ")} silent` : "")
     : "no upstream reading";
   $("xcVerdict").textContent = c.note;
+}
+
+/* ---------------- I7: the model, held to its own record ----------------
+ * The ensemble block above perturbs forecast points by an error curve, and that curve is
+ * THIS model's measured RMSE (ensemble.py reads the benchmark). So the model is load-bearing
+ * for a number the app already shows, and the honest thing is to put its record next to it —
+ * including the part of the record that argues against using it. What the card cannot show is
+ * a live model forecast: the model needs the daily stage of all seven gauges, which the
+ * browser does not fetch, so it shows MEASURED SKILL and says so instead of implying a
+ * prediction. Every sentence below is computed from the artifact, and the losses are read
+ * from it rather than written here — a summary of a benchmark that can drop its own
+ * counter-evidence is not a summary. */
+const WIN_LABEL: Record<string, string> = {
+  train_2013_15: "in sample", holdout_2016_17: "2016-17",
+  later_2018_21: "2018-21", recent_2022_26: "2022-26",
+};
+
+function renderModelCross() {
+  const mc = state.modelCross;
+  const box = $("mdCard");
+  if (!mc) { box.hidden = true; return; }
+  box.hidden = false;
+
+  const out = mc.windows.filter((w) => w.id !== "train_2013_15");
+  const horizons = [...new Set(mc.benchmark.map((r) => r[1]))].sort((a, b) => a - b);
+  const cell = (w: string, h: number) =>
+    mc.benchmark.find((r) => r[0] === w && r[1] === h);
+
+  // RMSE in feet, model / persistence. A row is flagged when the model is no better than
+  // assuming today's stage, which is the finding the pipeline reports and the reason this
+  // card exists at all.
+  const rows = horizons.map((h) => {
+    const cells = out.map((w) => {
+      const r = cell(w.id, h);
+      if (!r) return `<td class="na">—</td>`;
+      const worse = r[2] >= r[3];
+      return `<td${worse ? ' class="bad"' : ""}>${r[2].toFixed(2)}` +
+        `<i>/${r[3].toFixed(2)}</i>${worse ? '<span class="flag">no better</span>' : ""}</td>`;
+    }).join("");
+    return `<tr><th scope="row">+${h} d</th>${cells}</tr>`;
+  }).join("");
+  $("mdTable").innerHTML =
+    `<table><caption>${mc.question}</caption><thead><tr><th scope="col">days ahead</th>` +
+    out.map((w) => `<th scope="col">${WIN_LABEL[w.id] ?? w.id}</th>`).join("") +
+    `</tr></thead><tbody>${rows}</tbody></table>`;
+
+  const train = cell("train_2013_15", 1);
+  const ho = cell("holdout_2016_17", 3);
+  $("mdHead").textContent = `Each cell is the model's RMSE in feet against persistence, on ` +
+    `windows it was not fitted on — the published holdout (2016-17, which contains the 2016 ` +
+    `flood and Harvey) and two later ones. In sample at +1 d it scores ` +
+    `${train ? train[2].toFixed(2) : "?"} ft against ${train ? train[3].toFixed(2) : "?"} ft, ` +
+    `which is memorising 2013-15 rather than forecasting; the holdout at +3 d is ` +
+    `${ho ? ho[2].toFixed(2) : "?"} ft against persistence's ${ho ? ho[3].toFixed(2) : "?"}.`;
+
+  // The note is the artifact's own sentence about its losses, lower-cased for a mid-sentence
+  // joining there and capitalised here — it is one string in one place, not two copies that
+  // could disagree.
+  const note = mc.comparison.note
+    ? mc.comparison.note.charAt(0).toUpperCase() + mc.comparison.note.slice(1)
+    : "";
+  $("mdSum").textContent = `Across every out-of-sample window and horizon: ` +
+    `${mc.comparison.summary}. ${note ? note + "." : ""}`;
+
+  // The events where the model is WORSE at the shortest lead time. Inside a flood the
+  // upstream gauges are exactly what the model has, so this is where it should do best —
+  // saying when it does not is the whole difference between a cross-check and a headline.
+  const MONTH = ["January", "February", "March", "April", "May", "June", "July", "August",
+    "September", "October", "November", "December"];
+  const when = (iso: string) => {
+    const [y, m] = iso.split("-");
+    return `${MONTH[Number(m) - 1]} ${y}`;
+  };
+  const losing = mc.events.filter((e) => e.rows.length && e.rows[0][1] > e.rows[0][2]);
+  $("mdLoss").textContent = losing.length
+    ? `Inside ${losing.map((e) => `the ${when(e.peak_at)} flood (peak ${e.peak_ft} ft, the model ` +
+        `${e.rows[0][1].toFixed(1)} ft off against persistence's ${e.rows[0][2].toFixed(1)} at ` +
+        `+1 d)`).join("; ")} the model is the worse of the two at the shortest lead time — ` +
+      `which is the event where it matters most. On the other ` +
+      `${mc.events.length - losing.length} floods in the record it wins.`
+    : `On every one of the ${mc.events.length} floods found in the record the model beats ` +
+      `persistence at +1 day.`;
+
+  // Exceedance at the four stages the answer speaks in, in the most recent window at +3 d.
+  // Counts travel with the rate, and an empty denominator is stated as such.
+  const win = "recent_2022_26";
+  const ex = (st: number, model: string) =>
+    mc.exceedance.find((r) => r[0] === win && r[1] === 3 && r[2] === st && r[3] === model);
+  $("mdStages").textContent = `At 3 days out on ${WIN_LABEL[win]}, scored against the stages ` +
+    `this app answers in: ` + mc.stages.map(([st, label]) => {
+      const r = ex(st, "xgboost");
+      if (!r || r[9] === null) {
+        return `${st} ft ${label} — no day reached it, so there is no rate to report`;
+      }
+      const n = (v: number, one: string, many: string) => `${v} ${v === 1 ? one : many}`;
+      return `${st} ft ${label} CSI ${r[9].toFixed(2)} (${n(r[4], "hit", "hits")}, ` +
+        `${n(r[5], "missed", "missed")}, ${n(r[6], "false alarm", "false alarms")})`;
+    }).join("; ") + ".";
+
+  const knots = state.ensembleSpec?.parameters.forecast_rmse_knots_ft;
+  $("mdHint").textContent = `The uncertainty block above uses this model's error curve to ` +
+    `grow its forecast spread` +
+    (knots && knots.length
+      ? ` (${knots.map(([d, v]: [number, number]) => `+${d} d ${v.toFixed(1)} ft`).join(", ")})`
+      : "") +
+    `, so a model that is no better than persistence past 3 days is exactly why that block ` +
+    `reports a range instead of the model's own number.`;
 }
 
 /* ---------------- lead time ---------------- */
@@ -1024,6 +1177,46 @@ function setSelected(i: number) {
 /* ---------------- map ---------------- */
 let map: maplibregl.Map | null = null;
 
+/* Fetched once and kept, rather than held only on the MapLibre source: the basemap fallback
+ * replaces the whole style, which drops the source, and the extent has to be handed back to
+ * the new style without a second 500 KB request. Null means "not loaded yet", which draws
+ * nothing rather than guessing. */
+/* eslint-disable-next-line @typescript-eslint/no-explicit-any -- the geometry is handed to
+ * MapLibre unread, and maplibre's GeoJSON type does not describe the sibling `meta` member. */
+let floodData: any = null;
+let floodMeta: FloodMeta | null = null;
+const EMPTY_FC = { type: "FeatureCollection", features: [] };
+
+/** The filter that selects ONE band. `band === -1` matches nothing, which is what the
+ * layers start on: a first frame that drew an arbitrary band would be water at a stage
+ * nobody asked for. */
+function bandFilter(band: number): maplibregl.FilterSpecification {
+  return ["==", ["get", "stage_ft"], band] as unknown as maplibregl.FilterSpecification;
+}
+
+/* The basemap. OpenFreeMap serves a keyless vector style — no account, no card, no request
+ * limit, commercial use allowed. OSM's own raster tiles are permitted for ordinary
+ * human-driven viewing but are best-effort with no SLA, so they are kept as the FALLBACK
+ * rather than the source: this page should not be waiting on a tile server with no promises
+ * behind an answer about a river.
+ *
+ * The fallback is load-bearing, not decoration. A style URL is a third-party request, and if
+ * it fails the road layer would sit on an empty canvas — which is exactly what a map with no
+ * basemap looks like. */
+const BASEMAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
+const BASEMAP_FALLBACK: maplibregl.StyleSpecification = {
+  version: 8,
+  sources: {
+    osm: {
+      type: "raster",
+      tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+      tileSize: 256,
+      attribution: "© OpenStreetMap contributors",
+    },
+  },
+  layers: [{ id: "osm", type: "raster", source: "osm" }],
+};
+
 async function buildMap() {
   // Lazy, and the guard is the feature: in text mode this function is never called, so
   // MapLibre and its stylesheet are never requested.
@@ -1038,26 +1231,55 @@ async function buildMap() {
   keepOfflineCopy(loadedHere());
   const maplibregl = mod.default;
   if (textOnly) return;    // the toggle navigates, but a race must not build the map anyway
+
+  /* The extent is fetched here, not in loadStatic: the text-only route never calls this
+   * function, and that route's whole claim is that it downloads neither the map nor its
+   * data. The fetch runs alongside the style request rather than before it. */
+  const floodReady = fetch(DATA + "flood_extent.json")
+    .then((r) => (r.ok ? r.json() : null))
+    .catch(() => null);
+  void floodReady.then((f) => {
+    if (!f || !f.meta) return;
+    floodData = f;
+    floodMeta = f.meta as FloodMeta;
+    if (map?.getSource("flood")) {
+      (map.getSource("flood") as maplibregl.GeoJSONSource).setData(f);
+    }
+    syncMap();
+    renderFloodNote();
+  });
+
   map = new maplibregl.Map({
     container: "map",
-    style: {
-      version: 8,
-      sources: {
-        osm: {
-          type: "raster",
-          tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-          tileSize: 256,
-          attribution: "© OpenStreetMap contributors",
-        },
-      },
-      layers: [{ id: "osm", type: "raster", source: "osm" }],
-    },
+    style: BASEMAP_STYLE,
+    /* Each style states its own attribution — the vector style names OpenFreeMap,
+     * OpenMapTiles and OSM; the raster fallback names OSM. A custom attribution here would
+     * print OSM twice on the vector path and lie about the fallback. */
+    attributionControl: { compact: true },
     center: [GAUGE.lon, GAUGE.lat],
     zoom: 12,
   });
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
-  map.on("load", () => {
-    map!.addSource("roads", { type: "geojson", data: "./data/road_thresholds.geojson" });
+
+  /* Layers are installed from `style.load` rather than `load`, because the raster fallback
+   * below replaces the style after the map has already loaded — and `load` fires once.
+   * Installing a second time is a no-op rather than a duplicate-source error. */
+  const installLayers = () => {
+    if (!map) return;
+    if (map.getSource("roads")) { syncMap(); updateRouteLine(); return; }
+    /* FIRST, so the water sits UNDER the roads: the roads are the answer and the extent is
+     * the context. The bands are nested, so the filter names exactly one of them (the
+     * nearest at or below the stage) and the source is uploaded once. */
+    map!.addSource("flood", { type: "geojson", data: floodData ?? EMPTY_FC });
+    map!.addLayer({
+      id: "flood-extent", type: "fill", source: "flood", filter: bandFilter(-1),
+      paint: { "fill-color": "#1a6d93", "fill-opacity": 0.26 },
+    });
+    map!.addLayer({
+      id: "flood-edge", type: "line", source: "flood", filter: bandFilter(-1),
+      paint: { "line-color": "#1a6d93", "line-width": 1, "line-opacity": 0.5 },
+    });
+    map.addSource("roads", { type: "geojson", data: "./data/road_thresholds.geojson" });
     map!.addLayer({
       id: "roads-pass", type: "line", source: "roads",
       filter: [">", ["get", "flood_stage_ft"], state.current],
@@ -1098,6 +1320,28 @@ async function buildMap() {
     });
     syncMap();
     updateRouteLine();   // a selection made before the style was ready still gets its line
+  };
+
+  /* One fallback, once. A style error and the timeout race each other; whichever arrives
+   * first wins, and the other becomes a no-op. */
+  let fellBack = false;
+  let styleReady = false;
+  const useFallback = (why: string) => {
+    if (fellBack || styleReady) return;
+    fellBack = true;
+    console.warn(`basemap: ${why}; falling back to OSM raster tiles`);
+    map!.setStyle(BASEMAP_FALLBACK);
+  };
+  const styleTimer = setTimeout(() => useFallback("the vector style did not load in 8 s"), 8000);
+  map.on("style.load", () => {
+    styleReady = true;
+    clearTimeout(styleTimer);
+    installLayers();
+  });
+  map.on("error", (e) => {
+    // Style and glyph failures arrive here. A tile error AFTER the style is up is not a
+    // reason to discard the basemap, so the guard is "the style never arrived".
+    if (!styleReady) useFallback(e.error?.message ?? "the vector style failed to load");
   });
   map.on("click", (e) => {
     // Select the road segment the click landed on, by index, so the routing graph
@@ -1110,6 +1354,51 @@ function syncMap() {
   if (!map || !map.getLayer("roads-flood")) return;
   map.setFilter("roads-flood", ["<=", ["get", "flood_stage_ft"], state.current]);
   map.setFilter("roads-pass", [">", ["get", "flood_stage_ft"], state.current]);
+  syncFlood();
+}
+
+/** The band whose extent is drawn at this stage: the nearest at or BELOW it.
+ *
+ * Bands are cut at flood (45), moderate (48), major (50) and Harvey's peak, and they are
+ * nested, so drawing the band below the stage under-states the water by at most one band's
+ * worth of rise and never invents water the stage has not reached. Above the top band
+ * (replay's crest is 55.01 ft, the top band 54.74) the top band stays drawn.
+ */
+function floodBand(stage: number): number | null {
+  return bandFor(stage, floodMeta?.bands_ft ?? []);
+}
+
+function syncFlood() {
+  if (!map || !map.getLayer("flood-extent")) return;
+  const f = bandFilter(floodBand(state.current) ?? -1);
+  map.setFilter("flood-extent", f);
+  map.setFilter("flood-edge", f);
+}
+
+/** What the extent is, in the card under the map — including what it got wrong.
+ *
+ * The number this must not hide is the score: at the one stage anyone has observed, the
+ * model maps more than twice the water the radar saw. A layer labelled "flood extent" with
+ * no such sentence would be the app asserting something it cannot defend, which is the one
+ * thing this project's voice is built not to do. */
+function renderFloodNote() {
+  const el = document.getElementById("floodNote");
+  if (!el) return;
+  const band = floodBand(state.current);
+  const v = floodMeta?.validation;
+  el.dataset.band = band === null ? "none" : String(band);
+  if (!floodMeta || !v) { el.textContent = ""; return; }
+  if (band === null) {
+    el.textContent = `No extent is drawn below the flood stage (${TH.minor} ft): the water is ` +
+      `in the channel, and the roads above already say what that means.`;
+    return;
+  }
+  const km2 = floodMeta.band_areas_km2?.[String(band)];
+  el.textContent =
+    `HAND extent at ${band} ft: ${km2 ? `${km2} km²` : "—"}, an upper bound. ` +
+    `Scored against the one 2016 radar image at ${v.observed_stage_ft.toFixed(1)} ft it maps ` +
+    `${v.area_ratio.toFixed(1)}× the water it shows (IoU ${v.iou_at_that_stage.toFixed(2)}), ` +
+    `and Harvey's crest scores ${v.iou_at_harvey_peak.toFixed(2)} against that same image.`;
 }
 
 /* ---------------- routing ---------------- *
@@ -2165,6 +2454,7 @@ function render() {
   updateRobustness(sel);
   updateCuts(stage);
   renderCrossCheck();
+  renderModelCross();
 
   const lowConf = state.roads.filter((r) => r.properties.confidence === "low").length;
   const trapped = state.roads.filter((r) => r.properties.isolation_gap_ft !== null
@@ -2257,6 +2547,7 @@ function render() {
   syncMap();
   const flooded = state.roads.filter((r) => stage >= r.properties.flood_stage_ft).length;
   $("mapNote").textContent = `${flooded} of ${state.roads.length} segments under water`;
+  renderFloodNote();
 
   renderChartText();
   if (!textOnly) drawChart();

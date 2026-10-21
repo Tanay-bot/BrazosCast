@@ -51,7 +51,10 @@ const SHELL_URL = `${ORIGIN}/app.html`;
 const LANDING_URL = `${ORIGIN}/index.html`;
 const DATA_DIR = `${ORIGIN}/data/`;
 const GAUGE = "https://api.water.noaa.gov/nwps/v1/gauges/RMOT2/stageflow";
-const TILE = "https://tile.openstreetmap.org/12/940/1702.png";
+/* The tile the app actually asks for: OpenFreeMap's vector planet (the basemap), with the
+ * OSM raster style as the fallback. Only the shape matters here — a third-party URL that is
+ * not payload — but naming the real host keeps the failure message honest. */
+const TILE = "https://tiles.openfreemap.org/planet/20250122_001001_pt/12/940/1702.pbf";
 const FONT = "https://fonts.gstatic.com/s/publicsans/v1/xyz.woff2";
 const SHELL_CACHE = "brazoscast-shell-v1";
 const RUNTIME_CACHE = "brazoscast-runtime-v1";
@@ -576,8 +579,8 @@ stage = "third party";
 const tile = await world.request(TILE);
 const font = await world.request(FONT);
 if (tile.intercepted || font.intercepted) {
-  fail("the worker intercepted a map tile or a webfont. Tiles are unbounded in number and the OSM tile service " +
-       "is explicitly not for offline collection; the fonts are what ?text=1 exists to avoid downloading.");
+  fail("the worker intercepted a map tile or a webfont. Tiles are unbounded in number and neither tile service " +
+       "is ours to collect for offline use; the fonts are what ?text=1 exists to avoid downloading.");
 }
 if ([...world.stores.values()].some((m) => m.has(TILE) || m.has(FONT))) {
   fail("a tile or a webfont ended up in a cache");

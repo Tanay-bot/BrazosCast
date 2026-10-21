@@ -159,14 +159,17 @@ def test_forecast_error_never_falls_with_the_horizon():
     the last one it is held — all of which have to be non-decreasing for the walk to mean
     anything. It also has to pass through the measurements it claims to interpolate.
 
-    Asserting the second of those found something, and it is pinned below rather than smoothed
-    over: the held value is the last knot ROUNDED to three decimal places (`FORECAST_FLOOR_FT`
-    is 6.057 against a knot of 6.057354), so the curve misses its own final knot by 0.00035 ft
-    and has a downward step of exactly that size at 7 days. Measured, not assumed. It is not
-    corrected here because the floor feeds every draw past the seventh day and therefore every
-    count in the verification grid — a change that would regenerate the artifact, and the app's
-    copy of it, for a discrepancy three orders of magnitude below the ±11 ft spread the ensemble
-    propagates. What this test does instead is hold the seam to 1e-3 ft so it cannot grow.
+    Asserting the second of those found something. The floor used to be a hand-typed 6.057
+    against a knot of 6.057354 — the last knot rounded to three places — so the curve missed
+    its own final knot by 3.5e-4 ft and stepped DOWN by exactly that at 7 days. It was pinned
+    here rather than smoothed over, with the note that correcting it would regenerate the
+    artifact and the app's copy of it.
+
+    That is now fixed at the cause rather than at the seam: NEXT-PLAN.md § 4.1 had the ensemble
+    read its whole error curve from model_forecast_benchmark.csv, so the floor IS the last knot
+    and there is no rounded second copy left to disagree with. The assertion below therefore
+    requires the seam to be exactly zero — the regression it guards against is a hand-typed
+    floor reappearing, which is what this file was documenting in the first place.
     """
     last_d, last_v = E.RMSE_KNOTS[-1]
 
@@ -183,12 +186,19 @@ def test_forecast_error_never_falls_with_the_horizon():
     for d, v in E.RMSE_KNOTS[:-1]:
         assert abs(E.rmse_ft(float(d)) - v) < 1e-9, f"the curve misses its own knot at {d} d"
 
-    # The last knot's seam: the limit from the left against the value AT the knot.
+    # The last knot's seam: the limit from the left against the value AT the knot. Zero,
+    # because the floor is the knot itself — a non-zero seam means someone typed the floor in
+    # again instead of reading it from the benchmark.
+    # 1e-6 ft, not 0: the value 1e-9 days before the knot comes from the interpolation of the
+    # 5-7 day segment, which is correct to within a few 1e-10 ft and not exactly the knot. The
+    # seam this replaced was 3.5e-4 — two thousand times larger, and in the other direction.
     seam = E.rmse_ft(float(last_d) - 1e-9) - E.rmse_ft(float(last_d))
-    assert 0 < seam < 1e-3, f"the step at the last knot is {seam:.6f} ft, not the ~3e-4 documented"
+    assert abs(seam) < 1e-6, (f"the curve steps by {seam:.6f} ft at the last knot, so the held "
+                              f"floor is not the knot the benchmark states")
     assert E.rmse_ft(float(last_d)) == E.FORECAST_FLOOR_FT, (
         "the value at the last knot is no longer the held floor")
-    assert abs(last_v - E.FORECAST_FLOOR_FT) < 1e-3, "the held value is not the last knot"
+    assert last_v == E.FORECAST_FLOOR_FT, (
+        f"the held value {E.FORECAST_FLOOR_FT} is not the last measured knot {last_v}")
     assert E.rmse_ft(last_d + 30) == E.FORECAST_FLOOR_FT, "the curve is not held past its range"
 
     # "Error grows with the horizon" is stricter than "error never falls": a FLAT segment is

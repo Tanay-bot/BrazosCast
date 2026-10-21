@@ -73,7 +73,7 @@ artifact descends from:
 
 | path | size | re-created by |
 |---|---|---|
-| `hand/` | 66 MB / 14 files | nothing. HAND v2 for HUC 12070104 is a manual archive download, and `road_thresholds.py` cannot run without it. |
+| `hand/` | 66 MB / 14 files | nothing. NOAA-OWP HAND v2 FIM for HUC 12070104, branch 3125000011 — **CC BY 4.0**, via the Texas Pin2Flood distribution of the HAND products (which is also what carries the SRC tables). It is a manual archive download: NEXT-PLAN § 5.2's fetcher is not built, because the national inputs are ~400 GB and a HUC8 selector has to come first. Read by `road_thresholds.py`, `hand_unit_resolution.py` and `inundation.py`; the last two read the 40 MB REM raster, its catchment raster and the branch hydrotable, and refuse to run without them. |
 | `usgs/*.json` | 46 MB / 15 files | `node pipeline/fetch/fetch_usgs_history.mjs 1985` |
 | `usgs/iv/*.json` | 50 MB / 124 files | `python pipeline/analyze/travel_time_subdaily.py` |
 
@@ -87,7 +87,16 @@ it:
 | nothing further | the golden regression fails on **three** stages: `road_thresholds.py`, for the missing `data/raw/hand/12070104/osm_roads_fimpact.csv`; `gauge_redundancy.py`, which dies as `KeyError: ['HPDT2']` — an illegible symptom of a missing `data/raw/usgs/*_daily.json`, naming neither the file nor the fetch command; and `second_event_validation.py`, for the missing `data/raw/usgs/iv/08114000_20160524.json`. The fast suite fails three tests: `test_source_integrity.py` (`missing artifact …/usgs/_summary.json`), `test_grid_parity.py` (no `app/node_modules`), and `test_second_event.py`, whose message names the file and the command that re-creates it. |
 | the USGS daily/peak caches (`node pipeline/fetch/fetch_usgs_history.mjs 1985`) and `app/node_modules` | **one** failure left: `test_second_event.py`. The 2016 event's 15-minute series is a cached event, not a history fetch, so the stage that comparison is scored at cannot be re-derived yet. |
 | also the event caches (`python pipeline/analyze/travel_time_subdaily.py 24`) | the fast suite passes — **82 passed, 2 skipped**. The skips are `test_raw_input_policy.py`'s two `git check-ignore` tests, which skip outside a git checkout by design. |
-| also the HAND archive | the golden regression passes, reproducing all **12** artifacts. |
+| also the HAND archive | the golden regression passes, reproducing all **13** artifacts (the XGBoost benchmark is one of them since NEXT-PLAN § 4.1). |
+
+**What the HAND archive is, and is not.** Four of its files are load-bearing and nothing else in
+the tree can stand in for them: `rem_zeroed_masked_<branch>.tif` (height above nearest drainage,
+10 m), `gw_catchments_reaches_filtered_addedAttributes_<branch>.tif` (which reach each cell
+belongs to), `hydroTable_<branch>.csv` (the synthetic rating curve per reach — stage, discharge,
+wetted cells) and the NWM stream/catchment subsets. The REM's unit is not documented anywhere in
+the archive, which is why it is a measurement in the pipeline (FINDINGS § 8a) and not a constant:
+`hand_unit_resolution.py` compares both candidate readings against the hydrotable's own cell
+counts and against the 2016 USFIMR water edge before anything downstream may read the raster.
 
 So the bootstrap is two commands, one download, and one install, and nothing else is missing in
 between. That is the trade the criterion makes deliberately: 162 MB is not going into git to make a
@@ -124,6 +133,52 @@ was dropped rather than left looking like it protected something.
 install\`` skip path, because that path tests for the presence of `npx` and not for a resolvable
 `vitest`. Left as it is: a loud failure is what the suite wants when the cross-language claim
 goes unchecked, and the README already requires `npm install`.
+
+## The ingestion layer (`pipeline/ingest/`)
+
+One command refreshes every public source, and the exit code is the contract: **non-zero if
+any source failed**, with the source named. Receipts merge into `data/raw/_receipt.json`
+(`{source, url, status, rows, bytes, sha256, fetched_at}` per request) so a single-source run
+cannot erase what the others last fetched.
+
+```bash
+node pipeline/ingest/refresh.mjs                    # nwps + usgs_ogc + usace
+node pipeline/ingest/refresh.mjs --source=nwps      # one source
+node pipeline/ingest/refresh.mjs --dry-run          # print the requests, fetch nothing
+```
+
+| adapter | host | auth | what is cached |
+|---|---|---|---|
+| `nwps.mjs` | `api.water.noaa.gov/nwps/v1` | none, no published limit | stageflow (observed + forecast) for the 7-gauge chain → `data/raw/nwps/` |
+| `usgs_ogc.mjs` | `api.waterdata.usgs.gov/ogcapi/v1` | none; **50 req/hour per IP**, `USGS_API_KEY` raises it to 1,000 | 7 days of `00065` stage + `00060` discharge → `data/raw/usgs/ogc/` |
+| `usace_cwms.mjs` | `cwms-data.usace.army.mil/cwms-data` | none for low-risk public data | the SWF project inventory for the 7 Brazos reservoirs, plus pool elevation → `data/raw/usace/` |
+
+**Two measured facts that shaped the USACE adapter, both recorded because they are not
+what the documentation implies:**
+
+1. `/projects?office=SWF` answers 200 and carries every project's USGS number in `long-name`
+   — that is the inventory, and it is asserted against an explicit Brazos allow-list
+   (`GGLT2, GNGT2, BLNT2, STIT2, WTYT2, ACTT2, SOMT2`). Addicks and Barker are **San Jacinto**
+   basin and are deliberately absent; `test_ingest_contract.py` refuses their ids.
+2. The CDA time-series endpoints do **not** expose pool elevation for these projects:
+   `ORA-20998: No such base parameter` for `Elev`/`Stor`, and
+   `ORA-20034: Time series profile "SWF/ACTT2/Elev" does not exist`. So the level series
+   comes from USGS `62614` (lake surface elevation, ft) at each project's own USGS number,
+   and every receipt says so. Granger is the one override: CDA's project location is the
+   downstream stream station `08105700` (0 rows of 62614), while the lake surface is
+   `08105600` (503.96 ft when measured).
+
+**One warning that cost a measurement:** `data/raw/nwps/{HPDT2,BAWT2}_stageflow.json` are
+committed because they are the redundancy gauges `gauge_redundancy.py` fits its transfer on,
+so `--source=nwps` rewrites a **derivation input** and the artifacts must be re-derived in the
+same breath (`gauge_redundancy.py` → `app_data.py`). The fetches here were run to prove the
+adapters work, and the two committed caches were restored afterwards so the working tree's
+data and the committed artifacts stay consistent.
+
+**Not migrated yet:** `pipeline/fetch/fetch_usgs_history.mjs` still calls the legacy
+`waterservices.usgs.gov` API, which USGS retires in **Q1 2027**. The ingest contract test is
+scoped to `pipeline/ingest/` so it does not fail for a file that predates the migration; the
+migration itself is listed in [NEXT-PLAN.md](./NEXT-PLAN.md).
 
 ## The premise, measured (from the cached claims)
 

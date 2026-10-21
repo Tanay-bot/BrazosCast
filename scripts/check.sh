@@ -7,6 +7,9 @@
 #   scripts/check.sh --browser  also the Playwright suite (~60 s: it builds the app again
 #                               and starts two servers — the app, and the origin gate the
 #                               outage spec takes the app's origin away with)
+#   scripts/check.sh --public   also asks whether the deployed site is actually open (needs
+#                               the network: 4 requests to the public alias, and to a preview
+#                               host if PREVIEW_ORIGIN is set)
 #   scripts/check.sh --all      also the golden regression, which re-runs the whole chain in
 #                               a throwaway copy (~2 min, mostly Harvey validation), and the
 #                               browser suite — measured end to end at ~3 min
@@ -30,11 +33,13 @@ PY="${BRAZOSCAST_PYTHON:-$HOME/miniforge3/envs/brazoscast/bin/python}"
 
 ALL=0
 BROWSER=0
+PUBLIC=0
 case "${1:-}" in
   "")        ;;
   --browser) BROWSER=1 ;;
+  --public)  PUBLIC=1 ;;
   --all)     ALL=1; BROWSER=1 ;;
-  *)         echo "usage: scripts/check.sh [--browser|--all]" >&2; exit 2 ;;
+  *)         echo "usage: scripts/check.sh [--browser|--public|--all]" >&2; exit 2 ;;
 esac
 
 step() { printf '\n== %s\n' "$1"; }
@@ -86,6 +91,16 @@ if [ "$BROWSER" = 1 ]; then
   ( cd "$ROOT/app" && npx playwright test ) || fail "browser suite (if Playwright is missing its browsers: cd app && npx playwright install chromium)"
 else
   echo "   (browser suite skipped — run scripts/check.sh --browser, or --all)"
+fi
+
+# Opt-in and last, because it is the only step that needs the network and cannot be made
+# hermetic: a deployment's protection setting lives in a dashboard, not in a file. It fails
+# by name on a redirect to vercel.com/sso-api, which is the state this repo cannot see.
+if [ "$PUBLIC" = 1 ]; then
+  step "deployed site is open (no Deployment Protection)"
+  node "$ROOT/scripts/check-public-access.mjs" || fail "public access (Vercel Deployment Protection? see docs/NEXT-PLAN.md § 1)"
+else
+  echo "   (public-access check skipped — run scripts/check.sh --public)"
 fi
 
 step "host config (Vercel headers still mirror the Worker's)"

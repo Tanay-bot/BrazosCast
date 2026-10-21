@@ -1,0 +1,182 @@
+{
+  "generated_at": "2026-10-19T12:16:06.790482+00:00",
+  "question": "in which unit is rem_zeroed_masked_3125000011 stored?",
+  "raster": {
+    "path": "data/raw/hand/12070104/branches/3125000011/rem_zeroed_masked_3125000011.tif",
+    "dtype": "int16",
+    "nodata": 32767.0,
+    "shape": [
+      14950,
+      9192
+    ],
+    "crs": "EPSG:5070",
+    "res_m": 10.0,
+    "max_value": 32766
+  },
+  "candidates": {
+    "millimetres": 1000.0,
+    "centimetres": 100.0
+  },
+  "hydrotable_cell_counts": {
+    "stages": [
+      {
+        "stage_m": 12.192,
+        "stage_ft": 40.0,
+        "reaches": 225,
+        "readings": {
+          "millimetres": {
+            "median_ratio": 1.0,
+            "p10": 0.8095,
+            "p90": 1.0146,
+            "within_10_percent": 0.8756,
+            "reproduces": true
+          },
+          "centimetres": {
+            "median_ratio": 0.0543,
+            "p10": 0.0008,
+            "p90": 0.2067,
+            "within_10_percent": 0.0,
+            "reproduces": false
+          }
+        }
+      },
+      {
+        "stage_m": 15.24,
+        "stage_ft": 50.0,
+        "reaches": 225,
+        "readings": {
+          "millimetres": {
+            "median_ratio": 1.0,
+            "p10": 0.9909,
+            "p90": 1.0164,
+            "within_10_percent": 0.96,
+            "reproduces": true
+          },
+          "centimetres": {
+            "median_ratio": 0.048,
+            "p10": 0.0013,
+            "p90": 0.173,
+            "within_10_percent": 0.0044,
+            "reproduces": false
+          }
+        }
+      },
+      {
+        "stage_m": 18.288,
+        "stage_ft": 60.0,
+        "reaches": 225,
+        "readings": {
+          "millimetres": {
+            "median_ratio": 1.0,
+            "p10": 0.9991,
+            "p90": 1.0164,
+            "within_10_percent": 0.9733,
+            "reproduces": true
+          },
+          "centimetres": {
+            "median_ratio": 0.0451,
+            "p10": 0.0019,
+            "p90": 0.173,
+            "within_10_percent": 0.0133,
+            "reproduces": false
+          }
+        }
+      }
+    ],
+    "agrees_with": [
+      "millimetres"
+    ],
+    "max_value": 32766
+  },
+  "usfimr_overlap": {
+    "observation": {
+      "stage_ft": 49.4,
+      "acquired": "2016-05-30 00:26:20+00:00",
+      "observed_km2": 212.6664
+    },
+    "readings": {
+      "millimetres": {
+        "at_observed_stage": {
+          "iou": 0.1907,
+          "tp": 2043652,
+          "fp": 8592585,
+          "fn": 83012,
+          "area_km2": 1063.6,
+          "recall": 0.961,
+          "precision": 0.1921
+        },
+        "best": {
+          "iou": 0.2077,
+          "tp": 1963634,
+          "fp": 7329694,
+          "fn": 163030,
+          "area_km2": 929.3,
+          "recall": 0.9233,
+          "precision": 0.2113,
+          "stage_m": 13.25,
+          "stage_ft": 43.47
+        },
+        "best_stage_gap_ft": 5.93,
+        "best_stage_is_plausible": true
+      },
+      "centimetres": {
+        "at_observed_stage": {
+          "iou": 0.0929,
+          "tp": 202654,
+          "fp": 55916,
+          "fn": 1924010,
+          "area_km2": 25.9,
+          "recall": 0.0953,
+          "precision": 0.7837
+        },
+        "best": {
+          "iou": 0.1007,
+          "tp": 220932,
+          "fp": 66990,
+          "fn": 1905732,
+          "area_km2": 28.8,
+          "recall": 0.1039,
+          "precision": 0.7673,
+          "stage_m": 22.0,
+          "stage_ft": 72.18
+        },
+        "best_stage_gap_ft": 22.78,
+        "best_stage_is_plausible": false
+      }
+    },
+    "harvey_peak_ft": 54.74,
+    "harvey_peak": {
+      "millimetres": {
+        "iou": 0.1789,
+        "tp": 2087805,
+        "fp": 9540343,
+        "fn": 38859,
+        "area_km2": 1162.8,
+        "recall": 0.9817,
+        "precision": 0.1795
+      },
+      "centimetres": {
+        "iou": 0.0949,
+        "tp": 207304,
+        "fp": 58310,
+        "fn": 1919360,
+        "area_km2": 26.6,
+        "recall": 0.0975,
+        "precision": 0.7805
+      }
+    },
+    "peak_is_not_like_for_like": "the image was taken at 49.40 ft and the crest three days later was 54.74 ft, so water at the crest extended further than the image can show; the like-for-like comparison is the one at the acquisition stage"
+  },
+  "chosen": "millimetres",
+  "units_per_metre": 1000.0,
+  "why": "two independent checks pick the same reading. The hydrotable reproduces the raster's cell counts per reach under millimetres (median ratio 1.000 at every stage tested) and not under centimetres (median 0.05); the 2016 Sentinel-1 extent overlaps it better, and the stage needed to explain that observation is 5.9 ft from the gauge under millimetres against 22.8 ft under centimetres \u2014 a reading that needs a stage 20+ ft from the measurement to fit the water is not measuring the same thing",
+  "regret_if_wrong": {
+    "area_at_observed_stage_ratio": 0.024,
+    "stage_needed_to_explain_the_observation_ft": {
+      "millimetres": 43.47,
+      "centimetres": 72.18
+    },
+    "reading": "under centimetres the 2016 image would need a stage 22.8 ft from the gauge's, against 5.9 ft under millimetres"
+  },
+  "residual": "the overlap is 0.21 IoU at best, not a match: the model floods a larger area than the radar image shows, and the image is a water edge in a forested floodplain, where C-band SAR under-maps. The unit is settled; the extent's bias is not, and inundation.py states it."
+}

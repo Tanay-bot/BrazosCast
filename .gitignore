@@ -63,6 +63,18 @@ data/raw/usgs/iv/*.json
 # working, which is how it went undeclared in the first place.
 !data/raw/usgs/iv/08114000_20170822.json
 #
+# 3.4 MB / 14 files — the ingest layer's continuous record, 7 sites x stage+discharge
+# for a 7-day window. Re-created by: node pipeline/ingest/refresh.mjs --source=usgs_ogc
+data/raw/usgs/ogc/
+#
+# 1.4 MB / 7 files — Brazos reservoir pool elevation, one per USACE project, from the
+# CWMS project inventory + USGS 62614. Re-created by:
+#   node pipeline/ingest/refresh.mjs --source=usace
+data/raw/usace/
+#
+# The ingest layer's own receipts are NOT ignored: data/raw/_receipt.json is 40 KB and is
+# the only record that these two bulk trees were fetched, from where, and when.
+#
 # NOT ignored, and deliberately so — no rule below, because there is nothing to exclude:
 # data/raw/usfimr/ (4.7 MB / 2 files) holds the SECOND observed extent, the Sentinel-1
 # water edge second_event_validation.py refutes thresholds against. It is a fixed release

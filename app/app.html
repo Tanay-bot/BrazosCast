@@ -34,7 +34,14 @@
     }
   </script>
 </head>
-<body>
+<body data-boot="loading">
+  <!-- The boot rail. A 2 px sweep at the very top of the document, drawn from the first
+       frame (it is in the HTML, not in the module) and withdrawn once the gauge has been
+       read and the first answer has been rendered. It exists for the connection where the
+       payload takes a second and a half: a page that shows nothing at all while it works
+       reads as a page that failed. aria-hidden because the header's own tag already says
+       the same thing in words. -->
+  <div class="boot-rail" id="bootRail" aria-hidden="true"><i></i></div>
   <header class="hdr">
     <div class="hdr-in">
       <!-- The mark is the brand's own staff gauge: waterline ticks, the rising hydrograph, and the
@@ -51,7 +58,11 @@
            is stated instead of hidden. Its title says what "offline" means here. -->
       <span class="offline-tag" id="offlineTag" hidden
             title="Your browser reports no connection. The answer is coming from the last downloaded copy.">offline</span>
-      <span class="src-tag" id="srcTag">connecting…</span>
+      <!-- data-state drives the mark before the text: a spinner while the gauge is being
+           read, a pulsing dot once it is live, an amber one when the stage is an estimate,
+           and a hollow one in replay. The state is set in render() from the same flags the
+           text is built from, so the mark cannot disagree with the sentence. -->
+      <span class="src-tag" id="srcTag" data-state="wait">connecting…</span>
       <div class="mode" role="group" aria-label="Data mode">
         <button id="mLive" aria-pressed="true">Live</button>
         <button id="mReplay" aria-pressed="false">Harvey replay</button>
@@ -198,7 +209,16 @@
       <section class="card map-card">
         <div class="card-h"><h2>Roads at this stage</h2>
           <span class="note" id="mapNote">—</span></div>
-        <div id="map" class="map"></div>
+        <div class="map-wrap">
+          <div id="map" class="map"></div>
+          <!-- What the extent costs, while it is being paid for. The map route asks for
+               450 KB of polygons; without this the layer simply appears a moment later
+               with no sign that anything was in flight. The count is DECODED bytes, so it
+               is bytes received and never a percentage — see src/lib/stream.ts. -->
+          <div class="flood-chip" id="floodChip" hidden>
+            <i class="spin" aria-hidden="true"></i><span id="floodChipText">loading extent</span>
+          </div>
+        </div>
         <div class="legend">
           <span class="lg"><span class="sw" style="background:var(--water);opacity:.45"></span>Modelled flood extent (HAND)</span>
           <span class="lg"><span class="sw" style="background:var(--dry)"></span>Passable</span>
@@ -224,8 +244,20 @@
               <div style="text-align:right"><div class="stage-lab">Category</div>
                 <div class="cat" id="catVal">—</div></div>
             </div>
-            <input type="range" id="stage" min="5" max="56" step="0.1" value="9" aria-label="River stage in feet" />
-            <div class="hint"><span id="stageHint">official NWS categories: action 20 · flood 45 · moderate 48 · major 50</span></div>
+            <!-- The category marks are laid out in script from TH and the input's own
+                 min/max, so they cannot drift from the thresholds the app colours by. -->
+            <div class="stage-slider">
+              <div class="stage-ticks" id="stageTicks" aria-hidden="true"></div>
+              <input type="range" id="stage" min="5" max="56" step="0.1" value="9" aria-label="River stage in feet" />
+            </div>
+            <div class="stage-foot">
+              <span class="hint" id="stageHint">official NWS categories: action 20 · flood 45 · moderate 48 · major 50</span>
+              <!-- The whole model on one button: stage in, band out. It walks the stage
+                   through the four categories so the extent can be seen growing, and it
+                   stops where the bands stop. -->
+              <button id="playRise" class="rise" type="button" aria-pressed="false"
+                      title="Animate the river rising through the categories to the top mapped band">Play the rise</button>
+            </div>
           </div>
         </section>
 
@@ -315,7 +347,7 @@
       Dry road, no way out: the same graph's <code>segment_route_cut_ft</code>, joined to each street's own threshold.
       Past stages: the USGS annual peak record for <code>08114000</code> (<code>pipeline/derive/gauge_history.py</code>) — annual maxima, not a continuous series.
       A forecast you paste is yours: it never leaves the page and is not part of any published number.</p>
-      <p class="disc">A working prototype. Road depths are modelled, never observed. Flood extents are provisional pending a unit check on the HAND raster.
+      <p class="disc">A working prototype. Road depths are modelled, never observed. The flood extent is an upper bound: at the one observed stage it maps 2.3× the water the radar shows.
       A refuge is ground the modelled water does not reach at 50 ft — not a shelter — and routes leaving the mapped corridor are not counted, so a street
       marked “no dry route out”, or one with no modelled route to a responder, may still have one outside the study area.
       Destinations are volunteer-mapped OSM points, not a dispatch feed.

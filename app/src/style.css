@@ -1,5 +1,16 @@
 /* BrazosCast — the app's own rules. Tokens and base typography live in tokens.css, which the
    landing shares: this file starts where the two pages stop being the same document. */
+/* boot — the rail is in the HTML so it is drawn on the first frame, before the module
+   has parsed. It says "working", not "how much is left": the payload is eleven parallel
+   requests, so any fraction would be a number about the wrong thing. */
+.boot-rail{position:fixed;top:0;left:0;right:0;height:2px;z-index:60;overflow:hidden;
+  pointer-events:none;background:color-mix(in srgb,var(--water) 14%,transparent)}
+.boot-rail i{display:block;height:100%;width:34%;
+  background:linear-gradient(90deg,transparent,var(--water),transparent);
+  animation:rail-sweep 1.15s ease-in-out infinite}
+body[data-boot="done"] .boot-rail{opacity:0;transition:opacity .35s ease}
+@keyframes rail-sweep{from{transform:translateX(-110%)}to{transform:translateX(330%)}}
+
 /* header */
 .hdr{position:sticky;top:0;z-index:40;background:color-mix(in srgb,var(--bg) 88%,transparent);
   backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
@@ -10,7 +21,24 @@
 .brand span{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--fg-dim);font-weight:600}
 .hdr-sp{flex:1 1 auto}
 .src-tag{font:500 11px/1 var(--f-mono);padding:6px 9px;border-radius:5px;
-  background:var(--surface-2);color:var(--fg-dim);border:1px solid var(--line)}
+  background:var(--surface-2);color:var(--fg-dim);border:1px solid var(--line);
+  display:inline-flex;align-items:center;gap:6px}
+/* The mark is the state, the text is the reading. A spinner while the gauge is in flight,
+   a slow pulse once it is live (a reading that updates is a live thing, and the pulse is
+   the only cue in the header that the page is not a snapshot), amber when the stage is an
+   estimate, hollow in replay where nothing is live at all. */
+.src-tag::before{content:"";width:7px;height:7px;border-radius:50%;flex:none;background:var(--dot,var(--fg-faint))}
+.src-tag[data-state="live"]{--dot:var(--dry)}
+.src-tag[data-state="stale"]{--dot:var(--action)}
+.src-tag[data-state="wait"]::before{width:9px;height:9px;background:none;
+  border:1.5px solid color-mix(in srgb,var(--water) 28%,var(--line));border-top-color:var(--water);
+  animation:spin .7s linear infinite}
+.src-tag[data-state="live"]::before,.src-tag[data-state="stale"]::before{
+  animation:dot-pulse 2.6s ease-out infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes dot-pulse{
+  0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--dot) 55%,transparent)}
+  75%,100%{box-shadow:0 0 0 6px transparent}}
 /* Only ever visible with no connection. Coloured like the water it is about rather than
   like an error: offline is not a failure of the page, it is the condition the page is
   for. A tag, not a banner — it must not push the answer down on a small screen. */
@@ -132,7 +160,21 @@
 .cols{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:16px;margin-top:16px;align-items:start}
 .side{display:grid;gap:16px;min-width:0}
 .map-card{overflow:hidden}
+/* The base map must not paint over the chip that says the extent is still arriving, and the
+   chip must not swallow a click meant for a road. */
+.map-wrap{position:relative}
 .map{height:460px;background:var(--sunk)}
+.flood-chip{position:absolute;left:12px;bottom:12px;z-index:2;display:flex;align-items:center;gap:7px;
+  padding:6px 9px;border-radius:6px;pointer-events:none;
+  background:color-mix(in srgb,var(--ink) 82%,transparent);border:1px solid var(--ink-line);
+  color:var(--paper);font:400 10.5px/1 var(--f-mono);letter-spacing:.02em;
+  backdrop-filter:blur(6px)}
+.flood-chip[hidden]{display:none}
+.flood-chip.fail{color:var(--crossing)}
+.flood-chip.done .spin{display:none}
+.spin{width:9px;height:9px;border-radius:50%;flex:none;
+  border:1.5px solid color-mix(in srgb,var(--paper) 28%,transparent);border-top-color:var(--paper);
+  animation:spin .7s linear infinite}
 .legend{display:flex;gap:14px;flex-wrap:wrap;padding:11px 16px;border-top:1px solid var(--line-soft);
   font-size:11.5px;color:var(--fg-dim)}
 .lg{display:inline-flex;align-items:center;gap:6px}
@@ -150,7 +192,28 @@
   font-variant-numeric:tabular-nums;color:var(--sev,var(--fg))}
 .stage-val i{font-style:normal;font-size:16px;color:var(--fg-dim);margin-left:3px}
 .cat{font:600 15px/1.2 var(--f-body);color:var(--sev,var(--fg))}
+/* The scale above the slider: the three stages at which the app's own answer changes, set
+   where they actually sit on the track. The numbers come from TH in script, so a threshold
+   edit moves the mark instead of leaving it behind. The 9px inset is the thumb radius —
+   without it every mark is a few pixels to the left of the stage it names. */
+.stage-slider{position:relative;padding-top:13px}
+.stage-ticks{position:absolute;top:0;left:9px;right:9px;height:8px;pointer-events:none}
+.stage-ticks i{position:absolute;bottom:0;width:1px;height:5px;background:var(--line);
+  transform:translateX(-.5px)}
+.stage-ticks i::after{content:attr(data-lab);position:absolute;bottom:7px;left:50%;
+  transform:translateX(-50%);font:600 8.5px/1 var(--f-mono);letter-spacing:.02em;
+  color:var(--fg-faint);white-space:nowrap}
 input[type=range]{width:100%;margin:0;accent-color:var(--water);height:26px}
+.stage-foot{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.stage-foot .hint{margin-top:0;flex:1 1 210px}
+.rise{display:inline-flex;align-items:center;gap:7px;flex:none;cursor:pointer;
+  font:600 11.5px/1 var(--f-body);letter-spacing:.02em;padding:8px 11px;border-radius:7px;
+  border:1px solid var(--line);background:var(--surface-2);color:var(--water)}
+.rise:hover{background:color-mix(in srgb,var(--water) 10%,var(--surface-2))}
+.rise::before{content:"";width:0;height:0;border-left:7px solid currentColor;
+  border-top:4.5px solid transparent;border-bottom:4.5px solid transparent}
+.rise[aria-pressed="true"]{background:var(--water);border-color:var(--water);color:#fff}
+.rise[aria-pressed="true"]::before{width:7px;height:7px;border:0;border-radius:1px;background:currentColor}
 
 /* exits */
 .card-b{padding:14px 16px}
@@ -176,7 +239,8 @@ input[type=range]{width:100%;margin:0;accent-color:var(--water);height:26px}
    What goes is the base map, its raster tiles and the chart canvas: the three things
    that cost megabytes or battery. What stays is every sentence, including the flood
    count that the map's legend was only illustrating. */
-body.text-only #map,body.text-only .legend,body.text-only .flood-note,body.text-only .hgwrap{display:none}
+body.text-only #map,body.text-only .map-wrap,body.text-only .legend,body.text-only .flood-note,
+body.text-only .hgwrap{display:none}
 body.text-only .chart-text{display:block}
 body.text-only .map-card .card-h{margin-bottom:0}
 /* With the map gone the wide column holds one line of text, so the two-column grid
@@ -333,4 +397,7 @@ body.text-only .cols{grid-template-columns:minmax(0,1fr)}
   .count{text-align:left}
   .map{height:380px}
 }
-@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+@media (prefers-reduced-motion:reduce){
+  /* The pseudo-elements are named explicitly: `*` does not match ::before, so the header's
+     spinner and pulse kept animating for anyone who asked for less motion. */
+  *,*::before,*::after{transition:none!important;animation:none!important}}

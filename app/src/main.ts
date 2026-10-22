@@ -30,6 +30,7 @@ import { messagesFor } from "./lib/notify";
 import type { Lang, TemplateSet } from "./lib/notify";
 import type { Pt } from "./lib/series";
 import { bandFor } from "./lib/flood";
+import { readJsonProgress } from "./lib/stream";
 
 /* ------------------------------------------------------------------ *
  * BrazosCast — address-first flood lead time for the lower Brazos.
@@ -1183,9 +1184,66 @@ let map: maplibregl.Map | null = null;
  * nothing rather than guessing. */
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any -- the geometry is handed to
  * MapLibre unread, and maplibre's GeoJSON type does not describe the sibling `meta` member. */
-let floodData: any = null;
+let floodData: FloodData | null = null;
 let floodMeta: FloodMeta | null = null;
-const EMPTY_FC = { type: "FeatureCollection", features: [] };
+const EMPTY_FC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
+
+/** The extent as it ships: a FeatureCollection plus the metadata the card reads. The
+ *  metadata is a sibling member rather than foreign members on the collection, which is
+ *  what the pipeline writes and what the contract test asserts. */
+type FloodData = GeoJSON.FeatureCollection & { meta: FloodMeta };
+
+/* The extent's own meter, in the map's corner.
+ *
+ * The map route is the only part of the app that downloads something big enough to need
+ * one: 450 KB of polygons, 90.5 KB over the wire. Saying so while it arrives is not
+ * decoration — the layer appears under the roads, and without a mark the page looks like
+ * it has finished when it has not. The figure is bytes RECEIVED, never a percentage: the
+ * body is decoded before it reaches this function and `content-length` describes the
+ * gzipped bytes, so a percentage would pass 100% halfway through (lib/stream.ts). */
+function floodChip(state: "load" | "done" | "fail", text: string) {
+  const chip = document.getElementById("floodChip");
+  const label = document.getElementById("floodChipText");
+  if (!chip || !label) return;
+  chip.hidden = false;
+  chip.classList.toggle("done", state === "done");
+  chip.classList.toggle("fail", state === "fail");
+  if (label.textContent !== text) label.textContent = text;
+}
+
+async function loadFlood() {
+  floodChip("load", "loading extent");
+  try {
+    const res = await fetch(DATA + "flood_extent.json");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const f = await readJsonProgress<FloodData>(res, (p) => {
+      // Rounded to the kilobyte, and only rewritten when the figure moves: a DOM write per
+      // chunk would be thousands of writes for one line of text.
+      if (p.bytes >= 1000) floodChip("load", `loading extent \u00b7 ${Math.round(p.bytes / 1000)} KB`);
+    });
+    if (!f?.meta) throw new Error("no meta");
+    floodData = f;
+    floodMeta = f.meta;
+    if (map?.getSource("flood")) {
+      (map.getSource("flood") as maplibregl.GeoJSONSource).setData(f);
+    }
+    syncMap();
+    renderFloodNote();
+    // The transfer size, not the decoded size: what the reader actually paid for. Some
+    // servers send the body chunked with no content-length, so the resource timeline is
+    // the second source — and if neither states a size, it is left out rather than guessed.
+    const timed = performance.getEntriesByName(res.url, "resource").at(-1) as
+      PerformanceResourceTiming | undefined;
+    const wire = Number(res.headers.get("content-length")) || timed?.encodedBodySize || 0;
+    // Named after the layer rather than left as a bare count: at a stage below flood stage
+    // nothing is drawn, and "95 polygons" on its own would read as water that is not there.
+    floodChip("done", `HAND extent \u00b7 ${f.features.length} polygons${wire ? ` \u00b7 ${Math.round(wire / 1000)} KB` : ""}`);
+  } catch {
+    // A missing extent must not take the map with it: the roads are the answer, the water
+    // is context, and the chip says which one is missing.
+    floodChip("fail", "extent unavailable");
+  }
+}
 
 /** The filter that selects ONE band. `band === -1` matches nothing, which is what the
  * layers start on: a first frame that drew an arbitrary band would be water at a stage
@@ -1235,19 +1293,7 @@ async function buildMap() {
   /* The extent is fetched here, not in loadStatic: the text-only route never calls this
    * function, and that route's whole claim is that it downloads neither the map nor its
    * data. The fetch runs alongside the style request rather than before it. */
-  const floodReady = fetch(DATA + "flood_extent.json")
-    .then((r) => (r.ok ? r.json() : null))
-    .catch(() => null);
-  void floodReady.then((f) => {
-    if (!f || !f.meta) return;
-    floodData = f;
-    floodMeta = f.meta as FloodMeta;
-    if (map?.getSource("flood")) {
-      (map.getSource("flood") as maplibregl.GeoJSONSource).setData(f);
-    }
-    syncMap();
-    renderFloodNote();
-  });
+  void loadFlood();
 
   map = new maplibregl.Map({
     container: "map",
@@ -1399,6 +1445,98 @@ function renderFloodNote() {
     `Scored against the one 2016 radar image at ${v.observed_stage_ft.toFixed(1)} ft it maps ` +
     `${v.area_ratio.toFixed(1)}× the water it shows (IoU ${v.iou_at_that_stage.toFixed(2)}), ` +
     `and Harvey's crest scores ${v.iou_at_harvey_peak.toFixed(2)} against that same image.`;
+}
+
+/* ---------------- play the rise ---------------- *
+ * The stage slider answers "what happens at this number". It cannot answer the question
+ * the extent exists for, which is what the water DOES between numbers — so this walks the
+ * stage from where it is to the top mapped band, and the bands, the flooded segments and
+ * the routes recompute on the way. It is the same render() the slider drives; nothing here
+ * computes a second truth.
+ *
+ * Held to ~20 fps on purpose. render() re-routes to every facility and re-partitions the
+ * graph, which is what makes a stage change mean something and is far more than a frame's
+ * worth of work: at 60 fps the animation would spend its budget on answers too fast to read.
+ */
+let riseRaf = 0;
+
+function riseButton(): HTMLButtonElement | null {
+  return document.getElementById("playRise") as HTMLButtonElement | null;
+}
+
+function stopRise() {
+  if (riseRaf) cancelAnimationFrame(riseRaf);
+  riseRaf = 0;
+  const b = riseButton();
+  if (!b) return;
+  b.setAttribute("aria-pressed", "false");
+  b.textContent = "Play the rise";
+}
+
+function playRise() {
+  // A second press is the stop button. The control is a toggle, not a one-way trigger.
+  if (riseRaf) { stopRise(); render(); return; }
+  const bands = floodMeta?.bands_ft ?? [];
+  const top = bands.length ? Math.max(...bands) : TH.major;
+  const flood = Math.min(TH.minor, top);
+  // At or above the top band there is nowhere to rise TO, so the pass starts at flood
+  // stage — the first stage at which the extent draws anything at all.
+  const from = state.current >= top - 0.005 ? flood : state.current;
+  const to = top;
+  if (!(to > from)) return;
+
+  const b = riseButton();
+  b?.setAttribute("aria-pressed", "true");
+  if (b) b.textContent = "Stop";
+
+  // The rise is information, not decoration, so reduced motion gets the destination rather
+  // than nothing: one render at the top band.
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    state.current = to; render(); stopRise(); return;
+  }
+
+  state.current = from;
+  const ms = Math.min(4200, Math.max(1100, (to - from) * 380));
+  const t0 = performance.now();
+  let last = 0;
+  const step = (now: number) => {
+    const k = Math.min(1, (now - t0) / ms);
+    // Smoothstep: ease out of the current stage and into the crest instead of starting and
+    // stopping at full speed, which reads as a jump cut rather than a river.
+    const e = k * k * (3 - 2 * k);
+    state.current = from + (to - from) * e;
+    if (now - last >= 45 || k === 1) { render(); last = now; }
+    if (k < 1) {
+      riseRaf = requestAnimationFrame(step);
+    } else {
+      riseRaf = 0;
+      stopRise();
+      render();
+    }
+  };
+  riseRaf = requestAnimationFrame(step);
+}
+
+/** The three stages at which the app's own answer changes, drawn on the slider's track.
+ *
+ * Positions are computed from TH and the input's own min/max, so changing a threshold moves
+ * its mark; a hard-coded percentage would be a second, silently ageing copy of the numbers.
+ * The 9 px inset matches the thumb radius, without which every mark sits left of the stage
+ * it names. */
+function layoutTicks() {
+  const box = document.getElementById("stageTicks");
+  if (!box) return;
+  const { min, max } = stageRange();
+  const marks: [string, number][] = [
+    ["action", TH.action], ["flood", TH.minor], ["moderate", TH.moderate], ["major", TH.major],
+  ];
+  box.replaceChildren(...marks.map(([name, ft]) => {
+    const i = document.createElement("i");
+    i.style.left = `${((ft - min) / (max - min)) * 100}%`;
+    i.dataset.lab = String(ft);
+    i.title = `${name} ${ft} ft`;
+    return i;
+  }));
 }
 
 /* ---------------- routing ---------------- *
@@ -2365,6 +2503,12 @@ function render() {
   $("catVal").textContent = cat.n;
   $("sevPill").textContent = cat.n;
   $("srcTag").textContent = state.source;
+  // The mark beside that sentence, from the same flags the sentence is built from: waiting,
+  // estimated, replay, or live. Derived here rather than set at each fetch site, because
+  // there are four paths into this function and only one of them is allowed to be wrong.
+  $("srcTag").dataset.state = !state.series.length ? "wait"
+    : state.estimated ? "stale"
+    : state.mode === "replay" ? "replay" : "live";
   // The badge is the only thing standing between a user and acting on an estimate
   // as if it were a measurement, so it is driven by the flag, not by the wording.
   ($("estPill") as HTMLElement).style.display = state.estimated ? "" : "none";
@@ -2596,9 +2740,12 @@ function wire() {
     if ((e as KeyboardEvent).key === "Enter") go();
   });
   ($("stage") as unknown as HTMLInputElement).addEventListener("input", (e) => {
+    // A hand on the slider outranks an animation: the animation stops where the hand is.
+    stopRise();
     state.current = Number((e.target as HTMLInputElement).value);
     render();
   });
+  $("playRise").addEventListener("click", playRise);
   $("mLive").addEventListener("click", () => setMode("live"));
   $("mReplay").addEventListener("click", () => setMode("replay"));
   // F7 — the alert language. A view choice, like text mode: it is in the link, so the
@@ -2658,6 +2805,9 @@ async function shareLink() {
 }
 
 async function setMode(mode: "live" | "replay") {
+  // The stage is about to be replaced by the other event's, so a pass in flight is now
+  // rising through a river that is no longer on screen.
+  stopRise();
   state.mode = mode;
   setModeButtons();
   // A pasted forecast is a statement about the series this mode loaded, so it does not
@@ -2733,6 +2883,7 @@ async function boot() {
   await loadStatic();
   samples();
   wire();
+  layoutTicks();
   // The URL decides the mode BEFORE anything is fetched, so a replay link does not
   // make a live request only to throw it away — and on a flaky connection it does not
   // wait for a live gauge before showing 2017.
@@ -2767,7 +2918,13 @@ async function boot() {
   }
 }
 
-boot();
+/* The rail is withdrawn whatever happens: a failed boot must not leave the page claiming to
+ * be working on something it has given up on. */
+void boot().finally(() => {
+  document.body.dataset.boot = "done";
+  // Removed rather than hidden after the fade — a fixed bar at zero opacity still paints.
+  setTimeout(() => document.getElementById("bootRail")?.remove(), 400);
+});
 
 // Called, not awaited, and outside boot(): the offline copy is a background capability,
 // and nothing the user is looking at waits for it.

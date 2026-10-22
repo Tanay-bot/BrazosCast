@@ -53,7 +53,10 @@ export default defineConfig({
       // Build first, so this can never pass or fail against a stale `dist/`: a browser suite
       // that tests the previous build is the trap this project has already been bitten by
       // (see the payload-sync step in scripts/check.sh).
-      command: `npm run build && npx vite preview --port ${PORT} --strictPort`,
+      // `--host 127.0.0.1` matches BASE. Vite's default host is the NAME `localhost`, which
+      // resolves to ::1 on this machine, so the server came up on a socket the poll over
+      // 127.0.0.1 could not reach and the suite waited out its 180 s.
+      command: `npm run build && npx vite preview --port ${PORT} --strictPort --host 127.0.0.1`,
       url: BASE,
       reuseExistingServer: false,
       timeout: 180_000,

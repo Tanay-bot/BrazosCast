@@ -140,6 +140,27 @@ node pipeline/fetch/fetch_fbcad_roads.mjs              # county road centerlines
 
 Writes `data/raw/` and `data/raw/manifest.json` (per-source status, counts, per-gauge datums).
 
+### The four public products, and the archive that is bigger than them
+
+```bash
+node pipeline/ingest/refresh.mjs                  # NWPS + USGS OGC + USACE CWMS: 21 receipts
+node pipeline/ingest/refresh.mjs --dry-run        # print the requests, fetch nothing
+node pipeline/ingest/refresh.mjs --check-stale=36 # offline: is the standing snapshot old?
+node pipeline/ingest/hand.mjs --huc8=12070104 --manifest   # what is in the HAND package (1.9 KB)
+node pipeline/ingest/hand.mjs --huc8=12070104 --extract     # fetch, verify against that manifest, unzip
+```
+
+`refresh.mjs` exits non-zero if any source failed, because a source that answers `200` with zero
+rows is the failure mode that looks like a quiet river. `--check-stale` reads the receipts and
+nothing else, so it is cheap enough for a timer; `.github/workflows/refresh.yml` runs the two
+together daily and fails if the run itself produced nothing fresh.
+
+`hand.mjs` is separate on purpose: one basin is **1.7 GB** (`--variant=full` is 9 GB), it does not
+change between releases, and it would be absurd in a nightly job. It fetches the keyless Pin2Flood
+HUC8 package (**CC BY 4.0**, TACC), parses the package manifest *before* moving any bytes, refuses
+a package missing a layer the pipeline reads, and compares the archive against that manifest rather
+than trusting its hash alone. Its receipt goes to `data/raw/_receipt.json` with the licence.
+
 ## Run the checks
 
 ```bash
@@ -160,8 +181,11 @@ each one.
 `docs/DATA-SOURCES.md` § "Raw inputs — what is tracked, and why" is the whole inventory and the
 measurements behind it. A fresh clone runs neither suite unattended: the fast path needs the USGS
 caches (`node pipeline/fetch/fetch_usgs_history.mjs 1985`) and `app/node_modules`, and `--all`
-additionally needs the 66 MB HAND archive, which has no fetcher at all — it is a manual download
-into `data/raw/hand/`. With those in place both pass, which is how the criterion was checked.
+additionally needs the 66 MB HAND archive under `data/raw/hand/`. It has a fetcher now —
+`node pipeline/ingest/hand.mjs --huc8=12070104 --extract` — with one caveat stated where it
+belongs: that command pulls the keyless Pin2Flood HUC8 package, which is a *different packaging* of
+the same HAND family, not a byte-for-byte reproduction of NOAA-OWP's per-branch tree the Python
+stages read. With those in place both suites pass, which is how the criterion was checked.
 
 The test suite needs one dependency the pipeline does not, and the browser suite needs two more:
 

@@ -19,6 +19,8 @@ import pathlib
 import re
 import subprocess
 
+import pytest
+
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 INGEST = ROOT / "pipeline" / "ingest"
 
@@ -91,6 +93,45 @@ def test_refresh_plans_every_source_without_the_network():
     assert "would fetch https://api.water.noaa.gov/nwps/v1/gauges/RMOT2/stageflow" in out.stdout
     assert "would fetch" in out.stdout and "dry run: nothing fetched" in out.stdout
     assert "receipts" not in out.stdout, "a dry run wrote receipts"
+
+
+def test_refresh_can_answer_how_old_the_snapshot_is_without_the_network():
+    """The cadence's other half. A scheduled fetch is only useful if something notices it stopped.
+
+    `--check-stale` reads the receipts and nothing else, so it is safe on a timer and safe in
+    a test. The two assertions bracket the threshold rather than pinning a wall-clock time: any
+    real receipt is older than zero hours and younger than a million.
+    """
+    if not (ROOT / "data" / "raw" / "_receipt.json").exists():
+        pytest.skip("no receipts in this checkout, so there is no age to report")
+
+    generous = subprocess.run(["node", "pipeline/ingest/refresh.mjs", "--check-stale=1000000"],
+                              cwd=ROOT, capture_output=True, text=True, timeout=30)
+    assert generous.returncode == 0, generous.stderr
+    assert "source families" in generous.stdout
+
+    strict = subprocess.run(["node", "pipeline/ingest/refresh.mjs", "--check-stale=0"],
+                            cwd=ROOT, capture_output=True, text=True, timeout=30)
+    assert strict.returncode == 1, "nothing can be zero hours old, so this must fail"
+    assert "FAILED:" in strict.stderr and "refresh.mjs" in strict.stderr
+
+    bad = subprocess.run(["node", "pipeline/ingest/refresh.mjs", "--check-stale=soon"],
+                         cwd=ROOT, capture_output=True, text=True, timeout=30)
+    assert bad.returncode == 2, "a non-numeric threshold must be a usage error"
+
+
+def test_the_cadence_is_a_committed_job_and_not_a_memory():
+    """§ 2.6 asked for a schedule. A schedule that only exists in someone's notes is the
+    failure mode this test is written against, so the workflow is asserted to exist, to run
+    on a cron, and to finish by proving it fetched something."""
+    path = ROOT / ".github" / "workflows" / "refresh.yml"
+    assert path.exists(), "the scheduled refresh is gone: nothing runs the ingest on a cadence"
+    text = path.read_text()
+    assert "cron:" in text, "the workflow has no schedule, so it is a button rather than a cadence"
+    assert "node pipeline/ingest/refresh.mjs" in text
+    assert "--check-stale=1" in text, (
+        "the job never asserts that its own run produced fresh receipts, so a run that fetched "
+        "nothing would still pass")
 
 
 def test_refresh_refuses_an_unknown_source():

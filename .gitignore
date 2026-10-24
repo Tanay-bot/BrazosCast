@@ -40,10 +40,12 @@ app/playwright-report/
 # survive a wholesale exclusion are marked. A rule with no comment above it is a
 # half-made decision; pipeline/tests/test_raw_input_policy.py refuses one.
 #
-# 66 MB / 14 files — HAND v2 for HUC 12070104. Nothing in pipeline/fetch produces
-# this: it is a manual archive download, and road_thresholds.py cannot run
-# without it. It is the ONE input a clone cannot fetch for itself — the trees
-# below it are recoverable with a command, this one is not.
+# 66 MB / 14 files — HAND v2 for HUC 12070104 in NOAA-OWP's per-BRANCH layout,
+# which road_thresholds.py cannot run without. The keyless route is the Pin2Flood
+# HUC8 package, fetched by:
+#   node pipeline/ingest/hand.mjs --huc8=12070104 --extract
+# That is the same HAND family in a different packaging (1.7 GB, CC BY 4.0), so it
+# does not byte-reproduce this tree — the receipt records which package was pulled.
 data/raw/hand/
 #
 # 46 MB / 15 files — daily and annual-peak series for the seven corridor gauges,

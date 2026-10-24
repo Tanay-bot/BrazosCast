@@ -1,0 +1,59 @@
+name: refresh
+
+# The cadence NEXT-PLAN § 2.6 asked for, and the reason it is a separate job rather than
+# something the app does at boot: a source that stops answering is a fact about the world, and
+# it should be noticed on a schedule by something that is allowed to fail loudly, not by the
+# first household that opens the page during an event.
+#
+# What this job IS: a health check on the four public products the numbers descend from. It
+# fetches, writes receipts, and fails by name if a source refuses or returns nothing.
+# What it is NOT: a deploy. The app's static payload is derived by the Python chain and
+# committed; refreshing this snapshot does not regenerate it. A source going stale here is the
+# early warning that the next `scripts/check.sh --all` will be reading old water.
+on:
+  schedule:
+    # 12:17 UTC — after the 12Z NWPS cycle has published, and not on the hour, because every
+    # cron in the world is on the hour and a public API does not need the spike.
+    - cron: "17 12 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # Informational: the committed snapshot is expected to be older than a day between
+      # commits, and that is not a failure — it is the condition this job exists to correct.
+      - name: how old is the standing snapshot
+        continue-on-error: true
+        run: node pipeline/ingest/refresh.mjs --check-stale=36
+
+      - name: refresh every source
+        run: node pipeline/ingest/refresh.mjs
+
+      # The claim that the run above did something, asserted rather than assumed: every
+      # receipt must now be younger than an hour. A run that silently fetched nothing would
+      # otherwise pass, because nothing failed.
+      - name: the snapshot is fresh after the run
+        run: node pipeline/ingest/refresh.mjs --check-stale=1
+
+      - name: keep the receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: receipts
+          path: data/raw/_receipt.json
+          if-no-files-found: error

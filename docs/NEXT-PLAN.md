@@ -12,7 +12,7 @@
 |---|---|---|
 | 0.2 public-access gate | **done** | `scripts/check-public-access.mjs`, `scripts/check.sh --public`; both hosts report 4/4 open, and the validator's own gated fixture is asserted on every run |
 | 1.3 keyless vector basemap | **done** | OpenFreeMap `liberty` in `buildMap()`, OSM raster as a one-shot fallback on style error or 8 s, layers installed from `style.load` so the fallback keeps them; verified on screen at 1280 and in the build |
-| 2.1–2.7 ingestion | **done** | `pipeline/ingest/{lib,nwps,usgs_ogc,usace_cwms,refresh}.mjs`; 21 receipts from a live run, `pipeline/tests/test_ingest_contract.py` (8 tests, offline) |
+| 2.1–2.7 ingestion | **done** | `pipeline/ingest/{lib,nwps,usgs_ogc,usace_cwms,refresh}.mjs`; 21 receipts from a live run, `pipeline/tests/test_ingest_contract.py` (10 tests, offline). 2.6's cadence is `.github/workflows/refresh.yml` — daily cron, fails by name on a source that refuses, then asserts its own run left every family inside 1 h via `refresh.mjs --check-stale` |
 | 3 XGBoost | **done** — gated, measured on three windows, and in the app as a cross-check | § 4, FINDINGS § 9b |
 | 4 HAND | **done** — unit settled by two independent checks (mm), per-reach stage, extent in the app at 90.5 KB gzipped, IoU 0.31 stated on the card | § 5, FINDINGS § 8 |
 
@@ -237,10 +237,17 @@ rating gives, which moves the corridor extent at 50 ft from 440 to 289 km² and 
 0.19 to 0.31. 4.4 ships 95 polygons at 90.5 KB gzipped, drawn under the roads at the band at or
 below the stage. Stated scores: **IoU 0.31 at the image's 49.40 ft (2.3× the radar's area) and
 0.315 at Harvey's crest**, which is not like-for-like because the image precedes the crest by
-three days; the card prints both rather than the flattering one. **Not done: 4.2's fetcher** —
-the archive is still a manual download, because the national inputs are 400 GB and a HUC8
-selector comes first. The remaining bias is HAND's connectivity assumption plus the radar's
-under-mapping under forest, which one observation cannot separate.
+three days; the card prints both rather than the flattering one. **4.2 landed, with its limit
+stated where it can be read**: `pipeline/ingest/hand.mjs` fetches one HUC8 (the national inputs
+are 400 GB and a bulk pull is what the selector exists to prevent), parses the package manifest
+before any bytes move, refuses a package missing a layer the pipeline reads, compares the archive
+against that manifest rather than trusting a hash alone, and records the licence and the sha256 in
+`data/raw/_receipt.json`. The limit is packaging, not capability: NOAA's per-branch tree is behind
+an ESIP-keyed bucket that answers 403 without credentials, so the keyless route is the Texas
+Pin2Flood HUC8 archive — the same HAND family, **CC BY 4.0**, in a different layout. The fetcher
+reproduces the product and the provenance; it does not byte-reproduce `data/raw/hand/12070104/`.
+The remaining bias is HAND's connectivity assumption plus the radar's under-mapping under forest,
+which one observation cannot separate.
 
 ---
 

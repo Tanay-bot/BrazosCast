@@ -73,7 +73,7 @@ artifact descends from:
 
 | path | size | re-created by |
 |---|---|---|
-| `hand/` | 66 MB / 14 files | nothing. NOAA-OWP HAND v2 FIM for HUC 12070104, branch 3125000011 — **CC BY 4.0**, via the Texas Pin2Flood distribution of the HAND products (which is also what carries the SRC tables). It is a manual archive download: NEXT-PLAN § 5.2's fetcher is not built, because the national inputs are ~400 GB and a HUC8 selector has to come first. Read by `road_thresholds.py`, `hand_unit_resolution.py` and `inundation.py`; the last two read the 40 MB REM raster, its catchment raster and the branch hydrotable, and refuse to run without them. |
+| `hand/` | 66 MB / 14 files | `node pipeline/ingest/hand.mjs --huc8=12070104 --extract` — **with a caveat that is the whole point of this row**: what that fetches is the keyless Texas Pin2Flood HUC8 package (1.7 GB zipped, 2.08 GB unpacked, **CC BY 4.0**, hosted at TACC), and what is committed is NOAA-OWP HAND v2's per-BRANCH layout for the same HUC, branch 3125000011. They are the same HAND family in two packagings, so the command reproduces the *product* and the licence, not the bytes; NOAA's own bucket (`s3://noaa-nws-owp-fim`) needs ESIP credentials and answers 403 without them. Read by `road_thresholds.py`, `hand_unit_resolution.py` and `inundation.py`; the last two read the 40 MB REM raster, its catchment raster and the branch hydrotable, and refuse to run without them. The fetcher writes `data/raw/hand/_receipt.json` (licence, manifest rows, sha256) and merges the same record into `data/raw/_receipt.json` unless given `--no-merge`. |
 | `usgs/*.json` | 46 MB / 15 files | `node pipeline/fetch/fetch_usgs_history.mjs 1985` |
 | `usgs/iv/*.json` | 50 MB / 124 files | `python pipeline/analyze/travel_time_subdaily.py` |
 
@@ -98,7 +98,7 @@ the archive, which is why it is a measurement in the pipeline (FINDINGS § 8a) a
 `hand_unit_resolution.py` compares both candidate readings against the hydrotable's own cell
 counts and against the 2016 USFIMR water edge before anything downstream may read the raster.
 
-So the bootstrap is two commands, one download, and one install, and nothing else is missing in
+So the bootstrap is two commands, one HUC8 package, and one install, and nothing else is missing in
 between. That is the trade the criterion makes deliberately: 162 MB is not going into git to make a
 test feel self-contained.
 

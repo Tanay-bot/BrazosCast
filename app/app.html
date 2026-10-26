@@ -76,6 +76,17 @@
   </header>
 
   <main class="wrap">
+    <!-- The live river is low almost every day, and this page is built for the week it is not. At
+         8.38 ft every block below reports a zero, which reads as a broken instrument rather than
+         a working one — so one line above the fold says what the reading is and points at the day
+         it was not that reading. Shown only in live mode below the action stage, dressed in the
+         water's colour and no other, and gone the moment the river is worth the space. The href
+         is rebuilt from the current parameters by syncUrl(); this one is the no-script default. -->
+    <p class="low-water" id="lowWater" hidden>
+      <span id="lowWaterText">The river is low today. This page is built for the week it is not:</span>
+      <a id="lowWaterLink" href="?mode=replay&amp;stage=30">See it during Harvey, 2017 &rarr;</a>
+    </p>
+
     <section class="ask" aria-label="Find your street">
       <label for="addr">Your address</label>
       <div class="ask-row">

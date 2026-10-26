@@ -44,6 +44,16 @@ const TZ = "America/Chicago";
 const DATA = "./data/";
 const MAPBOX_TOKEN = (import.meta.env.VITE_MAPBOX_TOKEN as string | undefined) ?? "";
 
+/* Harvey replay opens HERE, not at the crest.
+ *
+ * The crest is the least informative moment this page has. At 55 ft the answer is "0 hours" and
+ * 1,469 of 1,614 segments are already under water — a solid wash of red that says "too late",
+ * which is the one thing a flood app must not lead with. On the rising limb the same page is the
+ * product: at 30 ft, 1600 Jackson Street reads "water reaches this street ... 145 hours of lead
+ * time". So the replay opens mid-rise and the slider climbs from here into the crest; that climb
+ * is also the shape of the demo. */
+const REPLAY_OPEN_FT = 30;
+
 type ChainRow = { name: string; median_h: number; p25_h: number; p75_h: number; n: number };
 type Road = {
   properties: {
@@ -405,8 +415,9 @@ async function loadReplay() {
   // moment the connection is likely to be the thing that is missing. Cache it too.
   keepOfflineCopy([{ url: DATA + "replay-harvey.json" }]);
   state.series = j.points.map((p: { t: string; v: number }) => ({ t: Date.parse(p.t), v: p.v, kind: "obs" as const }));
-  const peak = j.points.reduce((a: { v: number }, b: { v: number }) => (b.v > a.v ? b : a), j.points[0]);
-  state.current = peak.v;
+  // Not the peak: see REPLAY_OPEN_FT. The crest is one drag away, and the point of opening
+  // before it is that the answer still has hours left to give.
+  state.current = REPLAY_OPEN_FT;
   state.source = `Replay · ${j.event} · USGS ${j.site} observed`;
 }
 
@@ -959,6 +970,14 @@ function syncUrl() {
   if (textOnly) p.set(TEXT_PARAM, "1"); else p.delete(TEXT_PARAM);
   if (state.lang === "es") p.set("lang", "es"); else p.delete("lang");
   ($("viewToggle") as unknown as HTMLAnchorElement).href = viewHref(p, !textOnly);
+  // The quiet-river line's link, built from the same parameters: the household and the view
+  // travel with it, the event and the stage do not. Same document, so it is a real navigation
+  // that boots the app in replay mode at the stage the demo opens on.
+  const replay = new URLSearchParams(p);
+  replay.set("mode", "replay");
+  replay.set("stage", REPLAY_OPEN_FT.toFixed(1));
+  ($("lowWaterLink") as unknown as HTMLAnchorElement).href =
+    `${location.pathname}?${replay.toString()}`;
   const qs = p.toString();
   const before = location.href;
   history.replaceState(history.state, "", `${location.pathname}${qs ? `?${qs}` : ""}`);
@@ -2492,16 +2511,42 @@ function renderHousehold(stage: number) {
     (failed ? ` \u00b7 ${failed} could not be placed` : "") + ` \u00b7 at ${stage.toFixed(2)} ft`;
 }
 
+/* ---------------- the quiet-river line ---------------- *
+ * The live river is low almost every day, and this page is built for the week it is not: at
+ * 8.38 ft every block below reports a zero — 0 of 50 runs reach the street, 0 of 1,614
+ * segments under water, no extent drawn, no alert, nobody cut off. Everything the app does is
+ * invisible, and a first-time visitor reads an empty instrument rather than a working one.
+ *
+ * So when the live stage is below the action stage, one line above the fold says what the
+ * reading is and points at the day it was not that reading. It is a sentence, not a banner ad:
+ * no animation, no colour of its own beyond the water's, and it disappears the moment the
+ * river is high enough to be worth the space.
+ */
+function renderLowWater(stage: number) {
+  const el = $("lowWater");
+  const show = state.mode === "live" && state.series.length > 0 && stage < TH.action;
+  el.hidden = !show;
+  if (!show) return;
+  $("lowWaterText").textContent =
+    `The river is low today — ${stage.toFixed(2)} ft, below the ${TH.action} ft action stage. ` +
+    `This page is built for the week it is not:`;
+}
+
 /* ---------------- render ---------------- */
 function render() {
   const stage = state.current;
   const cat = category(stage);
   const ans = document.getElementById("answer")!;
-  ans.style.setProperty("--sev", cat.v);
+
+  // The stripe and the pill are set from the SELECTION, at the end of the branch chain
+  // below, because what they are about is the street. Until then, they say what the gauge
+  // says — which is all there is to say when no street has been chosen.
+  let sevColor = cat.v;
+  let sevLabel = cat.n;
+  ans.dataset.urgency = "river";
 
   $("stageVal").textContent = stage.toFixed(2);
   $("catVal").textContent = cat.n;
-  $("sevPill").textContent = cat.n;
   $("srcTag").textContent = state.source;
   // The mark beside that sentence, from the same flags the sentence is built from: waiting,
   // estimated, replay, or live. Derived here rather than set at each fetch site, because
@@ -2539,10 +2584,14 @@ function render() {
       vEl.innerHTML = "Water is <em>on your street now</em>";
       sEl.textContent = `This segment's low point is ${at.toFixed(1)} ft on the Richmond gauge; the gauge is at ${stage.toFixed(2)} ft. Do not drive out.`;
       hEl.textContent = "0"; hlEl.textContent = "hours of lead time";
+      sevColor = "var(--major)"; sevLabel = "Water on your street";
+      ans.dataset.urgency = "flooded";
     } else if (leads && stage >= limit) {
       vEl.innerHTML = "You have <em>no dry route out</em>";
       sEl.textContent = `Every dry way off ${sel.properties.name ?? "this segment"} was cut at ${(iso as number).toFixed(1)} ft on the Richmond gauge — ${(at - (iso as number)).toFixed(1)} ft before the street itself goes under at ${at.toFixed(1)} ft. The gauge is at ${stage.toFixed(2)} ft.`;
       hEl.textContent = "0"; hlEl.textContent = "hours of lead time";
+      sevColor = "var(--major)"; sevLabel = "No dry way out";
+      ans.dataset.urgency = "cut";
     } else if (hrsLimit === null) {
       vEl.innerHTML = leads
         ? `Your <em>last way out</em> stays open in this forecast`
@@ -2554,6 +2603,8 @@ function render() {
         ? `You keep a dry route out until ${limit.toFixed(1)} ft; the street floods at ${at.toFixed(1)} ft. The forecast does not reach either, and the gauge is at ${stage.toFixed(2)} ft. ` + quietLine(limit, true)
         : `The forecast does not reach it, and the gauge is at ${stage.toFixed(2)} ft. ` + quietLine(at, false);
       hEl.textContent = "—"; hlEl.textContent = "no crossing forecast";
+      sevColor = "var(--dry)"; sevLabel = leads ? "Dry way out kept" : "Your street is dry";
+      ans.dataset.urgency = "dry";
     } else {
       const when = fmtTime((state.mode === "replay" ? state.series[0].t : Date.now()) + hrsLimit * 3_600_000,
         { weekday: "long", hour: "numeric", minute: "2-digit" });
@@ -2565,6 +2616,8 @@ function render() {
         : `${sel.properties.name ?? "This segment"} floods at ${at.toFixed(1)} ft on the Richmond gauge; the river is at ${stage.toFixed(2)} ft.`;
       hEl.textContent = Math.round(hrsLimit).toString();
       hlEl.textContent = leads ? "until you are cut off" : "hours of lead time";
+      sevColor = "var(--action)"; sevLabel = leads ? "A way out is closing" : "Water is coming";
+      ans.dataset.urgency = "coming";
     }
     // Every street number in this panel inherits the threshold's measured bias, so it is
     // disclosed on the answer itself rather than only in the provenance line.
@@ -2580,6 +2633,21 @@ function render() {
   }
 
   if (state.estimateNote) sEl.textContent += ` ⚠ ${state.estimateNote}`;
+
+  /* The stripe and the pill follow the STREET, not the river's official category.
+   *
+   * This is the one place the design used to argue against the product: at 42 ft the gauge's
+   * category is "Action stage" — amber — while the headline reads "Water is on your street
+   * now", because 1600 Jackson Street floods at 36.1 ft. The stripe tracked the official
+   * category, and colour is read before text, so a scanning reader got amber and relaxed at the
+   * exact moment the answer was the opposite. Now: red once this segment's own threshold (or its
+   * last dry way out) is crossed, whatever the river is officially called; amber while the
+   * crossing is inside the forecast; green when it is not. With no street selected there is
+   * nothing to speak for but the river, so the official category stands — and it keeps its own
+   * labelled line in the River stage card either way, where it is named as the river's rather
+   * than the answer's. data-urgency is the same decision in a form a test can read. */
+  ans.style.setProperty("--sev", sevColor);
+  $("sevPill").textContent = sevLabel;
 
   // --- uncertainty ensemble ---------------------------------------------------
   // Depends only on the selection, the mode and the series — never on the slider — so
@@ -2695,6 +2763,7 @@ function render() {
 
   renderChartText();
   if (!textOnly) drawChart();
+  renderLowWater(stage);
 
   // Every state change lands here, so the URL and the screen cannot disagree.
   syncUrl();
@@ -2828,6 +2897,11 @@ async function setMode(mode: "live" | "replay") {
     $("askHint").textContent = `Could not load ${mode} data: ${e}`;
   }
   render();
+  // The two modes are different documents in everything but the chrome: the reading, the
+  // headline, the backcast, the quiet-river line and the provenance line all change. Keeping
+  // the scroll position landed a reader halfway down a statistics table with no answer on
+  // screen, so a mode change goes back to the top where the answer is.
+  window.scrollTo(0, 0);
   if (mode === "live") void runCrossCheck();
   else { state.cross = null; renderCrossCheck(); }
 }

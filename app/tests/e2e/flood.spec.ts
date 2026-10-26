@@ -39,7 +39,10 @@ test("the extent draws the band at or below the stage, and states its score", as
 });
 
 test("the replay's crest draws the top band", async ({ page }) => {
-  await booted(page, "?mode=replay");
+  // The stage is in the link because replay no longer OPENS at the crest (REPLAY_OPEN_FT in
+  // main.ts): it opens at 30 ft, where the answer still has hours to give. The crest is one
+  // drag away, and this is what it must draw when the slider gets there.
+  await booted(page, "?mode=replay&stage=55");
   // Harvey's crest at Richmond is 55.01 ft, above the top band (54.74), so the top band
   // stays drawn rather than the layer disappearing at the one moment it matters most.
   await expect(page.locator("#floodNote")).toHaveAttribute("data-band", "54.74");

@@ -73,6 +73,10 @@ test("a replay link boots 2017 without asking the live gauge anything", async ({
   await expect(page.locator("#srcTag")).toHaveText(/^Replay · .+ · USGS \d+ observed$/);
   await expect(page.locator("#bcCard")).toBeVisible();
   await expect(page.locator("#bcSum")).toContainText("before the crest");
+  // The replay opens mid-rise, not at the crest: at the crest the same page reads 0 hours and
+  // 1,469 of 1,614 segments already under water, which is the one moment the answer is "too
+  // late". 30 ft is where the product is working, and the slider climbs from there.
+  await expect(page.locator("#stageVal")).toHaveText("30.00");
 
   // The whole point of reading the URL before the first fetch (D2): a shared replay link
   // must not make a live request only to throw the answer away.

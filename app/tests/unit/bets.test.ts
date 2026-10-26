@@ -375,23 +375,67 @@ describe("I6 — does the answer survive", () => {
     expect(lo.holds).toBe(true);                     // still reached: the claim survives
   });
 
-  test("with no forecast in the series those rows are marked skipped, not silently zero", () => {
+
+
+  /* The four cases the release asked for, as four tests. The first is the bug: the forecast
+   * rows used to be skipped whenever the base answer was "not reached", which reported that a
+   * non-crossing survived every perturbation — when an upward-shifted forecast is precisely how
+   * a non-crossing becomes a crossing. */
+  // A forecast that peaks just under the threshold: 47 ft, then 48 ft, against 50 ft.
+  const nearMiss: Pt[] = [
+    { t: now, v: 10, kind: "obs" },
+    { t: now + 6 * 3_600_000, v: 20, kind: "obs" },
+    { t: now + 12 * 3_600_000, v: 30, kind: "obs" },
+    { t: now + 18 * 3_600_000, v: 47, kind: "fc" },
+    { t: now + 24 * 3_600_000, v: 48, kind: "fc" },
+  ];
+  // The measured RMSE grows with lead time: 1 ft at the first forecast point, 3 ft at +6 h.
+  const growing = (h: number) => (h <= 0 ? 1 : 3);
+
+  test("a base non-crossing is perturbed, and a high forecast can turn it into a crossing", () => {
+    const r = robustness(nearMiss, now, 50,
+      { ...opts, sigmaFt: 0, liftFt: 0, rmseAtHours: growing });
+    expect(r.base).toBe(null);                              // the point estimate: not reached
+    const hi = r.rows.find((x) => x.key === "fc_hi")!;
+    const lo = r.rows.find((x) => x.key === "fc_lo")!;
+    expect(hi.skipped).toBe(false);                         // ...and it IS perturbed
+    // The envelope is by horizon, not one offset: +1 ft at the first forecast point (48 ft)
+    // misses, +3 ft at the next (51 ft) crosses, so the answer is 24 h from `now`.
+    expect(hi.hours).toBe(24);
+    expect(hi.holds).toBe(false);
+    expect(r.survives).toBe(false);
+    expect(lo.hours).toBe(null);                            // −1σ, −3σ: never reaches
+    expect(lo.holds).toBe(true);
+    expect(hi.detail).toContain("at +6 h");
+    expect(r.forecastEnvelope).toEqual({ maxFt: 3, atHours: 6 });
+  });
+
+  test("a base non-crossing that no perturbation reaches keeps the answer", () => {
+    const r = robustness(nearMiss, now, 60, { ...opts, sigmaFt: 0, liftFt: 0, rmseAtHours: growing });
+    expect(r.base).toBe(null);
+    expect(r.rows.find((x) => x.key === "fc_hi")!.hours).toBe(null);
+    expect(r.rows.find((x) => x.key === "fc_hi")!.holds).toBe(true);
+    expect(r.survives).toBe(true);
+    expect(r.appliedCount).toBe(6);
+  });
+
+  test("an ordinary crossing is still moved by the forecast envelope", () => {
+    const r = robustness(nearMiss, now, 40, { ...opts, sigmaFt: 0, liftFt: 0, rmseAtHours: growing });
+    expect(r.base).toBe(18);
+    const lo = r.rows.find((x) => x.key === "fc_lo")!;
+    // 47 − 1 = 46 still crosses 40 at the first forecast point, so the low scenario keeps the
+    // answer and its hours; only a base answering "not reached" can be turned into a crossing.
+    expect(lo.hours).toBe(18);
+    expect(lo.holds).toBe(true);
+  });
+
+  test("an observed-only replay has no forecast to perturb, and says so", () => {
     const observed = series.map((p) => ({ ...p, kind: "obs" as const }));
     const r = robustness(observed, now, 45, { ...opts, forecastFrom: null });
     expect(r.rows.filter((x) => x.skipped).map((x) => x.key)).toEqual(["fc_hi", "fc_lo"]);
-    expect(r.appliedCount).toBe(4);
-    expect(r.survives).toBe(false);                  // thr_hi and lift erase the crossing
-    expect(r.rows[3].detail).toContain("no forecast in this series");
-  });
-
-  test("a skipped row says WHY it was skipped, in both ways it can be", () => {
-    // Replay with an observed-only series, and live with an answer that is already "not
-    // reached": two different reasons, and "—" without either would read as a zero.
-    const r = robustness(series, now, 50, { ...opts, sigmaFt: 0, liftFt: 0 });
-    expect(r.base).toBe(null);
-    expect(r.rows.filter((x) => x.skipped).map((x) => x.key)).toEqual(["fc_hi", "fc_lo"]);
-    expect(r.rows[3].detail).toContain("already 'not reached'");
-    expect(r.survives).toBe(true);
+    expect(r.rows.filter((x) => x.key.startsWith("fc"))[0].detail)
+      .toContain("no forecast in this series");
+    expect(r.forecastEnvelope).toBe(null);
     expect(r.appliedCount).toBe(4);
   });
 

@@ -23,7 +23,9 @@ import { cutOffAt, hospitalCutAt } from "./lib/responders";
 import type { CutRow } from "./lib/responders";
 import { MAX_USER_HOURS, applyUserForecast, parseForecast } from "./lib/userforecast";
 import { robustness } from "./lib/robustness";
-import type { RobustOut } from "./lib/robustness";
+import type { RobustOut, RobustRow } from "./lib/robustness";
+import { figuresFor, normaliseStreet, postAsk, rateLimiter, resolveStreet, unsupportedNumbers } from "./lib/ask";
+import type { AskAnswer, AskResult, StreetCandidate, StreetFacts } from "./lib/ask";
 import { islandForSegment } from "./lib/islands";
 import type { IslandSpec, IslandView } from "./lib/islands";
 import { messagesFor } from "./lib/notify";
@@ -2034,10 +2036,13 @@ function renderEnsemble(sel: Road | null) {
   const span = Math.max(point ?? 0, e.p90_h ?? 0, 1);
   $("ensCount").textContent = `${e.crossing} of ${e.of}`;
   $("ensLab").textContent = e.crossing === 1 ? "run reaches this street" : "runs reach this street";
+  // Replay hours are counted from the start of the record; the label says so rather than
+  // leaving a number that means something else than the live one in the same position.
   $("ensRange").textContent = e.median_h === null
     ? "no run reaches it within the window"
     : `median ${Math.round(e.median_h)} h \u00b7 ${Math.round(e.p10_h as number)}\u2013` +
-      `${Math.round(e.p90_h as number)} h`;
+      `${Math.round(e.p90_h as number)} h` +
+      (state.mode === "replay" ? " from replay start" : "");
   $("ensNever").textContent = e.never_h
     ? `${e.never_h} of ${e.of} never reach it in the window`
     : "every run reaches it";
@@ -2075,8 +2080,10 @@ function renderEnsemble(sel: Road | null) {
     (point === null ? ", which never reaches it at all." : `, ${Math.round(point)} h here.`) +
     ` ${state.mode === "replay"
       ? "The replay hydrograph is observed, so this spread is the threshold error alone."
-      : `The forecast adds its own measured error (${p.forecast_rmse_knots_ft[0][1].toFixed(1)} ft at ` +
-        `+1 day, ${p.forecast_rmse_beyond_measured_ft.toFixed(1)} ft at +7).`} ` +
+      : `The official NOAA forecast adds this project's benchmark error as an ASSUMPTION ` +
+        `(${p.forecast_rmse_knots_ft[0][1].toFixed(1)} ft at +1 day, ` +
+        `${p.forecast_rmse_beyond_measured_ft.toFixed(1)} ft at +7) \u2014 that curve was not ` +
+        `measured on NOAA's forecast, so it is not a calibrated uncertainty for it.`} ` +
     `The correction is measured from one event and is deliberately not applied to the ` +
     `headline; this block is not a probability of flooding.`;
 }
@@ -2277,6 +2284,11 @@ function updateRobustness(sel: Road | null) {
   $("robHead").textContent = r.base === null
     ? "The point estimate is that water does NOT reach this street in the window. Do the measured errors change that?"
     : `The point estimate is ${r.base.toFixed(1)} h. Under the errors this project has measured:`;
+  // A row that reaches a street the point estimate says is never reached has no Δ in hours;
+  // "—" there would read as nothing happened, which is the opposite of what the row says.
+  const delta = (row: RobustRow) => row.delta !== null
+    ? `${row.delta > 0 ? "+" : ""}${row.delta.toFixed(1)} h`
+    : r.base === null && row.hours !== null ? "from never" : "—";
   $("robBody").innerHTML =
     `<div class="rob-row rob-head"><span>perturbation</span><span>lead time</span>` +
     `<span>Δ</span><span>what changed</span></div>` +
@@ -2284,7 +2296,7 @@ function updateRobustness(sel: Road | null) {
       ? `<div class="rob-row skip"><b>${row.label}</b><span>—</span><span></span><i>${row.detail}</i></div>`
       : `<div class="rob-row${row.holds ? "" : " bad"}"><b>${row.label}</b>` +
         `<span>${fmt(row.hours)}</span>` +
-        `<span>${row.delta === null ? "—" : `${row.delta > 0 ? "+" : ""}${row.delta.toFixed(1)} h`}</span>` +
+        `<span>${delta(row)}</span>` +
         `<i>${row.detail}</i></div>`)).join("");
   $("robVerdict").textContent = r.survives
     ? `The qualitative answer holds under all ${r.appliedCount} perturbations: ` +
@@ -2292,6 +2304,15 @@ function updateRobustness(sel: Road | null) {
         : "water still reaches this street inside the window, though the hours move.")
     : "⚠ The measured errors do not all preserve the answer — a row above turns 'reached' into " +
       "'not reached' or back. The point estimate alone does not say which.";
+  // Where the curve came from, and what applying it to NOAA's forecast does NOT mean. The
+  // benchmark was measured on this project's own model; calling that NOAA's uncertainty would
+  // be a calibration this project has never done.
+  $("robNote").textContent = state.mode === "replay"
+    ? "Hours here are measured from the start of the 2017 record, not from now. This series has " +
+      "no forecast, so there is no forecast error to apply: these rows are the threshold error alone."
+    : "The forecast rows apply this project's forecast-error curve — the benchmark's RMSE by lead " +
+      "time — to the official NOAA forecast, point by point. That is an assumption about NOAA's " +
+      "error, not a calibration of it: the curve was measured on this project's own model.";
 }
 
 /* ---------------- I4: bring your own forecast ----------------
@@ -2472,6 +2493,16 @@ function renderHousehold(stage: number) {
     const hours = document.createElement("div");
     hours.className = "t";
     hours.textContent = row.hours === null ? "\u2014" : `${Math.round(row.hours)} h`;
+    // The basis is printed beside the number, not left to a caption: in replay these hours
+    // are counted from the start of the 2017 record, and the headline's hours are not.
+    if (row.hours !== null && state.mode === "replay") {
+      const basis = document.createElement("small");
+      basis.className = "basis";
+      basis.textContent = "from replay start";
+      // A space before it, so the accessible text reads "143 h from replay start" even though
+      // the block layout puts the label on its own line.
+      hours.append(document.createTextNode(" "), basis);
+    }
     const what = document.createElement("div");
     what.className = "m";
 
@@ -2508,7 +2539,8 @@ function renderHousehold(stage: number) {
 
   const failed = rows.filter((r) => r.si === null).length;
   $("hhNote").textContent = `${rows.length} addresses \u00b7 soonest first` +
-    (failed ? ` \u00b7 ${failed} could not be placed` : "") + ` \u00b7 at ${stage.toFixed(2)} ft`;
+    (failed ? ` \u00b7 ${failed} could not be placed` : "") + ` \u00b7 at ${stage.toFixed(2)} ft` +
+    (state.mode === "replay" ? " \u00b7 hours from replay start" : "");
 }
 
 /* ---------------- the quiet-river line ---------------- *
@@ -2581,42 +2613,52 @@ function render() {
     const hrsLimit = crossingHours(limit);
 
     if (stage >= at) {
-      vEl.innerHTML = "Water is <em>on your street now</em>";
-      sEl.textContent = `This segment's low point is ${at.toFixed(1)} ft on the Richmond gauge; the gauge is at ${stage.toFixed(2)} ft. Do not drive out.`;
-      hEl.textContent = "0"; hlEl.textContent = "hours of lead time";
-      sevColor = "var(--major)"; sevLabel = "Water on your street";
+      // Modelled, not observed: this is a threshold on a HAND surface compared with a gauge
+      // reading, and saying "water is on your street" implies someone saw it there.
+      vEl.innerHTML = "Modelled threshold crossed — <em>water may be on your street</em>";
+      sEl.textContent = `This segment's modelled low point is ${at.toFixed(1)} ft on the Richmond gauge; the gauge is at ${stage.toFixed(2)} ft. Road depths are modelled, never observed — a crossed threshold is not a report of water on the road. Do not drive out.`;
+      hEl.textContent = "0";
+      hlEl.textContent = state.mode === "replay" ? "already crossed at this stage" : "hours of lead time";
+      sevColor = "var(--major)"; sevLabel = "Threshold crossed";
       ans.dataset.urgency = "flooded";
     } else if (leads && stage >= limit) {
-      vEl.innerHTML = "You have <em>no dry route out</em>";
-      sEl.textContent = `Every dry way off ${sel.properties.name ?? "this segment"} was cut at ${(iso as number).toFixed(1)} ft on the Richmond gauge — ${(at - (iso as number)).toFixed(1)} ft before the street itself goes under at ${at.toFixed(1)} ft. The gauge is at ${stage.toFixed(2)} ft.`;
-      hEl.textContent = "0"; hlEl.textContent = "hours of lead time";
-      sevColor = "var(--major)"; sevLabel = "No dry way out";
+      vEl.innerHTML = "No <em>modelled dry way out</em>";
+      sEl.textContent = `Every modelled dry way off ${sel.properties.name ?? "this segment"} is cut at ${(iso as number).toFixed(1)} ft on the Richmond gauge — ${(at - (iso as number)).toFixed(1)} ft before the street's modelled threshold at ${at.toFixed(1)} ft. The gauge is at ${stage.toFixed(2)} ft. A cut route is a routing result on the modelled network, not a report of a closed road.`;
+      hEl.textContent = "0";
+      hlEl.textContent = state.mode === "replay" ? "cut off at this stage" : "hours of lead time";
+      sevColor = "var(--major)"; sevLabel = "No modelled way out";
       ans.dataset.urgency = "cut";
     } else if (hrsLimit === null) {
       vEl.innerHTML = leads
-        ? `Your <em>last way out</em> stays open in this forecast`
+        ? `Your <em>last modelled way out</em> stays open in this forecast`
         : `Your street stays <em>dry</em> in this forecast`;
       // "Stays dry" is true and useless on its own. F1's second half: what would have to
       // happen, and when it last did — computed from the cached peak record, so it costs no
       // request and works during the outage that motivates the product.
       sEl.textContent = leads
-        ? `You keep a dry route out until ${limit.toFixed(1)} ft; the street floods at ${at.toFixed(1)} ft. The forecast does not reach either, and the gauge is at ${stage.toFixed(2)} ft. ` + quietLine(limit, true)
+        ? `A modelled dry route out exists in this network until ${limit.toFixed(1)} ft; the street's threshold is ${at.toFixed(1)} ft. The forecast does not reach either, and the gauge is at ${stage.toFixed(2)} ft. ` + quietLine(limit, true)
         : `The forecast does not reach it, and the gauge is at ${stage.toFixed(2)} ft. ` + quietLine(at, false);
-      hEl.textContent = "—"; hlEl.textContent = "no crossing forecast";
+      hEl.textContent = "—";
+      hlEl.textContent = state.mode === "replay" ? "no crossing in the record" : "no crossing forecast";
       sevColor = "var(--dry)"; sevLabel = leads ? "Dry way out kept" : "Your street is dry";
       ans.dataset.urgency = "dry";
     } else {
       const when = fmtTime((state.mode === "replay" ? state.series[0].t : Date.now()) + hrsLimit * 3_600_000,
         { weekday: "long", hour: "numeric", minute: "2-digit" });
       vEl.innerHTML = leads
-        ? `You lose your last way out <em>${when}</em>`
-        : `Water reaches this street <em>${when}</em>`;
+        ? `You lose your last <em>modelled way out</em> ${when}`
+        : `Water is modelled to reach this street <em>${when}</em>`;
       sEl.textContent = leads
-        ? `Every dry route off ${sel.properties.name ?? "this segment"} is cut at ${limit.toFixed(1)} ft on the Richmond gauge — ${(at - limit).toFixed(1)} ft before the street itself floods at ${at.toFixed(1)} ft. The river is at ${stage.toFixed(2)} ft.`
-        : `${sel.properties.name ?? "This segment"} floods at ${at.toFixed(1)} ft on the Richmond gauge; the river is at ${stage.toFixed(2)} ft.`;
+        ? `Every modelled dry route off ${sel.properties.name ?? "this segment"} is cut at ${limit.toFixed(1)} ft on the Richmond gauge — ${(at - limit).toFixed(1)} ft before the street's modelled threshold at ${at.toFixed(1)} ft. The river is at ${stage.toFixed(2)} ft.`
+        : `${sel.properties.name ?? "This segment"} has a modelled threshold of ${at.toFixed(1)} ft on the Richmond gauge; the river is at ${stage.toFixed(2)} ft.`;
       hEl.textContent = Math.round(hrsLimit).toString();
-      hlEl.textContent = leads ? "until you are cut off" : "hours of lead time";
-      sevColor = "var(--action)"; sevLabel = leads ? "A way out is closing" : "Water is coming";
+      // Hours are measured from `seriesRef()`: now in live mode, the start of the 2017 record in
+      // replay. The label says which, because 145 h means different things on those two bases.
+      hlEl.textContent = state.mode === "replay"
+        ? (leads ? "hours until cut off, from replay start" : "hours from replay start")
+        : (leads ? "until you are cut off" : "hours of lead time");
+      sevColor = "var(--action)";
+      sevLabel = leads ? "A modelled way out is closing" : "Modelled crossing ahead";
       ans.dataset.urgency = "coming";
     }
     // Every street number in this panel inherits the threshold's measured bias, so it is
@@ -2681,8 +2723,8 @@ function render() {
     : "";
   $("prov").innerHTML =
     `<span>USGS ${GAUGE.usgs} / NWS ${GAUGE.lid} · Brazos River at Richmond</span><s>|</s>` +
-    `<span>observed ${stage.toFixed(2)} ft</span><s>|</s>` +
-    `<span>${state.mode === "live" ? "official NWS forecast" : "historical replay"}</span>` +
+    `<span>${state.mode === "live" ? `observed ${stage.toFixed(2)} ft` : `replay stage ${stage.toFixed(2)} ft`}</span><s>|</s>` +
+    `<span>${state.mode === "live" ? "observed · official NOAA forecast" : "USGS 2017 observed record"}</span>` +
     `<s>|</s><span>thresholds: modelled (OWP HAND) \u00b7 ${lowConf} of ${state.roads.length} low confidence</span>` +
     valNote +
     `<s>|</s><span>${trapped} cut off before their street floods</span>`;
@@ -2702,7 +2744,12 @@ function render() {
   youLi.innerHTML = `<b>Your street</b><div class="t">${userHours === null ? "—" : `${Math.round(userHours)} h`}</div>` +
     `<div class="m">${sel ? (sel.properties.name ?? "selected segment") : "not selected"}</div>`;
   list.appendChild(youLi);
-  $("chainNote").textContent = "derived from historical crest travel times (daily + sub-daily)";
+  // Two bases in one card: the rows above are travel times BETWEEN gauges, while "your
+  // street" is measured from where the series starts. Say which is which.
+  $("chainNote").textContent = "derived from historical crest travel times (daily + sub-daily)" +
+    (state.mode === "replay"
+      ? " · your street: hours from replay start, not a travel time"
+      : " · your street: hours from now");
 
   // ways out — routing to real destinations on the modelled network, at this stage
   computeRoutes(stage);
@@ -2719,23 +2766,23 @@ function render() {
       parts.push(state.routes.slice(0, 5).map((r) => {
         const km = (r.meters / 1000).toFixed(1);
         const meta = r.ok
-          ? `${km} km · dry route`
-          : `${km} km · crosses water on ${r.wet} segment${r.wet > 1 ? "s" : ""}; ` +
+          ? `${km} km · modelled dry route in this network`
+          : `${km} km · crosses modelled water on ${r.wet} segment${r.wet > 1 ? "s" : ""}; ` +
             `deepest floods at ${r.deepestFt!.toFixed(1)} ft`;
         const far = r.f.snap_m > 60 ? ` · route ends ${Math.round(r.f.snap_m)} m from the station` : "";
         return `<div class="exit"><div style="flex:1;min-width:0">` +
           `<b>${r.f.name ?? r.f.kind}</b><span>${meta}${far}</span></div>` +
-          `<span class="st ${r.ok ? "ok" : "bad"}">${r.ok ? "open" : "water"}</span></div>`;
+          `<span class="st ${r.ok ? "ok" : "bad"}">${r.ok ? "dry" : "water"}</span></div>`;
       }).join(""));
     }
     const cut = state.graph.segment_route_cut_ft[state.selIdx];
     const medCut = state.graph.segment_route_cut_medical_ft[state.selIdx];
     const rev = reverseBest(stage);
     const cutTxt = cut === null || cut === undefined
-      ? "No route off this segment exists at any river stage."
-      : `Your last route out is cut at ${cut.toFixed(1)} ft.`;
+      ? "No modelled route off this segment exists at any river stage."
+      : `Your last modelled route out is cut at ${cut.toFixed(1)} ft.`;
     const revTxt = rev
-      ? `${rev.f.name ?? rev.f.kind} can reach this segment${rev.wet ? ` — but only by crossing ${rev.wet} flooded segment${rev.wet > 1 ? "s" : ""}` : " on a dry route"}`
+      ? `${rev.f.name ?? rev.f.kind} has a modelled route in this network${rev.wet ? ` — but it crosses ${rev.wet} flooded segment${rev.wet > 1 ? "s" : ""}` : " that stays dry"}`
       : "No responder has a modelled route to this segment";
     // Reaching a fire station is not the same as reaching a hospital: for someone
     // who cannot be treated in place, the hospital route is the one that matters.
@@ -2746,8 +2793,8 @@ function render() {
     } else if (cut === null || cut === undefined || medCut < cut - 0.05) {
       medTxt = ` A hospital route is cut at ${medCut.toFixed(1)} ft.`;
     }
-    parts.push(`<p class="hint" style="margin-top:10px">Responder access: ${revTxt}. ${cutTxt}${medTxt}` +
-      ` Routes are on the modelled corridor only; a responder outside it is not counted.</p>`);
+    parts.push(`<p class="hint" style="margin-top:10px">Responder access, modelled: ${revTxt}. ${cutTxt}${medTxt}` +
+      ` A modelled dry route is a path in this network, not a guarantee of a safe one: routes are on the modelled corridor only, and a responder outside it is not counted.</p>`);
     ex.innerHTML = parts.join("");
   }
   $("exitNote").textContent = `at ${stage.toFixed(2)} ft`;
@@ -2763,10 +2810,285 @@ function render() {
 
   renderChartText();
   if (!textOnly) drawChart();
+  // An Ask answer belongs to the stage it was asked at. Once the stage or the mode moves, its
+  // figures are stale, and stale figures beside a live headline are exactly the confusion this
+  // panel exists to avoid.
+  if (askStamp && askStamp !== askStampNow()) {
+    askUnavailable("The stage or mode changed since that answer — ask again for the current numbers.");
+    $("askNote").textContent = "stale";
+  }
+  // The one place on the page where two numbers on screen can mean different things, said
+  // once in words: in replay every hour is counted from the first observation of 2017, and a
+  // headline of 0 means the slider is past the threshold, not that no time is left.
+  const basisEl = $("replayBasis");
+  const showBasis = state.mode === "replay" && !!sel;
+  basisEl.hidden = !showBasis;
+  if (showBasis) {
+    basisEl.textContent = "Replay hours are measured from the start of the 2017 record, not from " +
+      "now. A headline of 0 means the slider's stage is already past your street's threshold; " +
+      "the household and uncertainty panels quote when the record crossed each threshold, " +
+      "measured from that same start.";
+  }
   renderLowWater(stage);
 
   // Every state change lands here, so the URL and the screen cannot disagree.
   syncUrl();
+}
+
+/* ---------------- Ask BrazosCast ---------------- *
+ * The model does two jobs and neither is arithmetic: it turns a question into a structured
+ * request, and it writes commentary around a result object. Every figure below is rendered from
+ * that object — computed by crossingHours / limitOf / robustness / the routing graph, which are
+ * the app's own kernels — and the prose is checked against the object's numbers before it is
+ * shown. A sentence carrying a number this page did not compute is withheld.
+ *
+ * What this block owns is the part only the page can know: which streets exist in the segment
+ * index, what the current series and stage are, and which card each figure came from. Nothing
+ * is sent to the endpoint except the question (to parse it) and the computed object (to
+ * narrate it) — no address, no series, no gauge feed.
+ */
+const askBudget = rateLimiter(4, 60_000);
+let askBusy = false;
+/** What the last rendered answer was computed at. A stage change makes it stale. */
+let askStamp = "";
+
+const askStampNow = () => `${state.mode}|${state.current.toFixed(1)}|${state.series.length}`;
+
+/** Every named street in the segment index, grouped by normalised name, with every modelled
+ *  segment that name covers. Grouping here is the same name agreement the map uses; there is no
+ *  nearest-neighbour step, so a street this model does not have cannot resolve to one it does. */
+function askCandidates(): StreetCandidate[] {
+  const by = new Map<string, number[]>();
+  state.roads.forEach((r, i) => {
+    const n = r.properties.name;
+    if (!n) return;
+    const k = normaliseStreet(n);
+    const hit = by.get(k);
+    if (hit) hit.push(i); else by.set(k, [i]);
+  });
+  return [...by.values()].map((roads) => ({
+    name: state.roads[roads[0]].properties.name as string,
+    roads,
+  }));
+}
+
+/** The computed facts for one street, read off the kernels the rest of the page uses. */
+function askFacts(c: StreetCandidate, hypotheticalFt: number | null): StreetFacts {
+  // One name can cover many modelled segments with different thresholds. If the answer above is
+  // already about one of them, that segment IS the street here — a panel that contradicts the
+  // headline beside it would be worse than no panel. Otherwise the answer is the first segment to
+  // go under, because that is the one the street's lead time belongs to, and the figure says how
+  // many segments share the name.
+  let si = c.roads.includes(state.selIdx) ? state.selIdx : c.roads[0];
+  if (!c.roads.includes(state.selIdx)) {
+    for (const i of c.roads) {
+      if (state.roads[i].properties.flood_stage_ft < state.roads[si].properties.flood_stage_ft) si = i;
+    }
+  }
+  const road = state.roads[si];
+  const p = road.properties;
+  const at = p.flood_stage_ft;
+  const { limit, cut } = limitOf(road);
+  const spec = state.ensembleSpec;
+  const rob = spec
+    ? robustness(state.series, seriesRef(), at, {
+        sigmaFt: spec.parameters.per_street_sigma_ft,
+        liftFt: spec.parameters.lift_ft,
+        rmseAtHours: (h) => rmseFt(h / 24, spec),
+        forecastFrom: firstForecastIndex(state.series),
+        horizonHours: 72,
+      })
+    : null;
+  const obs = state.series.filter((x) => x.kind === "obs");
+  const obsAt = state.mode === "replay"
+    ? (state.series[0]?.t ?? Date.now())
+    : (obs[obs.length - 1]?.t ?? Date.now());
+  const obsStage = obs.length ? obs[obs.length - 1].v : state.current;
+  const last = state.series[state.series.length - 1];
+  return {
+    name: p.name ?? `segment ${p.osmid}`,
+    osmid: p.osmid,
+    segments: c.roads.length,
+    thresholdFt: at,
+    stageFt: state.current,
+    // ?stage=42 and the slider both move the stage off the river's own reading; the figures say
+    // which one they are about rather than passing a scenario off as an observation.
+    stageIsSlider: Math.abs(state.current - obsStage) > 0.05,
+    observedStageFt: obsStage,
+    mode: state.mode,
+    crossingHours: crossingHours(at),
+    isolationFt: cut ? limit : null,
+    routeCutFt: state.graph?.segment_route_cut_ft[si] ?? null,
+    survives: rob ? rob.survives : true,
+    observedAt: new Date(obsAt).toISOString(),
+    forecastTo: state.mode === "live" && last ? new Date(last.t).toISOString() : null,
+    hypotheticalFt,
+    liftFt: spec?.parameters.lift_ft ?? 0,
+    sigmaFt: spec?.parameters.per_street_sigma_ft ?? 0,
+  };
+}
+
+function askClear(): void {
+  const figs = $("askFigs");
+  figs.innerHTML = "";
+  figs.hidden = true;
+  const prose = $("askProse");
+  prose.hidden = true;
+  prose.textContent = "";
+  const why = $("askWhy");
+  why.hidden = true;
+  why.textContent = "";
+  askStamp = "";
+}
+
+/** The one sentence every failure shares. Nothing else on the page changes with it. */
+function askUnavailable(why: string): void {
+  askClear();
+  $("askWhy").textContent = why;
+  $("askWhy").hidden = false;
+  $("askNote").textContent = "unavailable";
+}
+
+function askReasonText(r: Extract<AskResult, { ok: false }>): string {
+  if (r.reason === "rate") return "A few questions a minute — try again in a moment. Nothing else on this page changes.";
+  if (r.reason === "timeout") return "Ask is unavailable right now — it took longer than 8 seconds. Every number on this page is unaffected.";
+  return "Ask is unavailable right now. Every number on this page is unaffected.";
+}
+
+/** Figures first, then commentary. `extra` is the honest line about what is missing. */
+function askRender(a: AskAnswer, prose: string | null, extra: string): void {
+  const list = $("askFigs");
+  list.innerHTML = "";
+  for (const g of a.figures) {
+    const li = document.createElement("li");
+    li.className = "ask-fig";
+    const b = document.createElement("b");
+    b.textContent = g.label;
+    const val = document.createElement("span");
+    val.className = "val";
+    val.textContent = g.value;
+    const meta = document.createElement("span");
+    meta.className = "meta";
+    meta.textContent = g.limitation;
+    const src = document.createElement("span");
+    src.className = "src";
+    const kind = document.createElement("span");
+    kind.className = `kind ${g.kind}`;
+    kind.textContent = g.kind;
+    const link = document.createElement("a");
+    link.href = g.anchor;
+    link.textContent = "the card this came from";
+    src.append(document.createTextNode(`${g.source} · ${g.at} · `), kind,
+      document.createTextNode(" "), link);
+    li.append(b, val, meta, src);
+    list.appendChild(li);
+  }
+  list.hidden = false;
+  const why = $("askWhy");
+  why.hidden = !extra;
+  why.textContent = extra;
+  const pe = $("askProse");
+  pe.hidden = !prose;
+  pe.textContent = prose ?? "";
+  $("askNote").textContent = `${a.street?.name ?? "this corridor"} · ${a.figures.length} figures`;
+  askStamp = askStampNow();
+}
+
+async function askQuestion(raw: string): Promise<void> {
+  const q = raw.trim();
+  if (!q || askBusy) return;
+  if (!askBudget.take()) {
+    askUnavailable("A few questions a minute — try again in a moment. Nothing else on this page changes.");
+    return;
+  }
+  askBusy = true;
+  const btn = $("askGo") as unknown as HTMLButtonElement;
+  btn.disabled = true;
+  askClear();
+  $("askNote").textContent = "reading the question…";
+  try {
+    const parsed = await postAsk("parse", { question: q });
+    if (!parsed.ok || !("request" in parsed)) {
+      askUnavailable(askReasonText(parsed as Extract<AskResult, { ok: false }>));
+      return;
+    }
+    const req = parsed.request;
+    const wanted = req.streets.slice(0, 3);
+    // A question with no street in it gets the model's own clarifying question when it wrote
+    // one, because "which street?" is more useful than "unsupported".
+    if (!wanted.length && req.clarify) {
+      askUnavailable(req.clarify);
+      $("askNote").textContent = "needs a street";
+      return;
+    }
+    if (req.intent === "unsupported") {
+      askUnavailable("I can only answer questions about streets, river stages and access in this corridor. I don't produce flood levels or predictions of my own.");
+      // The panel is working; the question is outside what it answers. "unavailable" here would
+      // blame the service for a refusal that is the service doing its job.
+      $("askNote").textContent = "outside this model";
+      return;
+    }
+    const candidates = askCandidates();
+    if (!wanted.length) {
+      askUnavailable("Which street do you mean? The question needs one street in this corridor.");
+      $("askNote").textContent = "needs a street";
+      return;
+    }
+    const matched: StreetCandidate[] = [];
+    const missing: string[] = [];
+    for (const name of wanted) {
+      const c = resolveStreet(name, candidates);
+      if (c) matched.push(c); else missing.push(name);
+    }
+    if (!matched.length) {
+      askUnavailable(`I don't have ${missing.map((m) => `“${m}”`).join(" or ")} in this model. ` +
+        `It covers ${candidates.length} named streets in this corridor; a nearest guess would be an ` +
+        `answer about someone else's address.`);
+      $("askNote").textContent = "not in this model";
+      return;
+    }
+
+    const answers = matched.map((c) => figuresFor(askFacts(c, req.stage_ft)));
+    const merged: AskAnswer = {
+      street: answers[0].street,
+      hypotheticalFt: req.stage_ft,
+      figures: answers.flatMap((a) => a.figures),
+      numbers: [...new Set(answers.flatMap((a) => a.numbers))].sort((x, y) => x - y),
+      note: answers[0].note,
+    };
+    const notes: string[] = [];
+    if (missing.length) {
+      notes.push(`I don't have ${missing.map((m) => `“${m}”`).join(" or ")} in this model, so it is not guessed at.`);
+    }
+    if (req.mode && req.mode !== state.mode) {
+      notes.push(`The question mentions ${req.mode === "replay" ? "the 2017 replay" : "live mode"}; ` +
+        `these figures are for ${state.mode} mode, which is what the page is showing.`);
+    }
+    const before = notes.join(" ");
+
+    // The figures are the answer and they are on screen before the prose is asked for: a model
+    // that is slow, refuses or invents gets no chance to be the thing the reader waits for.
+    askRender(merged, null, before);
+
+    const nar = await postAsk("narrate", {
+      mode: state.mode, street: merged.street, note: merged.note, figures: merged.figures,
+    });
+    if (!nar.ok || !("prose" in nar)) {
+      askRender(merged, null, `${before} The commentary is unavailable right now; the figures above are the answer.`.trim());
+      return;
+    }
+    const stray = unsupportedNumbers(nar.prose, merged.numbers);
+    if (stray.length) {
+      askRender(merged, null, `${before} The model wrote ${stray.length === 1 ? "a figure" : "figures"} ` +
+        `this page did not compute (${stray.slice(0, 3).join(", ")}), so its commentary is withheld. ` +
+        `The figures above are the answer.`.trim());
+      return;
+    }
+    askRender(merged, nar.prose, before);
+  } finally {
+    askBusy = false;
+    btn.disabled = false;
+  }
 }
 
 /* ---------------- wiring ---------------- */
@@ -2822,6 +3144,11 @@ function wire() {
   $("langEn").addEventListener("click", () => setAlertLang("en"));
   $("langEs").addEventListener("click", () => setAlertLang("es"));
   $("share").addEventListener("click", () => { void shareLink(); });
+  // Ask — the form is the only way in; a submit puts the question through the two-call flow.
+  $("askForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    void askQuestion(($("askQ") as unknown as HTMLInputElement).value);
+  });
   // I4 — a pasted forecast. Both controls are local: the series never leaves the page.
   $("fcUse").addEventListener("click", readUserForecast);
   $("fcClear").addEventListener("click", clearUserForecast);

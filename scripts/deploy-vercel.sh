@@ -5,7 +5,11 @@
 # plain static host may not send — sw.js uncached, /data/* revalidated, hashed assets immutable —
 # and app/vercel.json carries the same three as host config. This script is the part that makes
 # "carried" checkable: after the upload it curls the new origin and fails on a wrong header, a
-# wrong content type, or a missing payload that answers 200 with the HTML shell.
+# wrong content type, a missing payload that answers 200 with the HTML shell, or an Ask function
+# that is not there.
+#
+# The staged root is app/dist plus app/api: a directory upload is a static site unless the
+# function sits where Vercel looks for one.
 #
 # Auth, and what is deliberately not here: no token is written by this script and none is printed.
 # It reads one from $VERCEL_TOKEN, or from .vercel-token if you prefer a file (gitignored) — or
@@ -63,9 +67,18 @@ EOF
 fi
 
 step "deploy"
+# The upload is a DIRECTORY, and Vercel only looks for serverless functions in `<root>/api`, so
+# the staged root is the built bundle plus that one directory. Deploying `dist` alone is a static
+# site: the Ask panel would answer "unavailable" forever on this path while working on a Git
+# import, which is the kind of difference between two deployment routes that costs a demo.
+STAGE="$(mktemp -d)"
 OUT="$(mktemp)"
-trap 'rm -f "$OUT"' EXIT
-vc deploy "$DIST" --prod --yes --project "$PROJECT" --json ${TOKEN_ARG[@]+"${TOKEN_ARG[@]}"} >"$OUT" || {
+trap 'rm -rf "$STAGE"; rm -f "$OUT"' EXIT
+cp -R "$DIST/." "$STAGE/"
+if [ -d "$ROOT/app/api" ]; then cp -R "$ROOT/app/api" "$STAGE/api"; fi
+echo "   staged $(find "$STAGE" -type f | wc -l | tr -d ' ') files" \
+  "($([ -d "$STAGE/api" ] && echo "including" || echo "WITHOUT") app/api)"
+vc deploy "$STAGE" --prod --yes --project "$PROJECT" --json ${TOKEN_ARG[@]+"${TOKEN_ARG[@]}"} >"$OUT" || {
   cat "$OUT" >&2
   fail "vercel deploy"
 }
@@ -117,6 +130,10 @@ expect "/assets/$ASSET" "cache-control" "immutable"
 # The reason there is no SPA rewrite: a payload typo must not look like success.
 expect_status "/data/does-not-exist.json" 404
 expect_status "/?text=1&stage=35&addr=Skinner+Lane" 200
+# The function is THERE: a GET is rejected by the function itself with 405, which is a different
+# answer from the static host's 404 for a path it simply does not have. (A POST would spend a
+# model request; this checks deployment, not the key.)
+expect_status "/api/ask" 405
 
 if [ "$problems" -ne 0 ]; then
   fail "$problems deployed-header check(s) failed on $URL"

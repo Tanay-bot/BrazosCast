@@ -35,11 +35,11 @@ An address-first flood **lead-time** engine for the lower Brazos River at Richmo
 - [x] **The alert, in English and Spanish** — three tiers counted back from **your street's** own crossing (T−72 h / T−24 h / T−6 h), compiled at build time, filled by two independent implementations the tests require to carry the same digits, and simulated over the 2017 record: **4,407 messages** to **1,469 streets**, none duplicated, none arriving after the water, longest 279 characters
 - [x] **Offline address index** — a typed house number resolves to the right street segment with no geocoder and no API key, from county address ranges: 819 ranges across 96 of the 154 modelled street names, and **96.8%** of them name the same segment a map click returns
 - [x] **Two front doors, one dataset** — `/` is a landing page that answers the river's halves of the question in one screen: the live stage, a staff gauge you can drag to see what the river's own peak record says about any stage, and a box that resolves a street onto the same scale. `/app` is the map, unchanged; every link already sent still opens the answer it was about, because `/` redirects its legacy query to the app. Both documents render from the same payload — the gauge record and the street thresholds — and the build ships their chunks separately, so the storm page never downloads the homepage. Held by `app/tests/e2e/landing.spec.ts`, which asserts among other things that the scale is actually DRAWN (the ticks shipped collapsed to zero width once)
-- [x] **Test suite** — **136 pipeline tests**, **125 kernel tests** (`app/tests/unit`, vitest) and **62 browser tests** (`scripts/check.sh`), including a golden-artifact regression that re-runs the whole pipeline and diffs every artifact, a payload-contract test, source-integrity checks, raw-input-policy checks (which raw inputs are committed, and why — the rule that caught the 2017 interval record being excluded from the repo it is the source of), doc-drift checks against the README, **cross-language grid parity** — the ensemble's 16 rows and the backcast's 17, plus the transfer's knots, recomputed through the app's own TypeScript and required to match the pipeline exactly — **invariants over generated inputs** (reachability, the isolation bound, the forecast-error curve, three orders of magnitude more inputs than the shipped corridor), a state-contract suite holding the app to "the address is never stored on the device, the URL is replaced and not pushed, and a parameter this version does not know survives a link", and a Playwright suite that boots the built app with a stubbed gauge and reloads it with the origin genuinely taken away
+- [x] **Test suite** — **136 pipeline tests**, **151 kernel tests** (`app/tests/unit`, vitest) and **65 browser tests** (`scripts/check.sh`), including a golden-artifact regression that re-runs the whole pipeline and diffs every artifact, a payload-contract test, source-integrity checks, raw-input-policy checks (which raw inputs are committed, and why — the rule that caught the 2017 interval record being excluded from the repo it is the source of), doc-drift checks against the README, **cross-language grid parity** — the ensemble's 16 rows and the backcast's 17, plus the transfer's knots, recomputed through the app's own TypeScript and required to match the pipeline exactly — **invariants over generated inputs** (reachability, the isolation bound, the forecast-error curve, three orders of magnitude more inputs than the shipped corridor), a state-contract suite holding the app to "the address is never stored on the device, the URL is replaced and not pushed, and a parameter this version does not know survives a link", and a Playwright suite that boots the built app with a stubbed gauge and reloads it with the origin genuinely taken away
 - [x] **The page says it is working, and the river can be watched rising** — the boot rail is drawn from the HTML rather than by the module (it exists on the first frame, which is the point) and withdrawn once the first answer renders; the header mark is a spinner while the gauge is read, a pulse once it is live, amber when the stage is an estimate and hollow in replay, all from the same flags the sentence beside it uses. The extent's 450 KB says how many bytes have arrived and then what it cost — bytes received, never a percentage, because the body is decoded before the code sees it and `content-length` describes the gzip (`app/src/lib/stream.ts`). **Play the rise** walks the stage through all four bands at ~20 fps, one `render()` per step, so the flooded segments, the cut set and the extent move together; a second press stops it, the slider outranks it, and reduced motion gets the same top band in one frame. Held by `tests/e2e/polish.spec.ts`, which records the band sequence in the page rather than polling for it
 - [x] **The page argues with itself nowhere** — three presentation decisions that each cost one thing and buy the product's own thesis. The answer card's stripe and pill follow **the street's** threshold, not the river's official category: at 42 ft the gauge is at action stage (amber) while 1600 Jackson Street is under water, and amber next to "do not drive out" was the one place colour beat the copy in the wrong direction — now red once the segment's own threshold or its last dry way out is crossed, amber while the crossing is inside the forecast, green when it is not, with the river's category left where it belongs in the River stage card. A bare `/app` on the ordinary day reports its own emptiness: below the action stage one line above the fold names the reading and points at `mode=replay&stage=30`, because at 8.4 ft every block below is a zero. And replay **opens mid-rise, not at the crest** — at 55 ft the answer is 0 hours and 1,469 of 1,614 segments already under water, while at 30 ft the same street reads *"water reaches this street ... 145 hours of lead time"*, so the slider climbs from there into the crest and a mode change returns to the top of the page rather than leaving the reader in a statistics table. Held by `tests/e2e/answer.spec.ts` and `tests/e2e/boot.spec.ts`, which read the stripe's computed colour, the line's link and the stage the replay boots at
 - [x] **Shareable state** — the street, the stage and the mode travel in the URL, so a copied link restores that answer on a fresh load in a browser that has never seen the app; parameters this version does not know are carried through rather than stripped
-- [x] **`?text=1` low-bandwidth route** — no map, no chart, no MapLibre, no webfonts: measured from the build by `scripts/check-text-mode.mjs` (gzip -9 of exactly what ships), **322.7 KB against 639.5 KB** for the full route — **316.8 KB saved, 49.5%**, with the 84.6 KB of webfonts and the map tiles requested by neither. The 450 KB flood extent is charged to the full route only, because text mode never asks for it and the browser suite asserts that; the app's entry chunk is **32.3 KB gzipped** for every visitor, and the landing is a separate document with a chunk of its own
+- [x] **`?text=1` low-bandwidth route** — no map, no chart, no MapLibre, no webfonts: measured from the build by `scripts/check-text-mode.mjs` (gzip -9 of exactly what ships), **328.1 KB against 644.9 KB** for the full route — **316.8 KB saved, 49.1%**, with the 84.6 KB of webfonts and the map tiles requested by neither. The 450 KB flood extent is charged to the full route only, because text mode never asks for it and the browser suite asserts that; the app's entry chunk is **37.6 KB gzipped** for every visitor, and the landing is a separate document with a chunk of its own
 - [x] **Offline cache** — a service worker keeps what the page has already been asked for, so a reload with no connection still answers. **One visit is enough**: measured on a fresh origin, a first load leaves the 14-file payload (~2.1 MB, including the 450 KB flood extent the map route fetches) and the current gauge reading cached, and a reload with every connection refused restored the same answer from the cache. The eager set is the shell only, because precaching 2 MiB would hand back what `?text=1` saved
 - [x] **What the river would have to do** — on a dry day the answer is not "stays dry" but *"this street floods at 33.4 ft; the gauge last reached that in 2025 (34.76 ft)"*, from the USGS annual peak record (`pipeline/derive/gauge_history.py`, 111 annual peaks back to 1884, highest 61.20 ft in 1913)
 - [x] **Two gauges, one answer (I2)** — the upstream gauges transferred down the reach at the lag each was fitted at, compared with the live reading against the measured band, and honest when the river is too low for the transfer to mean anything
@@ -47,6 +47,7 @@ An address-first flood **lead-time** engine for the lower Brazos River at Richmo
 - [x] **Dry road, no way out (I5)** — the inverse view: segments whose route to help is already cut while their own street is still dry (294 at 30 ft, 116 at 45 ft, 12 at 55 ft — the set is a lens on two curves, not a growing list), worst first
 - [x] **Per-street 2017 backcast (I3)** — the alert the selected street itself would have got in 2017, recomputed in the browser and checked against the pipeline's 1,614-entry per-segment array
 - [x] **Bring your own forecast (I4)** — paste a series and the app's own rule runs over it, with the observations kept and every unreadable line reported by number; nothing pasted is stored or put in the URL
+- [x] **Ask BrazosCast** — a question box whose answers are computed by the code already on the page: the model turns a question into a structured request and writes commentary around a result object, and **every figure is rendered from that object**, never from the sentences. A street name resolves exactly against the segment index or is refused by name; a stage the question names is labelled hypothetical; prose that introduces a number the object does not hold is **withheld**, not shown. One server-side file (`app/api/ask.ts`) holds the key, reads it from `process.env` (never `VITE_`), uses the REST API with no SDK, and fails closed — no key, an error, or 8 seconds all become *"Ask is unavailable right now"* while the rest of the page is untouched
 - [x] Static app: address → street threshold → hours of lead time (live + Harvey replay)
 - [ ] Forecast vs archived NWS / NWM retrospective *(deliberately cut — archived AHPS is not openly published)*
 
@@ -59,6 +60,7 @@ data/raw/   cached source snapshots + manifest.json
 data/derived/
 app/        frontend (static, deployable): index.html = landing, app.html = the map
 app/src/    landing.ts/landing.css and main.ts/style.css, over one tokens.css
+app/api/    the only server-side code: the Ask function (a Vercel function)
 app/public/ payload the browser fetches, and the brand marks
 ```
 
@@ -90,6 +92,12 @@ A street the app does not model is **refused rather than snapped to the nearest 
 because that would answer a different household's question. Every refusal says which streets are
 close, and a typo is offered the real address that works.
 
+**Ask needs the function, not just the bundle.** `npm run dev` and `vite preview` serve the static app
+and know nothing about `app/api/`, so the Ask panel says *"Ask is unavailable right now"* there — which
+is also what it says in production without a key, and is the fallback rather than a broken state. To
+try the panel locally, run the function beside the build (`vercel dev` from `app/`, with
+`GEMINI_API_KEY` in `.env.local`), or open the deployed site.
+
 ## Deploy
 
 The app is a static bundle; any host that serves `app/dist` works. `app/vercel.json` carries the
@@ -103,8 +111,17 @@ payload the bundle does not ship. The payload list is read out of the two docume
 typed into the check: a typed count is how a check ends up guarding the wrong thing.
 
 **Vercel, from a Git import.** Import the repo and set **Root Directory to `app`**; the Vite preset
-fills in `npm run build` and `dist`. No environment variable is needed, and the build fetches no
-data: the payload in `app/public/data/` is committed.
+fills in `npm run build` and `dist`. The build fetches no data: the payload in `app/public/data/` is
+committed. `GEMINI_API_KEY` is the only environment variable the app can use — set it in the project's
+settings to turn **Ask** on; without it the panel says it is unavailable and nothing else changes.
+
+**The one server-side function.** `app/api/ask.ts` is the only code in this repo that runs anywhere
+other than the browser or the pipeline, and it is deliberately thin: it reads the key from
+`process.env.GEMINI_API_KEY` (never `VITE_`, which Vite inlines into the public bundle), calls the
+Gemini REST API with `fetch` — no SDK — and returns a structured request or two sentences. It never
+sees an address, a series or a threshold: the page computes those and sends only segment ids and the
+figures, so the function is a few kilobytes rather than a second copy of the pipeline. It is two POSTs
+per question, with a per-client ceiling of six a minute.
 
 **Vercel, from the CLI.** `scripts/deploy-vercel.sh` rebuilds, copies the header config into the
 bundle, uploads `app/dist`, then curls the new origin for those headers, the content types and the
@@ -313,7 +330,7 @@ test that owns the attribution fails while every artifact gate stays green ([FIN
 
 `app/tests/e2e/` (Playwright, `scripts/check.sh --browser`) runs the **built** app in Chromium —
 not the dev server, because the worker only registers in a build and the shipped document is not
-the source one. Thirty-eight tests in two projects:
+the source one. Sixty-five tests in two projects:
 
 ```bash
 cd app && npx playwright test                      # both projects
@@ -895,13 +912,26 @@ defined at this stage, and only a gauge *inside* the fitted range can raise a di
 Every published number descends from two estimated quantities: a street's flood stage (measured to run
 ~22 ft low, with ~11 ft of per-street spread) and the forecast (RMSE measured at several horizons). The
 headline quotes a point lead time and says nothing about either. This card re-runs the app's own rule
-under each measured error — threshold ±1σ, the corridor lift applied, the forecast ±1σ at the horizon
-the answer actually lands on, and the answer quoted only 72 h out — and reports whether the
-**qualitative** claim survives. On the quiet-river example above: *"the point estimate is that water
-does NOT reach this street in the window… the qualitative answer holds under all 4 perturbations"*, with
-the two forecast rows marked skipped and saying why (*already 'not reached'*). Where a perturbation
-flips the answer the row is marked, because "31 h" becoming "22 h" does not change a decision while
-"31 h" becoming "never in the window" does.
+under each measured error — threshold ±1σ, the corridor lift applied, a forecast **error envelope**,
+and the answer quoted only 72 h out — and reports whether the **qualitative** claim survives.
+
+The envelope is the part that was wrong until the release pass, in the direction that flatters the
+product. The forecast rows used to be skipped when the point estimate said "not reached", on the
+reasoning that forecast error cannot change an answer that never crosses — which is exactly backwards:
+an upward-shifted forecast is *how* a near miss becomes a crossing, and skipping the row reported that
+answer as surviving. Each forecast point is now raised and lowered by the RMSE measured **at its own
+horizon** (counted from the first forecast point, the issue time the benchmark scores from), and the
+crossing is recomputed from the perturbed series — so a base "not reached" is perturbed like any other
+answer and can come back "reached", with the row marked and `Δ` reading *from never* instead of a dash.
+Every forecast point gets its own error because the measured error grows with lead time; one offset for
+the whole series would understate the far end.
+
+That curve is **this project's own benchmark, applied to NOAA's forecast as an assumption**, and the
+card says so: it was measured on this project's model, not on NOAA's, and nothing here is a calibration
+of NOAA's uncertainty. On the quiet-river example the card reads *"the point estimate is that water does
+NOT reach this street in the window… the qualitative answer holds under all 6 perturbations"*. Where a
+perturbation flips the answer the row is marked, because "31 h" becoming "22 h" does not change a
+decision while "31 h" becoming "never in the window" — or the reverse — does.
 
 ## Dry road, no way out
 
@@ -929,6 +959,53 @@ observed record kept and only the forecast half replaced. Every line it cannot r
 number and reason**, never skipped silently, because a dropped point moves a crossing time and nothing on
 screen would say so. Nothing pasted is stored, put in the URL, or counted in any published figure, and
 clear restores the gauge's own series.
+
+## Ask BrazosCast
+
+A question box, and the most tempting place in this project to let a language model do arithmetic. It
+does not. The split is the feature:
+
+1. **The model turns the question into a structured request** — `intent`, street names as the reader
+   wrote them, an optional stage, an optional mode — under a JSON schema, temperature 0. Every field
+   is re-validated server-side: an unknown intent becomes `unsupported`, more than three streets are
+   dropped, and a stage outside 0–80 ft is discarded rather than shown.
+2. **The page resolves and computes.** A street name is matched against the app's own segment index
+   after normalisation (case, punctuation, `St.`/`Street`) and nothing else — *Jaxon Street* is
+   refused exactly like *Nowhere Street*, because a nearest guess would be a confident answer about
+   someone else's address. The figures then come from the code that was already here: the segment's
+   HAND threshold, the observed stage, `crossingHours`, `limitOf` and the isolation sweep, the routing
+   graph's cut, and the robustness envelope. Nothing is reimplemented for the panel.
+3. **The model writes two or three sentences around that result object**, and the object is the only
+   thing it is given for the narration. Then the guard: the page extracts every number from the
+   prose and refuses to show it if any is not already printed in the figures. A sentence that invents
+   a lead time is withheld, and the figures — which are the answer — stay on screen.
+
+What that looks like in use: ask *"when is Jackson Street cut off?"* and the panel prints the modelled
+threshold, the observed stage, the modelled crossing, the last modelled route out and whether the
+answer survives the measured error, each with its source, its timestamp, its **observed / forecast /
+modelled** badge, its limitation and a link to the card it came from — with the prose as commentary
+above them. Ask about 50 ft and the comparison is labelled **hypothetical**. Ask about a street this
+model does not contain and the answer is *"I don't have “Jaxon Street” in this model"*, by name. Ask
+about the World Cup and the panel says what it covers.
+
+Two things the figures refuse to blur, because the page already had to learn them: a stage the slider
+moved is labelled **a scenario set on this page, not the latest reading**, and replay hours are labelled
+*from replay start*. A narrator given a stage of 42 ft while the gauge reads 8.4 ft will happily call it
+observed; the figure does not.
+
+The endpoint (`app/api/ask.ts`) is one file, no SDK, one `fetch` per call, `GEMINI_API_KEY` from
+`process.env` with no `VITE_` prefix, and a same-origin check plus six requests a minute per client. The
+model id is a constant chosen from the live model list and then **timed**: `gemini-3.1-flash-lite`
+answered in 0.6–1.5 s when it answered at all but failed one request in three, and the panel's budget is
+8 s, so `gemini-3.5-flash-lite` — every structured request in 0.6–1.1 s — is what ships. A busy model is
+retried once inside the same budget; a rejected key is not retried, because it cannot succeed on a
+second try.
+
+With no key, no function, an upstream error or no answer inside 8 s, the panel says **"Ask is
+unavailable right now"** and every other number on the page is exactly what it was — held by
+`app/tests/e2e/ask.spec.ts`, which runs against the built app with no function behind it. The happy path
+is covered without a network instead (`tests/unit/ask.test.ts`, `tests/unit/ask-endpoint.test.ts`), because
+a test that needs somebody's funded API key is a test that gets skipped and then deleted.
 
 ## Known defect in the street thresholds
 

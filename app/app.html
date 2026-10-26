@@ -107,6 +107,11 @@
         </div>
         <div class="count"><b id="hours">—</b><span id="hoursLab">hours of lead time</span></div>
       </div>
+      <!-- The one place two numbers on the same screen can mean different things. In replay
+           every hour is counted from the first observation of 2017, not from now, and the
+           headline can read 0 while other panels still quote hours — so the difference is
+           stated once, beside the numbers, instead of left to be inferred. -->
+      <p class="hint replay-basis" id="replayBasis" hidden></p>
       <!-- The answer is only useful if it can be carried to someone else. The address,
            stage and mode all live in the URL, so this row is how the link gets out. -->
       <div class="share-row">
@@ -128,6 +133,34 @@
         <p class="ens-note" id="ensNote"></p>
       </div>
       <div class="prov" id="prov"></div>
+    </section>
+
+    <!-- Ask — a natural-language front door to the numbers above. The model does two jobs and
+         neither is arithmetic: it turns a question into a structured request, and it writes
+         commentary around a result object this page computed. Every figure below is rendered
+         from that object, and the prose is checked against it before display: a sentence that
+         introduces a number the object does not hold is withheld rather than shown. With no
+         key, no endpoint, or no answer inside 8 s, the panel says it is unavailable and the
+         rest of the page behaves exactly as it does without it. -->
+    <section class="card askc" id="askCard" aria-label="Ask BrazosCast">
+      <div class="card-h"><h2>Ask BrazosCast</h2>
+        <span class="note" id="askNote">answers from the numbers on this page</span></div>
+      <div class="card-b">
+        <form class="ask-form" id="askForm">
+          <input id="askQ" type="text" maxlength="300" autocomplete="off" spellcheck="false"
+                 aria-label="Your question about a street, a river stage or access"
+                 placeholder="e.g. When is Jackson Street cut off?" />
+          <button id="askGo" class="go" type="submit">Ask</button>
+        </form>
+        <p class="ask-why" id="askWhy" hidden></p>
+        <ul class="ask-figs" id="askFigs" hidden></ul>
+        <p class="ask-prose" id="askProse" hidden></p>
+        <p class="hint ask-foot" id="askFoot">Figures come from this page's own thresholds,
+          routing and uncertainty code. The language model only turns the question into a
+          request and writes sentences beside those figures — it never produces a number.
+          A stage you name is labelled hypothetical, and a street this model does not contain
+          is refused rather than guessed at.</p>
+      </div>
     </section>
 
     <!-- F3 — the household card. Hidden for one address: the answer above already IS that row.
@@ -178,16 +211,21 @@
     </section>
 
     <!-- I6 — does the answer survive? Every published number descends from two estimated
-         quantities (the street's threshold and the forecast), and both have a measured error.
-         This perturbs the answer by exactly those and asks whether the qualitative claim —
-         water reaches this street inside the window — still holds. -->
+         quantities: the street's threshold, whose error the 2017 and 2016 extents measured, and
+         the forecast, whose error here is this project's benchmark curve APPLIED to NOAA's
+         forecast as an assumption — there is no calibration of NOAA's uncertainty anywhere in
+         this project, and the card says so instead of implying one. -->
     <section class="card rob" id="robCard" hidden aria-label="Robustness of the answer">
       <div class="card-h"><h2>Does the answer survive?</h2>
-        <span class="note">perturbed by the errors this project measured</span></div>
+        <span class="note">perturbed by the errors this project measured · the forecast curve is its benchmark's, applied as an assumption</span></div>
       <div class="card-b">
         <p class="rob-head" id="robHead"></p>
         <div class="rob-table" id="robBody"></div>
         <p class="hint" id="robVerdict"></p>
+        <!-- Where the error curve came from, and what applying it to NOAA's forecast does
+             NOT mean: the benchmark measured this project's own model, not NOAA's, so it is
+             an assumption here and never a calibration of NOAA's uncertainty. -->
+        <p class="hint rob-note" id="robNote"></p>
       </div>
     </section>
 
@@ -334,7 +372,7 @@
          segment order, and it excludes the streets the extract cannot route a responder to at
          any stage rather than reporting them as trapped. -->
     <section class="card cut" id="cutCard" hidden aria-label="Segments cut off before their street floods">
-      <div class="card-h"><h2>Dry road, no way out</h2><span class="note" id="cutNote">—</span></div>
+      <div class="card-h"><h2>Dry road, no modelled way out</h2><span class="note" id="cutNote">—</span></div>
       <div class="card-b">
         <p class="cut-head" id="cutHead"></p>
         <ol class="cut-list" id="cutList"></ol>
@@ -356,6 +394,7 @@
       Robustness: the answer re-run with the per-street threshold error and the benchmark's forecast RMSE applied (<code>pipeline/derive/ensemble.py</code>, <code>pipeline/models/forecast.py</code>).
       Model cross-check: that benchmark's own record — xgboost against persistence at +1…+7 d on the 2016–17 holdout and two later windows, with threshold exceedance at the stages above. It beats persistence to +3 d and does not beyond, which is why its error is used as a spread and never as the forecast.
       Dry road, no way out: the same graph's <code>segment_route_cut_ft</code>, joined to each street's own threshold.
+      Ask: the question box turns a question into a structured request and writes commentary around a result object computed by this page (<code>app/src/lib/ask.ts</code>, <code>app/api/ask.ts</code>); every figure is rendered from that object, and a sentence carrying a number the page did not compute is withheld rather than shown.
       Past stages: the USGS annual peak record for <code>08114000</code> (<code>pipeline/derive/gauge_history.py</code>) — annual maxima, not a continuous series.
       A forecast you paste is yours: it never leaves the page and is not part of any published number.</p>
       <p class="disc">A working prototype. Road depths are modelled, never observed. The flood extent is an upper bound: at the one observed stage it maps 2.3× the water the radar shows.

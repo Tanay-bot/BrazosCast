@@ -200,7 +200,7 @@ test("the light view travels in the link, in both directions", async ({ page, co
   // cross with it, and the toggle back carries them home again.
   await expect(page.locator("#addrOut")).toHaveText("Jackson Street");
   await expect(page.locator("#stageVal")).toHaveText("50.00");
-  await expect(page.locator("#verdict")).toHaveText("Water is on your street now");
+  await expect(page.locator("#verdict")).toHaveText("Modelled threshold crossed — water may be on your street");
 
   // Share it from HERE — the recipient of a light link must not be handed the heavy view.
   await context.grantPermissions(["clipboard-read", "clipboard-write"], {

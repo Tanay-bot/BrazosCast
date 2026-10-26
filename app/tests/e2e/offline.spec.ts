@@ -65,7 +65,7 @@ test("a first visit is enough: the reload with the origin gone still answers", a
     verdict: await text(page, "verdict"),
     stage: await text(page, "stageVal"),
   };
-  expect(online.verdict).toBe("Water is on your street now");
+  expect(online.verdict).toBe("Modelled threshold crossed — water may be on your street");
   // The payload, AND the map's own chunk and stylesheet: content-hashed files no list in the
   // source can name, which the app hands over from its resource timeline once the map has
   // loaded. Without that, the first visit caches a shell whose map cannot be built at all.
@@ -87,7 +87,7 @@ test("a first visit is enough: the reload with the origin gone still answers", a
   await expect(page.locator("#exitNote")).toHaveText("at 50.00 ft");
   const exits = await text(page, "exits");
   expect(exits).toMatch(/\d+(\.\d+)? km/);
-  expect(exits).toContain("Your last route out is cut at");
+  expect(exits).toContain("Your last modelled route out is cut at");
   expect(exits).not.toContain("Enter an address");
   // The map itself, from the cache: a blank map was the second real bug this spec found,
   // because MapLibre's chunk had been fetched before the worker controlled the page.
@@ -161,7 +161,7 @@ test("a reading in storage is served, and its age is still labelled", async ({ p
   expect(sub).toContain("RMOT2 has not reported for 6 h — showing its last observation");
   expect(sub).not.toContain("ESTIMATED");
   // The answer itself is still on screen.
-  await expect(page.locator("#verdict")).toHaveText("Water is on your street now");
+  await expect(page.locator("#verdict")).toHaveText("Modelled threshold crossed — water may be on your street");
 });
 
 test("the offline tag says what it can actually know", async ({ page, context }) => {
@@ -190,7 +190,7 @@ test("the light route is also the one that survives an outage", async ({ page, r
   await gate(request, true);
   await page.reload();
 
-  await expect(page.locator("#verdict")).toHaveText("Water is on your street now");
+  await expect(page.locator("#verdict")).toHaveText("Modelled threshold crossed — water may be on your street");
   await expect(page.locator("#mapNote")).toHaveText(/^\d+ of 1614 segments under water$/);
   // The chart's text summary, from the cached payload alone. Which summary it is depends on
   // whether a reading could be read at all (the gauge is unreachable in this project), so

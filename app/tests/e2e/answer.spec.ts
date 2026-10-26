@@ -15,7 +15,7 @@ test("a typed address resolves to a street, a verdict and a route out", async ({
 
   await expect(page.locator("#addrOut")).toHaveText("Jackson Street");
   await expect(page.locator("#askHint")).toContainText("Read as 1600 Jackson Street");
-  await expect(page.locator("#verdict")).toHaveText("Water is on your street now");
+  await expect(page.locator("#verdict")).toHaveText("Modelled threshold crossed — water may be on your street");
   await expect(page.locator("#hoursLab")).toHaveText(/hours of lead time|until you are cut off/);
 
   // Ways out: a real destination with a distance, computed on the road graph at this stage.
@@ -63,8 +63,8 @@ test("the stripe follows the street, not the river's official category", async (
   // The same 42 ft against 1600 Jackson Street (floods at 36.1 ft): the river is officially
   // at "action" and the street is under water, and the stripe has to say the second thing.
   await booted(page, "?addr=1600+Jackson+Street&stage=42");
-  await expect(page.locator("#verdict")).toHaveText("Water is on your street now");
-  await expect(page.locator("#sevPill")).toHaveText("Water on your street");
+  await expect(page.locator("#verdict")).toHaveText("Modelled threshold crossed — water may be on your street");
+  await expect(page.locator("#sevPill")).toHaveText("Threshold crossed");
   await expect(page.locator("#answer")).toHaveAttribute("data-urgency", "flooded");
   expect(await stripe(), "the stripe is still the river's amber at a flooded street")
     .not.toBe(river);
@@ -111,7 +111,7 @@ test("a low river says so, and points at the day it was not", async ({ page }) =
   await expect(page.locator("#mReplay")).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator("#addrOut")).toHaveText("Jackson Street");
   await expect(page.locator("#stageVal")).toHaveText("30.00");
-  await expect(page.locator("#verdict")).toContainText("Water reaches this street");
+  await expect(page.locator("#verdict")).toContainText("Water is modelled to reach this street");
   await expect(page.locator("#answer")).toHaveAttribute("data-urgency", "coming");
   // Hours, not "too late": the whole reason it opens before the crest. 145 h at the gauge's
   // own first crossing of this street's 36.1 ft — the number the demo is built on.
@@ -153,4 +153,30 @@ test("a mode change returns to the top of the page", async ({ page }) => {
   await expect(page.locator("#bcCard")).toBeVisible();
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
   await expect(page.locator("#verdict")).toBeInViewport();
+});
+
+/* The robustness card's hardest case, in the direction that used to be wrong.
+ *
+ * A forecast that peaks just under a street's threshold is a "not reached" answer, and the card
+ * used to skip the forecast rows entirely for it — reporting that the answer survived, when an
+ * upward-shifted forecast is exactly how a near miss becomes a crossing. The stub below peaks at
+ * 40.0 ft against 1600 Jackson Street's 40.6 ft, so the point estimate is "not reached", and the
+ * +1σ envelope has to reach it, be marked as a reversal, and say where it came from. */
+test("a forecast that peaks under the threshold is still perturbed, and can come back reached", async ({ page }) => {
+  await stubGauge(page, { value: 30, forecastTo: 40, forecastHours: 48 });
+  await booted(page, "?addr=1600+Jackson+Street");
+
+  await expect(page.locator("#robCard")).toBeVisible();
+  await expect(page.locator("#robHead")).toContainText("does NOT reach this street");
+
+  const hi = page.locator(".rob-row", { hasText: "Forecast 1σ high" });
+  await expect(hi).not.toHaveClass(/skip/);
+  await expect(hi).toHaveClass(/bad/);                      // a reversal, marked as one
+  await expect(hi.locator("span").first()).not.toHaveText("not reached");
+  await expect(hi.locator("span").nth(1)).toHaveText("from never");
+  await expect(page.locator("#robVerdict")).toContainText("do not all preserve the answer");
+
+  // And the curve's provenance is on the card, not only in the docs: an assumption, never a
+  // calibration of NOAA's uncertainty.
+  await expect(page.locator("#robNote")).toContainText("assumption about NOAA's error");
 });

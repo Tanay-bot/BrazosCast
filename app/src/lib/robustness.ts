@@ -19,6 +19,18 @@
  *   * "holds" is about the qualitative claim only — whether the street is reached inside the
  *     window at all — because that is the claim a household acts on, and a lead time that moves
  *     from 31 h to 22 h does not change it while a lead time that vanishes does.
+ *
+ * The forecast rows are an ENVELOPE, not one offset. The measured RMSE grows with lead time, so
+ * each forecast point is shifted by the error at ITS OWN horizon, counted from the first forecast
+ * point (the issue time the benchmark scores from). Two consequences matter:
+ *
+ *   * the perturbation no longer depends on there being a base crossing. Until this was fixed the
+ *     forecast rows were skipped when the base answer was "not reached" — but a forecast that is
+ *     biased high is exactly how a non-crossing becomes a crossing, which is the direction that
+ *     costs someone their window. A non-crossing is now perturbed like any other answer and may
+ *     well come back "reached".
+ *   * it is an ASSUMPTION when applied to the official NOAA forecast. The curve was measured on
+ *     this project's own model, not on NOAA's; the UI says so wherever these rows are shown.
  */
 import type { Pt } from "./series";
 
@@ -50,6 +62,8 @@ export type RobustOut = {
   /** True when every applicable perturbation keeps the same qualitative answer. */
   survives: boolean;
   appliedCount: number;
+  /** The largest forecast error the envelope applied, in ft, and the horizon it applies at. */
+  forecastEnvelope: { maxFt: number; atHours: number } | null;
 };
 
 export type RobustOpts = {
@@ -57,7 +71,8 @@ export type RobustOpts = {
   sigmaFt: number;
   /** The corridor-wide measured lift, in ft (the correction the app does not apply). */
   liftFt: number;
-  /** Measured forecast RMSE in ft at a given horizon in hours. */
+  /** Measured forecast RMSE in ft at a LEAD time in hours, counted from the first forecast
+   *  point — the issue time the benchmark scores from, not from `ref`. */
   rmseAtHours: (hours: number) => number;
   /** Index of the first forecast point, or null when the whole series is observed. */
   forecastFrom: number | null;
@@ -67,12 +82,23 @@ export type RobustOpts = {
 
 const round1 = (x: number) => Math.round(x * 10) / 10;
 
-/** The series with every forecast point shifted by `ft`, observations untouched. A forecast that
- *  is biased high reaches a threshold EARLIER, which is the direction that matters: a later
- *  crossing is what costs someone their window. */
-function shiftForecast(series: readonly Pt[], from: number | null, ft: number): Pt[] {
-  if (from === null) return [...series];
-  return series.map((p, i) => (i >= from ? { ...p, v: p.v + ft } : p));
+/** The series with every forecast point shifted by the error measured at its own horizon,
+ *  observations untouched. `sign` is +1 for the high scenario and −1 for the low one. A
+ *  forecast biased high reaches a threshold EARLIER; a low one reaches it later or not at
+ *  all, which is the direction that costs someone their window. */
+function envelope(series: readonly Pt[], from: number, rmseAtHours: (h: number) => number,
+  sign: number): { pts: Pt[]; maxFt: number; atHours: number } {
+  const anchor = series[from].t;
+  let maxFt = 0;
+  let atHours = 0;
+  const pts = series.map((p, i) => {
+    if (i < from) return p;
+    const hours = Math.max(0, (p.t - anchor) / 3_600_000);
+    const sigma = Math.max(0, rmseAtHours(hours));
+    if (sigma > maxFt) { maxFt = sigma; atHours = hours; }
+    return { ...p, v: p.v + sign * sigma };
+  });
+  return { pts, maxFt: round1(maxFt), atHours: Math.round(atHours) };
 }
 
 export function robustness(series: readonly Pt[], ref: number, threshold: number,
@@ -103,21 +129,23 @@ export function robustness(series: readonly Pt[], ref: number, threshold: number
     `the +${opts.liftFt.toFixed(1)} ft lift the 2017 extent implies, deliberately not applied`,
     series, threshold + opts.liftFt);
 
-  const fcSkip = opts.forecastFrom === null
-    ? "no forecast in this series"
-    : "the answer is already 'not reached', and forecast error cannot change that";
-  if (opts.forecastFrom !== null && base !== null) {
-    // The forecast error is quoted at the horizon the base answer lands on, which is the only
-    // horizon that can change THIS answer.
-    const err = round1(opts.rmseAtHours(base));
-    const shifted = shiftForecast(series, opts.forecastFrom, err);
-    push("fc_hi", "Forecast 1σ high", `every forecast point +${err.toFixed(1)} ft at this horizon`,
-      shifted, threshold);
-    push("fc_lo", "Forecast 1σ low", `every forecast point −${err.toFixed(1)} ft at this horizon`,
-      shiftForecast(series, opts.forecastFrom, -err), threshold);
+  // The envelope is computed whether or not the base answer crosses: an upward shift is the one
+  // way a "not reached" becomes "reached", and skipping it reported that answer as surviving.
+  let forecastEnvelope: RobustOut["forecastEnvelope"] = null;
+  if (opts.forecastFrom !== null && opts.forecastFrom < series.length) {
+    const hi = envelope(series, opts.forecastFrom, opts.rmseAtHours, +1);
+    const lo = envelope(series, opts.forecastFrom, opts.rmseAtHours, -1);
+    forecastEnvelope = { maxFt: hi.maxFt, atHours: hi.atHours };
+    const what = `every forecast point shifted by the RMSE measured at its own horizon ` +
+      `(up to ${hi.maxFt.toFixed(1)} ft at +${hi.atHours} h)`;
+    push("fc_hi", "Forecast 1σ high", what, hi.pts, threshold);
+    push("fc_lo", "Forecast 1σ low", what, lo.pts, threshold);
   } else {
-    push("fc_hi", "Forecast 1σ high", fcSkip, series, threshold, false);
-    push("fc_lo", "Forecast 1σ low", fcSkip, series, threshold, false);
+    const why = opts.forecastFrom === null
+      ? "no forecast in this series — the whole record is observed"
+      : "the forecast index is past the end of this series";
+    push("fc_hi", "Forecast 1σ high", why, series, threshold, false);
+    push("fc_lo", "Forecast 1σ low", why, series, threshold, false);
   }
 
   const horizon = opts.horizonHours ?? 72;
@@ -131,5 +159,6 @@ export function robustness(series: readonly Pt[], ref: number, threshold: number
     rows,
     survives: applied.every((r) => r.holds),
     appliedCount: applied.length,
+    forecastEnvelope,
   };
 }
